@@ -45,17 +45,3 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 | Exit app completely (overlay open) | Hold Circle / Xbox B / Nintendo A for 1 second | — |
 | Brief control hint | Options / Start | F1 |
 | Refresh games, artwork and collection membership | Hold Triangle / Y for 1 second | F5 |
-
-## Build and verify
-
-For development, run `./build.ps1` from PowerShell. This uses Windows' .NET Framework C# compiler, with no package downloads, and produces `bin/PadLauncher.exe`. `./build.ps1 -Test` also checks library discovery, binary/text VDF, shortcuts, artwork, collections, corrupt-file handling, transparent overlay rendering and button-style configuration. Downloads above are already built.
-
-Useful executable arguments:
-
-- `--demo`: sample title-card library; game launching disabled.
-- `--quit`: exit the running app completely.
-- `--scan --steam "C:\Program Files (x86)\Steam"`: scan without opening the UI; write a diagnostic summary beside the executable and cache the library.
-- `--profile ACCOUNT_ID`: select a profile during a command-line scan.
-- `--data DIRECTORY`: override the launcher data directory for isolated verification.
-- `--render-preview`: render the sample UI to `preview.png` beside the executable.
-- `--render-preview --live-preview --data DIRECTORY`: render the cached library from the specified data directory without launching a game.
