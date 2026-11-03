@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.1.3.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.3.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.3")]
+[assembly: System.Reflection.AssemblyVersion("0.1.4.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.4.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.4")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
@@ -221,6 +221,31 @@ namespace PadLauncher {
             helpWindow.Closed+=(s,e) => helpWindow=null;
             helpWindow.Show();
         }
+        sealed class DialogOwner : System.Windows.Forms.IWin32Window {
+            public IntPtr Handle { get; private set; }
+            public DialogOwner(IntPtr handle) { Handle=handle; }
+        }
+        public string SetSteamFolder(string path) {
+            if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
+            if(String.IsNullOrWhiteSpace(path)) throw new System.IO.DirectoryNotFoundException("Choose the Steam installation folder containing steam.exe and steamapps.");
+            string folder=System.IO.Path.GetFullPath(Environment.ExpandEnvironmentVariables((path ?? "").Trim().Trim('"')));
+            if(!Directory.Exists(System.IO.Path.Combine(folder,"steamapps")) || !File.Exists(System.IO.Path.Combine(folder,"steam.exe")))
+                throw new System.IO.DirectoryNotFoundException("Choose the Steam installation folder containing steam.exe and steamapps.");
+            var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            string previous=String.IsNullOrEmpty(settings.SteamPath) ? "" : settings.SteamPath.Replace('/','\\').TrimEnd('\\');
+            next.SteamPath=folder;
+            if(!String.Equals(previous,folder.TrimEnd('\\'),StringComparison.OrdinalIgnoreCase)) {
+                next.UserId=null; next.CollectionId="all"; next.SelectedId=null;
+            }
+            Storage.Write("settings.json",next); settings=next; demo=false;
+            return folder;
+        }
+        public void SetShowGameTitle(bool show) {
+            bool previous=settings.ShowGameTitle;
+            try { settings.ShowGameTitle=show; Storage.Write("settings.json",settings); }
+            catch { settings.ShowGameTitle=previous; throw; }
+            title.Visibility=show ? Visibility.Visible : Visibility.Collapsed;
+        }
         public Window CreateHelpWindow() {
             var dialog=new Window {
                 Title="Pad Launcher · Help & Settings",Width=540,Height=720,MinWidth=480,MinHeight=500,
@@ -234,6 +259,28 @@ namespace PadLauncher {
             layout.Children.Clear();
             var names=Prompts.Buttons(settings);
             var heading=Label("Help & Settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
+            var steamCaption=Label("Steam folder",14,mint); steamCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(steamCaption);
+            var steamPath=new TextBox {Text=settings.SteamPath ?? SteamLibrary.DetectSteam() ?? "",FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"}; layout.Children.Add(steamPath);
+            var steamActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
+            var browseSteam=new Button {Content="Browse…",FontSize=13,Padding=new Thickness(14,7,14,7),Margin=new Thickness(0,0,8,0)};
+            var saveSteam=new Button {Content="Save & refresh",FontSize=13,Padding=new Thickness(14,7,14,7)};
+            var steamStatus=Label("Select the Steam installation, not an individual library drive.",12,muted); steamStatus.TextWrapping=TextWrapping.Wrap; steamStatus.Margin=new Thickness(0,7,0,0);
+            browseSteam.Click+=(s,e) => {
+                using(var picker=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the Steam installation folder",SelectedPath=steamPath.Text}) {
+                    if(picker.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).EnsureHandle()))==System.Windows.Forms.DialogResult.OK) steamPath.Text=picker.SelectedPath;
+                }
+            };
+            saveSteam.Click+=(s,e) => {
+                try { steamPath.Text=SetSteamFolder(steamPath.Text); steamStatus.Text="Steam folder saved."; steamStatus.Foreground=mint; RefreshLibrary(true); }
+                catch(Exception error) { steamStatus.Text=error.Message; steamStatus.Foreground=new SolidColorBrush(Color.FromRgb(255,172,153)); }
+            };
+            steamActions.Children.Add(browseSteam); steamActions.Children.Add(saveSteam); layout.Children.Add(steamActions); layout.Children.Add(steamStatus);
+            var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,2)};
+            titleToggle.Click+=(s,e) => {
+                try { SetShowGameTitle(titleToggle.IsChecked==true); }
+                catch(Exception error) { titleToggle.IsChecked=settings.ShowGameTitle; MessageBox.Show(dialog,"Could not save title preference: "+error.Message,"Settings"); }
+            };
+            layout.Children.Add(titleToggle);
             var monitorCaption=Label("Open on monitor",14,mint); monitorCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(monitorCaption);
             var monitorOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
             var displays=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
@@ -321,7 +368,7 @@ namespace PadLauncher {
             collectionText.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius=14,ShadowDepth=1,Opacity=.9 };
             scene.Children.Add(collectionText);
             carousel.Margin = new Thickness(0,205,0,195); scene.Children.Add(carousel);
-            title.Foreground = white; title.FontSize = 28; title.FontWeight = FontWeights.Medium;
+            title.Name="SelectedGameTitle"; title.Foreground = white; title.FontSize = 28; title.FontWeight = FontWeights.Medium;
             title.TextTrimming = TextTrimming.CharacterEllipsis; title.TextAlignment = TextAlignment.Center;
             title.HorizontalAlignment = HorizontalAlignment.Center; title.VerticalAlignment = VerticalAlignment.Top;
             title.MaxWidth = 1000; title.Margin = new Thickness(0,726,0,0);
@@ -347,7 +394,7 @@ namespace PadLauncher {
             if (scanning) { if (feedback) ShowNotice("Refreshing games and collections…"); return; }
             string path = settings.SteamPath;
             if (String.IsNullOrWhiteSpace(path)) path = SteamLibrary.DetectSteam();
-            if (String.IsNullOrWhiteSpace(path)) { ShowNotice("Steam not found. Set SteamPath in the settings.json configuration file."); Render(false); return; }
+            if (String.IsNullOrWhiteSpace(path)) { ShowNotice("Steam not found. Choose its folder in Help & Settings."); Render(false); return; }
             scanning = true;
             if (feedback) ShowNotice("Refreshing games and collections…");
             try {

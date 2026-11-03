@@ -14,6 +14,15 @@ public static class OverlayTests {
         for (int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) if (ContainsButton(VisualTreeHelper.GetChild(root,i))) return true;
         return false;
     }
+    static FrameworkElement FindElement(DependencyObject root,string name) {
+        var element=root as FrameworkElement;
+        if(element!=null && element.Name==name) return element;
+        for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) {
+            var match=FindElement(VisualTreeHelper.GetChild(root,i),name);
+            if(match!=null) return match;
+        }
+        return null;
+    }
     [STAThread] public static int Main() {
         Storage.Root=Path.Combine(Path.GetTempPath(),"PadLauncher-overlay-tests-"+Guid.NewGuid().ToString("N"));
         Launcher window=null;
@@ -43,6 +52,11 @@ public static class OverlayTests {
             var content=(FrameworkElement)window.Content;
             content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
             Check(!ContainsButton(content),"Overlay contains no visible or hidden desktop buttons");
+            var gameTitle=FindElement(content,"SelectedGameTitle");
+            window.SetShowGameTitle(false);
+            Check(gameTitle.Visibility==Visibility.Collapsed && !Storage.Read<Settings>("settings.json").ShowGameTitle,"Show game title setting hides the title immediately and saves the choice");
+            window.SetShowGameTitle(true);
+            Check(gameTitle.Visibility==Visibility.Visible && Storage.Read<Settings>("settings.json").ShowGameTitle,"Show game title setting can be restored immediately");
             var bitmap=new RenderTargetBitmap(1600,900,96,96,PixelFormats.Pbgra32); bitmap.Render(content);
             byte[] pixel=new byte[4]; bitmap.CopyPixels(new Int32Rect(0,0,1,1),pixel,4,0);
             Check(pixel[3]==0,"Rendered screen corner is fully transparent");
@@ -60,6 +74,16 @@ public static class OverlayTests {
             resident.ToggleOverlay();
             Check(resident.Idle,"Reopened overlay can be dismissed back to idle again");
             resident.ExitApp();
+            string steam=Path.Combine(Storage.Root,"steam"),libraryOnly=Path.Combine(Storage.Root,"library-only");
+            Directory.CreateDirectory(Path.Combine(steam,"steamapps")); File.WriteAllBytes(Path.Combine(steam,"steam.exe"),new byte[0]);
+            Directory.CreateDirectory(Path.Combine(libraryOnly,"steamapps"));
+            string savedBefore=File.ReadAllText(Path.Combine(Storage.Root,"settings.json"));
+            bool rejected=false; try { window.SetSteamFolder(libraryOnly); } catch(DirectoryNotFoundException) { rejected=true; }
+            Check(rejected && File.ReadAllText(Path.Combine(Storage.Root,"settings.json"))==savedBefore,"A library drive without steam.exe is rejected without changing saved settings");
+            string selectedSteam=window.SetSteamFolder(steam);
+            var steamSettings=Storage.Read<Settings>("settings.json");
+            Check(selectedSteam==Path.GetFullPath(steam) && steamSettings.SteamPath==selectedSteam,"Steam folder setting validates and persists the selected installation");
+            Check(steamSettings.UserId==null && steamSettings.CollectionId=="all" && steamSettings.SelectedId==null,"Changing Steam installations resets profile and collection selection for rediscovery");
             string legacy=Path.Combine(Storage.Root,"legacy"); Directory.CreateDirectory(legacy);
             string oldSettings=Path.Combine(legacy,"settings.json"); File.WriteAllText(oldSettings,"{\"ButtonPrompts\":\"Nintendo\"}");
             File.SetLastWriteTimeUtc(oldSettings,DateTime.UtcNow.AddMinutes(1));
