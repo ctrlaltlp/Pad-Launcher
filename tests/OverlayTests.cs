@@ -47,16 +47,25 @@ public static class OverlayTests {
             Check(pixel[3]>0,"Carousel artwork and shadow remain visible over the transparent desktop");
             window.ShowControls(); // Exercises optional hint with no settings dialog.
             var resident=new Launcher(true,true);
-            resident.PrepareBackground();
-            Check(resident.Idle,"Background startup prepares the overlay without showing it or polling the controller");
+            resident.PrepareTray();
+            Check(resident.Idle,"Tray startup prepares the overlay without showing it or polling the controller");
             resident.Close();
-            Check(resident.Idle,"Closing the background version leaves it idle with controller polling stopped");
+            Check(resident.Idle,"Dismissing the overlay leaves it idle with controller polling stopped");
             object retainedContent=resident.Content;
             resident.ToggleOverlay();
-            Check(resident.IsVisible && Object.ReferenceEquals(retainedContent,resident.Content),"Reopening the background overlay reuses the existing visual tree");
+            Check(resident.IsVisible && Object.ReferenceEquals(retainedContent,resident.Content),"Reopening the overlay reuses the existing visual tree");
             resident.ToggleOverlay();
             Check(resident.Idle,"Reopened overlay can be dismissed back to idle again");
             resident.ExitApp();
+            string legacy=Path.Combine(Storage.Root,"legacy"); Directory.CreateDirectory(legacy);
+            string oldSettings=Path.Combine(legacy,"settings.json"); File.WriteAllText(oldSettings,"{\"ButtonPrompts\":\"Nintendo\"}");
+            File.SetLastWriteTimeUtc(oldSettings,DateTime.UtcNow.AddMinutes(1));
+            Storage.MigrateFrom(legacy);
+            Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="Nintendo","Renamed app imports the latest existing button preference");
+            File.WriteAllText(Path.Combine(Storage.Root,"settings.json"),"{\"ButtonPrompts\":\"PlayStation\"}");
+            File.SetLastWriteTimeUtc(Path.Combine(Storage.Root,"settings.json"),DateTime.UtcNow.AddMinutes(2));
+            Storage.MigrateFrom(legacy);
+            Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="PlayStation","Migration preserves settings already changed in the renamed app");
             Console.WriteLine(checks+" overlay checks passed."); return 0;
         } catch (Exception e) { Console.Error.WriteLine(e); return 1; }
         finally {

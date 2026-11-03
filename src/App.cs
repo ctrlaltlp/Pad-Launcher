@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.1.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.0")]
+[assembly: System.Reflection.AssemblyVersion("0.1.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.1")]
 
 namespace PadLauncher {
     public static class Entry {
@@ -24,6 +24,7 @@ namespace PadLauncher {
         [STAThread] public static void Main(string[] args) {
             string dataPath = Argument(args,"--data");
             if (!String.IsNullOrEmpty(dataPath)) Storage.Root = System.IO.Path.GetFullPath(dataPath);
+            else Storage.MigrateFrom(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PadLauncherBackground"));
             if (args.Contains("--scan")) {
                 try {
                     string path = Argument(args, "--steam") ?? SteamLibrary.DetectSteam();
@@ -34,15 +35,15 @@ namespace PadLauncher {
                 return;
             }
             bool first;
-            var showSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\PadLauncher.Background.Show");
-            var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\PadLauncher.Background.Exit");
-            instance = new Mutex(true, @"Local\PadLauncher.Background", out first);
+            var showSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\PadLauncher.Show");
+            var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\PadLauncher.Exit");
+            instance = new Mutex(true, @"Local\PadLauncher", out first);
             if (!first) {
                 foreach (var process in Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName)) if (process.Id!=Process.GetCurrentProcess().Id) AllowSetForegroundWindow(process.Id);
-                if (args.Contains("--quit-background")) exitSignal.Set(); else showSignal.Set();
+                if (args.Contains("--quit")) exitSignal.Set(); else showSignal.Set();
                 return;
             }
-            if (args.Contains("--quit-background")) { instance.ReleaseMutex(); return; }
+            if (args.Contains("--quit")) { instance.ReleaseMutex(); return; }
             var app = new Application();
             app.DispatcherUnhandledException += (s,e) => {
                 try { Directory.CreateDirectory(Storage.Root); File.AppendAllText(System.IO.Path.Combine(Storage.Root, "error.log"), DateTime.Now + " " + e.Exception + Environment.NewLine); } catch { }
@@ -54,11 +55,11 @@ namespace PadLauncher {
             if (!args.Contains("--render-preview")) {
                 showWait=ThreadPool.RegisterWaitForSingleObject(showSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ShowOverlay)),null,Timeout.Infinite,false);
                 exitWait=ThreadPool.RegisterWaitForSingleObject(exitSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ExitApp)),null,Timeout.Infinite,false);
-                tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text="Pad Launcher · Background",Visible=true };
+                tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text="Pad Launcher",Visible=true };
                 var menu=new System.Windows.Forms.ContextMenuStrip();
                 menu.Items.Add("Show launcher",null,(s,e) => window.ShowOverlay());
                 menu.Items.Add("Show help && settings",null,(s,e) => window.ShowHelpWindow());
-                menu.Items.Add("Exit background process",null,(s,e) => window.ExitApp());
+                menu.Items.Add("Exit app",null,(s,e) => window.ExitApp());
                 tray.ContextMenuStrip=menu; tray.DoubleClick+=(s,e) => window.ToggleOverlay();
             }
             if (args.Contains("--render-preview")) {
@@ -71,7 +72,7 @@ namespace PadLauncher {
                 window.ExitApp();
             } else {
                 app.MainWindow=window; app.ShutdownMode=ShutdownMode.OnMainWindowClose;
-                window.PrepareBackground();
+                window.PrepareTray();
                 app.Run();
             }
             if (showWait!=null) showWait.Unregister(null);
@@ -156,7 +157,7 @@ namespace PadLauncher {
                 else { SetFilters(); Render(false); }
             }
         }
-        public void PrepareBackground() {
+        public void PrepareTray() {
             controllerTimer.Stop();
             var content=Content as FrameworkElement;
             if(content!=null) { content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout(); }

@@ -85,7 +85,15 @@ namespace PadLauncher {
         }
     }
     public static class Storage {
-        public static string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PadLauncherBackground");
+        public static string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PadLauncher");
+        public static void MigrateFrom(string legacyRoot) {
+            if(!Directory.Exists(legacyRoot)) return;
+            Directory.CreateDirectory(Root);
+            foreach(string name in new[]{"settings.json","library.json"}) {
+                string source=Path.Combine(legacyRoot,name),target=Path.Combine(Root,name);
+                if(File.Exists(source) && (!File.Exists(target) || File.GetLastWriteTimeUtc(source)>File.GetLastWriteTimeUtc(target))) File.Copy(source,target,true);
+            }
+        }
         public static JavaScriptSerializer Json() { return new JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024 }; }
         public static T Read<T>(string name) where T : class {
             try { return Json().Deserialize<T>(File.ReadAllText(Path.Combine(Root, name))); } catch { return null; }
