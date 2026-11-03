@@ -14,9 +14,10 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.1.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.1.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.1")]
+[assembly: System.Reflection.AssemblyVersion("0.1.2.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.2")]
+[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
     public static class Entry {
@@ -125,14 +126,13 @@ namespace PadLauncher {
             using(var iconStream=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PadLauncher.ico")) {
                 if(iconStream!=null) { var decoder=new IconBitmapDecoder(iconStream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad); Icon=decoder.Frames[decoder.Frames.Count-1]; }
             }
-            Width = 1280; Height = 760; MinWidth = 800; MinHeight = 500;
-            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            Width = 1280; Height = 760;
+            WindowStartupLocation = WindowStartupLocation.Manual;
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true; Background = Brushes.Transparent;
             Topmost = true; ShowInTaskbar = false; ResizeMode = ResizeMode.NoResize;
             UseLayoutRounding = true;
-            if (!preview) WindowState = WindowState.Maximized;
-            else { Width = 1600; Height = 900; Left = -20000; Top = -20000; }
+            if (preview) { Width = 1600; Height = 900; Left = -20000; Top = -20000; }
             FontFamily = new FontFamily("Segoe UI");
             Content = new Viewbox { Stretch = Stretch.Uniform, Child = scene };
             BuildScene();
@@ -170,10 +170,48 @@ namespace PadLauncher {
         public void ShowOverlay() {
             if (exiting) return;
             launching=false; refreshButton.Reset(); exitButton.Reset(); previousButtons=0; previousDirection=0;
-            Show(); if (!preview) WindowState=WindowState.Maximized; Activate(); Focus();
+            var monitor=preview ? null : ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
+            if(monitor!=null) PlaceOnMonitor(monitor);
+            Show();
+            if(monitor!=null) PlaceOnMonitor(monitor);
+            Activate(); Focus();
             if (!preview) controllerTimer.Start();
             // Paint retained artwork first, then reread Steam's saved changes.
             if (!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
+        }
+        [DllImport("user32.dll",SetLastError=true)]
+        static extern bool SetWindowPos(IntPtr window,IntPtr insertAfter,int x,int y,int width,int height,uint flags);
+        public static System.Windows.Forms.Screen ResolveMonitor(string preference,System.Windows.Forms.Screen[] monitors,System.Windows.Forms.Screen cursorMonitor) {
+            if(!String.IsNullOrEmpty(preference) && !preference.Equals("cursor",StringComparison.OrdinalIgnoreCase)) {
+                var selected=monitors.FirstOrDefault(s => s.DeviceName.Equals(preference,StringComparison.OrdinalIgnoreCase));
+                if(selected!=null) return selected;
+            }
+            return cursorMonitor;
+        }
+        void PlaceOnMonitor(System.Windows.Forms.Screen monitor) {
+            // Screen working areas and SetWindowPos share native pixel coordinates.
+            // Avoid mixing them with WPF's device-independent Left/Top values.
+            var handle=new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+            var area=monitor.WorkingArea;
+            WindowState=WindowState.Normal;
+            if(!SetWindowPos(handle,new IntPtr(-1),area.Left,area.Top,area.Width,area.Height,0x0010))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            // Moving between scaling factors can synchronously make WPF apply a
+            // DPI-change suggested rectangle. Reapply the target working area
+            // after that transition has settled, now using the destination DPI.
+            if(!SetWindowPos(handle,new IntPtr(-1),area.Left,area.Top,area.Width,area.Height,0x0010))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        }
+        public void CycleMonitor() {
+            if(preview || exiting) return;
+            var monitors=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
+            if(monitors.Length<2) { ShowNotice("Only one monitor is connected."); return; }
+            var handle=new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+            string current=System.Windows.Forms.Screen.FromHandle(handle).DeviceName;
+            int index=Array.FindIndex(monitors,s => s.DeviceName==current);
+            var next=monitors[(index+1)%monitors.Length];
+            PlaceOnMonitor(next); if(IsVisible) { Activate(); Focus(); }
+            ShowNotice("Monitor "+(Array.IndexOf(monitors,next)+1)+" of "+monitors.Length);
         }
         public void ExitApp() { exiting=true; if(helpWindow!=null) helpWindow.Close(); Close(); }
         public void ShowHelpWindow() {
@@ -195,6 +233,29 @@ namespace PadLauncher {
             layout.Children.Clear();
             var names=Prompts.Buttons(settings);
             var heading=Label("Help & Settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
+            var monitorCaption=Label("Open on monitor",14,mint); monitorCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(monitorCaption);
+            var monitorOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
+            var displays=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
+            for(int i=0;i<displays.Length;i++) {
+                var display=displays[i];
+                monitorOptions.Add(new KeyValuePair<string,string>(display.DeviceName,"Monitor "+(i+1)+" · "+display.Bounds.Width+" × "+display.Bounds.Height+(display.Primary ? " (primary)" : "")));
+            }
+            string monitorPreference=String.IsNullOrEmpty(settings.OpenMonitor) ? "cursor" : settings.OpenMonitor;
+            if(!monitorOptions.Any(p => p.Key==monitorPreference)) monitorOptions.Add(new KeyValuePair<string,string>(monitorPreference,"Saved monitor (disconnected)"));
+            var monitorPicker=new ComboBox {ItemsSource=monitorOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=monitorPreference,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
+            bool restoringMonitor=false;
+            monitorPicker.SelectionChanged+=(s,e) => {
+                if(restoringMonitor) return;
+                string next=monitorPicker.SelectedValue as string,previous=settings.OpenMonitor;
+                if(next==null || next==previous) return;
+                try { settings.OpenMonitor=next; Storage.Write("settings.json",settings); }
+                catch(Exception error) {
+                    settings.OpenMonitor=previous; restoringMonitor=true; monitorPicker.SelectedValue=previous ?? "cursor"; restoringMonitor=false;
+                    MessageBox.Show(dialog,"Could not save monitor preference: "+error.Message,"Settings");
+                }
+            };
+            layout.Children.Add(monitorPicker);
+            var monitorTip=Label("Applies the next time you open the overlay. If the chosen display is disconnected, the cursor's monitor is used.",12,muted); monitorTip.TextWrapping=TextWrapping.Wrap; monitorTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(monitorTip);
             var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,14,0,10); layout.Children.Add(caption);
             var styles=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
             foreach(string style in new[]{"PlayStation","Xbox","Nintendo"}) {
@@ -216,6 +277,7 @@ namespace PadLauncher {
                 new[]{"Tap "+names[1],"Clear search or dismiss overlay"},
                 new[]{"Hold "+names[1]+" · 1 sec","Exit app completely"},
                 new[]{names[2],"Switch collections"},
+                new[]{names[5],"Move overlay to the next monitor"},
                 new[]{"Tap "+names[3],"Open search (type with keyboard)"},
                 new[]{"Hold "+names[3]+" · 1 sec","Refresh games and collections"},
                 new[]{names[4],"Briefly show control hints"}
@@ -228,9 +290,9 @@ namespace PadLauncher {
                 var description=Label(row[1],14,white); description.TextWrapping=TextWrapping.Wrap; Grid.SetColumn(description,1); grid.Children.Add(description);
                 layout.Children.Add(grid);
             }
-            var keyboard=Label("Keyboard: ← / → browse · Enter play · Esc dismiss\nPage Up / Down collections · F search · F5 refresh · F1 hints",12,muted);
+            var keyboard=Label("Keyboard: ← / → browse · Enter play · Esc dismiss\nPage Up / Down collections · M next monitor\nF search · F5 refresh · F1 hints",12,muted);
             keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); layout.Children.Add(keyboard);
-            var note=Label("The library refreshes automatically whenever you open the overlay.\nThe app stays ready after you dismiss it. Hold "+names[1]+" for 1 second while the overlay is open, or use the tray menu, to exit completely.",12,muted);
+            var note=Label("The overlay opens on your chosen monitor (the cursor's monitor by default).\nThe library refreshes automatically whenever you open the overlay.\nThe app stays ready after you dismiss it. Hold "+names[1]+" for 1 second while the overlay is open, or use the tray menu, to exit completely.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,20); layout.Children.Add(note);
             var close=new Button {Content="Got it",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,IsCancel=true};
             close.Click+=(s,e) => dialog.Close(); layout.Children.Add(close);
@@ -427,6 +489,7 @@ namespace PadLauncher {
                 case System.Windows.Input.Key.F: ToggleSearch(); break;
                 case System.Windows.Input.Key.F5: if (!e.IsRepeat) RefreshLibrary(true); break;
                 case System.Windows.Input.Key.F1: ShowControls(); break;
+                case System.Windows.Input.Key.M: if(!e.IsRepeat) CycleMonitor(); break;
                 default: return;
             }
             e.Handled=true;
@@ -458,6 +521,7 @@ namespace PadLauncher {
                 return;
             }
             if ((pressed&0x1000)!=0) { LaunchSelected(); return; }
+            if ((pressed&0x4000)!=0) CycleMonitor();
             if ((pressed&0x0100)!=0) ChangeCollection(-1);
             if ((pressed&0x0200)!=0) ChangeCollection(1);
             ButtonGesture gesture=refreshButton.Update((buttons&0x8000)!=0,milliseconds);

@@ -44,11 +44,12 @@ namespace PadLauncher {
     public class Settings {
         public string ButtonPrompts { get; set; }
         public bool ShowGameTitle { get; set; }
+        public string OpenMonitor { get; set; }
         public string SteamPath { get; set; }
         public string UserId { get; set; }
         public string CollectionId { get; set; }
         public string SelectedId { get; set; }
-        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; }
+        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; OpenMonitor = "cursor"; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -58,14 +59,14 @@ namespace PadLauncher {
         }
         public static string[] Buttons(Settings settings) {
             switch(Style(settings)) {
-                case "Xbox": return new[]{"A","B","LB / RB","Y","Start"};
-                case "Nintendo": return new[]{"B","A","L / R","X","+"};
-                default: return new[]{"×","○","L1 / R1","△","Options"};
+                case "Xbox": return new[]{"A","B","LB / RB","Y","Start","X"};
+                case "Nintendo": return new[]{"B","A","L / R","X","+","Y"};
+                default: return new[]{"×","○","L1 / R1","△","Options","□"};
             }
         }
         public static string Help(Settings settings) {
             var names=Buttons(settings);
-            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Collections     "+names[3]+"  Search     Hold "+names[3]+"  Refresh     Right stick  3× speed";
+            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Collections     "+names[3]+"  Search     Hold "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  3× speed";
         }
     }
     public enum ButtonGesture { None, Tap, Hold }

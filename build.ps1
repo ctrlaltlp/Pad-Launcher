@@ -9,10 +9,10 @@ $librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScr
 $executableName = 'PadLauncher'
 $stagedExecutable = Join-Path $out ($executableName + '.build.exe')
 $iconPath = Join-Path $PSScriptRoot 'assets\PadLauncher.ico'
-& $compiler /nologo /target:winexe /platform:x64 /optimize+ ('/win32icon:' + $iconPath) ('/resource:' + $iconPath + ',PadLauncher.ico') ('/out:' + $stagedExecutable) $refs $librarySources (Join-Path $PSScriptRoot 'src\App.cs')
+& $compiler /nologo /target:winexe /platform:x64 /optimize+ ('/win32manifest:' + (Join-Path $PSScriptRoot 'src\App.manifest')) ('/win32icon:' + $iconPath) ('/resource:' + $iconPath + ',PadLauncher.ico') ('/out:' + $stagedExecutable) $refs $librarySources (Join-Path $PSScriptRoot 'src\App.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 $builtExecutable = Get-Item $stagedExecutable
-$newestSource = @($librarySources + (Join-Path $PSScriptRoot 'src\App.cs')) | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+$newestSource = @($librarySources + (Join-Path $PSScriptRoot 'src\App.cs') + (Join-Path $PSScriptRoot 'src\App.manifest')) | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if ($builtExecutable.LastWriteTimeUtc -lt $newestSource.LastWriteTimeUtc) { throw 'The executable is older than the source. Close any running launcher and rebuild.' }
 if ($args -contains '-Test') {
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'LibraryTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\LibraryTests.cs')
@@ -27,6 +27,10 @@ if ($args -contains '-Test') {
     if ($LASTEXITCODE -ne 0) { throw 'Overlay test build failed.' }
     & (Join-Path $out 'OverlayTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Overlay tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:MonitorTests ('/win32manifest:' + (Join-Path $PSScriptRoot 'src\App.manifest')) ('/out:' + (Join-Path $out 'MonitorTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'src\App.cs') (Join-Path $PSScriptRoot 'tests\MonitorTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Monitor test build failed.' }
+    & (Join-Path $out 'MonitorTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Monitor tests failed.' }
 }
 $installedExecutable = Join-Path $out ($executableName + '.exe')
 try { Copy-Item -LiteralPath $stagedExecutable -Destination $installedExecutable -Force }

@@ -20,10 +20,13 @@ public static class OverlayTests {
         try {
             var defaults=Storage.Json().Deserialize<Settings>("{\"CollectionId\":\"all\"}");
             Check(defaults.ButtonPrompts=="PlayStation" && defaults.ShowGameTitle,"Older configuration files default to PlayStation prompts and visible title");
+            Check(defaults.OpenMonitor=="cursor","Older configuration files default to the cursor's monitor");
             Check(Prompts.Help(defaults).Contains("×") && !Prompts.Help(defaults).Contains("LB"),"PlayStation hint uses cross, circle and L1/R1");
             defaults.ButtonPrompts="Xbox";
             Storage.Write("settings.json",defaults);
             var restored=Storage.Read<Settings>("settings.json");
+            restored.OpenMonitor="\\\\.\\DISPLAY2"; Storage.Write("settings.json",restored);
+            Check(Storage.Read<Settings>("settings.json").OpenMonitor=="\\\\.\\DISPLAY2","Selected display preference survives saving and reopening");
             Check(Prompts.Help(restored).Contains("LB / RB") && !Prompts.Help(restored).Contains("△"),"Xbox preference survives configuration save and reload");
             var hold=new HoldButton();
             Check(hold.Update(true,0)==ButtonGesture.None && hold.Update(false,200)==ButtonGesture.Tap,"Quick triangle press searches on release");

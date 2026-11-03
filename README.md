@@ -18,6 +18,8 @@ The first launch starts quietly in the tray and prepares the library without dis
 
 The hidden process stops controller polling and has no periodic library scan. On reopening, retained artwork displays first and Steam data refreshes afterwards.
 
+In **Help & Settings → Open on monitor**, choose **Cursor's monitor** (the default) or a specific connected display. The choice saves immediately and applies the next time you open the overlay. If the saved monitor is disconnected, it falls back to the cursor's monitor. Press **Square** (Xbox **X**, Nintendo **Y**) or keyboard **M** to cycle through connected monitors without changing your game, collection or saved opening preference. It fits the monitor's working area, leaving the taskbar visible, and supports per-monitor display scaling. With one monitor, the shortcut simply shows a notice.
+
 Right-click its notification-area icon and choose **Show help & settings** for controls and **PlayStation**, **Xbox**, or **Nintendo** style buttons. Changes save immediately and update help and overlay hints. Styles change labels while keeping physical button positions: Nintendo B plays, A dismisses, X searches/refreshes, L/R changes collections and + shows hints. The window can be opened while the overlay is hidden. Hold Circle for one second while the overlay is open, or use **Exit app**, to stop it completely. No Windows startup registration is installed.
 
 ## Configuration
@@ -26,6 +28,7 @@ The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app complet
 
 - `"ButtonPrompts": "PlayStation"` is the default. Set it to `"Xbox"` or `"Nintendo"` for those labels, or use the tray settings buttons. This changes optional help hints independently of the controller DS4Windows exposes.
 - `"ShowGameTitle": true` shows the selected game's title below the carousel. Set it to `false` to leave only artwork and the collection name.
+- `"OpenMonitor": "cursor"` is the default. Use the **Open on monitor** dropdown to choose a specific display; the app saves its Windows device name.
 - `SteamPath` and `UserId` override automatic Steam/profile detection.
 
 The normal overlay displays no control prompts. Press **Options** (Xbox: Start) or **F1** to briefly show the controls in your chosen button style. No settings dialog opens.
@@ -38,6 +41,7 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 | Browse games at 3× speed | Right stick left / right | — |
 | Launch selected game | Cross / A | Enter |
 | Change collection | L1 / R1, LB / RB | Page Up / Page Down |
+| Move to next monitor | Square / Xbox X / Nintendo Y | M |
 | Search | Triangle / Y | F |
 | Close search / clear search / exit | Circle / B | Escape |
 | Exit app completely (overlay open) | Hold Circle / Xbox B / Nintendo A for 1 second | — |

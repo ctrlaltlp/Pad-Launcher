@@ -1,6 +1,7 @@
 {
   "ButtonPrompts": "PlayStation",
   "ShowGameTitle": true,
+  "OpenMonitor": "cursor",
   "SteamPath": null,
   "UserId": null,
   "CollectionId": "all",
