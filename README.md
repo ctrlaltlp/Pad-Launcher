@@ -1,5 +1,7 @@
 # Pad Launcher
 
+![Pad Launcher showing the .Installed Steam collection](assets/preview.png)
+
 A transparent Windows overlay with an angled artwork carousel, the current collection and an optional game title. Your desktop stays visible around the cards. The app lives in the tray and keeps library data and artwork ready in memory. It reads your existing Steam library, non-Steam shortcuts, custom artwork and collections.
 
 ## Download and run
