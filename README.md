@@ -8,9 +8,13 @@ A transparent Windows overlay with an angled artwork carousel, the current colle
 
 **[Download PadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit), save it in a folder of your choice, and double-click it.
 
-The first launch puts the app in your notification area. Double-click its tray icon to open the game carousel.
+The first launch puts the app in your notification area. Double-click its tray icon to open the game carousel to test it. If you like it, bind a controller button to launch the .exe-that opens the carousel.
 
-Steam is detected automatically. If detection fails, set `SteamPath` in the settings(Tray Icon right-click) to the Steam installation folder (the folder containing `steam.exe` and `steamapps`). Set `UserId` to choose a specific local Steam profile, or leave it null for automatic selection.
+Steam is detected automatically. If detection fails, set Steam installation folder(the folder containing `steam.exe` and `steamapps`) in settings. Set `UserId` to choose a specific local Steam profile, or leave it null for automatic selection.
+
+## Recommendation for non-steam games artwork
+
+If you have non-steam games without artwork: Create an account on: https://www.steamgriddb.com/. Download either BoilR https://github.com/PhilipK/BoilR or SGDBoop https://www.steamgriddb.com/boop (more manual way of adding artwork) to add artwork to your games. Although I have both, I totally recommend BoilR. You just need to set your steamgriddb API key in BoilR from https://www.steamgriddb.com/profile/preferences/api.
 
 ## Tray and overlay
 
