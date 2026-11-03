@@ -4,13 +4,13 @@
 
 A transparent Windows overlay with an angled artwork carousel, the current collection and optionally a game title. Your desktop stays visible around the cards. The app lives in the tray and keeps library data and artwork ready in memory. It reads your existing Steam library, non-Steam shortcuts, custom artwork and collections.
 
-## Download and run
+## Usage
 
 **[Download PadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit), save it in a folder of your choice, and double-click it.
 
-The first launch puts the app in your notification area. Double-click its tray icon to open the game carousel. See [all releases](https://github.com/lpv11/pad-launcher-for-steam/releases) for version details and download checksums.
+The first launch puts the app in your notification area. Double-click its tray icon to open the game carousel.
 
-Steam is detected automatically. If detection fails, set `SteamPath` in the configuration file to the Steam installation folder (the folder containing `steam.exe` and `steamapps`). Set `UserId` to choose a specific local Steam profile, or leave it null for automatic selection. Steam remains responsible for launching games and applying their controller configurations.
+Steam is detected automatically. If detection fails, set `SteamPath` in the settings(Tray Icon right-click) to the Steam installation folder (the folder containing `steam.exe` and `steamapps`). Set `UserId` to choose a specific local Steam profile, or leave it null for automatic selection.
 
 ## Tray and overlay
 
