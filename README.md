@@ -2,9 +2,11 @@
 
 A transparent Windows overlay with an angled artwork carousel, the current collection and an optional game title. Your desktop stays visible around the cards. The app lives in the tray and keeps library data and artwork ready in memory. It reads your existing Steam library, non-Steam shortcuts, custom artwork and collections.
 
-## Run
+## Download and run
 
-Build with `./build.ps1`, then open **bin/PadLauncherBackground.exe**. The executable uses the .NET Framework already included with Windows; it needs no Node, Electron or .NET SDK installation.
+**[Download PadLauncherBackground.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/PadLauncherBackground.exe)** for Windows 10/11 (64-bit), save it in a folder of your choice, and double-click it. No installer or build step is needed. The executable uses the .NET Framework included with Windows; it needs no Node, Electron or .NET SDK installation.
+
+The first launch puts the app in your notification area. Double-click its tray icon to open the game carousel. See [all releases](https://github.com/lpv11/pad-launcher-for-steam/releases) for version details and download checksums.
 
 Steam is detected automatically. If detection fails, set `SteamPath` in the configuration file to the Steam installation folder (the folder containing `steam.exe` and `steamapps`). Set `UserId` to choose a specific local Steam profile, or leave it null for automatic selection. Steam remains responsible for launching games and applying their controller configurations.
 
@@ -62,7 +64,7 @@ Steam configuration files are read only. Changes made in Steam appear on the nex
 
 ## Build and verify
 
-Run `./build.ps1` from PowerShell. This uses Windows' .NET Framework C# compiler, with no package downloads. `./build.ps1 -Test` also checks library discovery, binary/text VDF, shortcuts, artwork, collections, corrupt-file handling, transparent overlay rendering and button-style configuration.
+For development, run `./build.ps1` from PowerShell. This uses Windows' .NET Framework C# compiler, with no package downloads, and produces `bin/PadLauncherBackground.exe`. `./build.ps1 -Test` also checks library discovery, binary/text VDF, shortcuts, artwork, collections, corrupt-file handling, transparent overlay rendering and button-style configuration. Downloads above are already built.
 
 Useful executable arguments:
 

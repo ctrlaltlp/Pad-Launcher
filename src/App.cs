@@ -14,7 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.1-refresh")]
+[assembly: System.Reflection.AssemblyVersion("0.1.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.0")]
 
 namespace PadLauncher {
     public static class Entry {
