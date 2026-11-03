@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.1.2.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.2.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.2")]
+[assembly: System.Reflection.AssemblyVersion("0.1.3.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.3.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.3")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
@@ -109,6 +109,7 @@ namespace PadLauncher {
         int selected, collectionIndex;
         bool scanning, launching, demo, preview;
         ushort previousButtons;
+        string previousInputSource;
         readonly HoldButton refreshButton = new HoldButton();
         readonly HoldButton exitButton = new HoldButton();
         int previousDirection;
@@ -138,10 +139,10 @@ namespace PadLauncher {
             BuildScene();
             PreviewKeyDown += OnKey;
             MouseWheel += (s,e) => { Move(e.Delta < 0 ? 1 : -1); };
-            Closed += (s,e) => { controllerTimer.Stop(); noticeTimer.Stop(); Save(); };
+            Closed += (s,e) => { controllerTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
                 if (!exiting) {
-                    e.Cancel=true; Save(); controllerTimer.Stop(); noticeTimer.Stop();
+                    e.Cancel=true; Save(); controllerTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); previousInputSource=null;
                     notice.Visibility=Visibility.Collapsed; refreshButton.Reset(); exitButton.Reset(); previousButtons=0; previousDirection=0;
                     launching=false; Hide();
                 }
@@ -175,7 +176,7 @@ namespace PadLauncher {
             Show();
             if(monitor!=null) PlaceOnMonitor(monitor);
             Activate(); Focus();
-            if (!preview) controllerTimer.Start();
+            if (!preview) { Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle()); controllerTimer.Start(); }
             // Paint retained artwork first, then reread Steam's saved changes.
             if (!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
         }
@@ -498,6 +499,10 @@ namespace PadLauncher {
             if (!IsActive || preview) { refreshButton.Reset(); exitButton.Reset(); previousButtons=0; previousDirection=0; nextMove=DateTime.UtcNow.AddMilliseconds(180); return; }
             PadState pad; bool found=Gamepad.Read(out pad);
             if (!found) { refreshButton.Reset(); exitButton.Reset(); previousButtons=0; previousDirection=0; return; }
+            if(previousInputSource!=Gamepad.Source) {
+                previousInputSource=Gamepad.Source; previousButtons=pad.Buttons;
+                previousDirection=0; refreshButton.Reset(); exitButton.Reset();
+            }
             ushort buttons=pad.Buttons;
             int rightDirection=pad.RX < -16000 ? -1 : pad.RX > 16000 ? 1 : 0;
             bool fast=rightDirection!=0;
@@ -548,14 +553,24 @@ namespace PadLauncher {
         [DllImport("xinput1_3.dll",EntryPoint="XInputGetState")] static extern uint Read13(uint index,out PadState state);
         [DllImport("xinput9_1_0.dll",EntryPoint="XInputGetState")] static extern uint Read91(uint index,out PadState state);
         static int version;
+        static readonly PlayStationInput sony=new PlayStationInput();
+        public static string Source { get; private set; }
+        public static void StartNative(IntPtr window) { sony.Start(window); }
+        public static void StopNative() { sony.Stop(); Source=null; }
         public static bool Read(out PadState state) {
+            if(ReadXbox(out state)) return true;
+            string identity;
+            if(sony.Read(out state,out identity)) { Source=identity; return true; }
+            Source=null; return false;
+        }
+        static bool ReadXbox(out PadState state) {
             state=new PadState();
             for (uint i=0;i<4;i++) {
-                try { if (version==0 || version==14) { uint r=Read14(i,out state); version=14; if (r==0) return true; continue; } }
+                try { if (version==0 || version==14) { uint r=Read14(i,out state); version=14; if (r==0) { Source="xinput:"+i; return true; } continue; } }
                 catch (DllNotFoundException) { version=13; } catch (EntryPointNotFoundException) { version=13; }
-                try { if (version==13) { if (Read13(i,out state)==0) return true; continue; } }
+                try { if (version==13) { if (Read13(i,out state)==0) { Source="xinput:"+i; return true; } continue; } }
                 catch (DllNotFoundException) { version=91; } catch (EntryPointNotFoundException) { version=91; }
-                try { if (Read91(i,out state)==0) return true; }
+                try { if (Read91(i,out state)==0) { Source="xinput:"+i; return true; } }
                 catch (DllNotFoundException) { return false; } catch (EntryPointNotFoundException) { return false; }
             }
             return false;
