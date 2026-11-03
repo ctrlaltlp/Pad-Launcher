@@ -1,0 +1,35 @@
+$ErrorActionPreference = 'Stop'
+$framework = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
+$compiler = Join-Path $framework 'csc.exe'
+if (!(Test-Path $compiler)) { throw 'The Windows .NET Framework 4 compiler is required.' }
+$out = Join-Path $PSScriptRoot 'bin'
+New-Item -ItemType Directory -Force $out | Out-Null
+$refs = @('System.dll','System.Core.dll','System.Web.Extensions.dll','System.Windows.Forms.dll','System.Drawing.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
+$librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'))
+$executableName = 'PadLauncherBackground'
+$stagedExecutable = Join-Path $out ($executableName + '.build.exe')
+$iconPath = Join-Path $PSScriptRoot 'assets\PadLauncher.ico'
+& $compiler /nologo /target:winexe /platform:x64 /optimize+ ('/win32icon:' + $iconPath) ('/resource:' + $iconPath + ',PadLauncher.ico') ('/out:' + $stagedExecutable) $refs $librarySources (Join-Path $PSScriptRoot 'src\App.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+$builtExecutable = Get-Item $stagedExecutable
+$newestSource = @($librarySources + (Join-Path $PSScriptRoot 'src\App.cs')) | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+if ($builtExecutable.LastWriteTimeUtc -lt $newestSource.LastWriteTimeUtc) { throw 'The executable is older than the source. Close any running launcher and rebuild.' }
+if ($args -contains '-Test') {
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'LibraryTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\LibraryTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Test build failed.' }
+    & (Join-Path $out 'LibraryTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'DynamicTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\DynamicTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Dynamic test build failed.' }
+    & (Join-Path $out 'DynamicTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Dynamic tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:OverlayTests ('/out:' + (Join-Path $out 'OverlayTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'src\App.cs') (Join-Path $PSScriptRoot 'tests\OverlayTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Overlay test build failed.' }
+    & (Join-Path $out 'OverlayTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Overlay tests failed.' }
+}
+$installedExecutable = Join-Path $out ($executableName + '.exe')
+try { Copy-Item -LiteralPath $stagedExecutable -Destination $installedExecutable -Force }
+catch { throw "Build completed, but Windows could not replace $executableName.exe. Exit that version completely and run build.ps1 again. $($_.Exception.Message)" }
+if ((Get-FileHash -LiteralPath $stagedExecutable).Hash -ne (Get-FileHash -LiteralPath $installedExecutable).Hash) { throw 'The installed executable does not match the tested build.' }
+Write-Output "Installed and verified $installedExecutable"

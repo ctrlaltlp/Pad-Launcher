@@ -1,0 +1,4 @@
+bin/
+*.user
+*.log
+*.cmd
