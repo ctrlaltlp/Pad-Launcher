@@ -66,7 +66,7 @@ namespace PadLauncher {
         }
         public static string Help(Settings settings) {
             var names=Buttons(settings);
-            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Collections     "+names[3]+"  Search     Hold "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  3× speed";
+            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Collections     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  3× speed";
         }
     }
     public enum ButtonGesture { None, Tap, Hold }

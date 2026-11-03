@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.1.4.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.4.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.4")]
+[assembly: System.Reflection.AssemblyVersion("0.1.5.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.5.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.5")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
@@ -94,8 +94,6 @@ namespace PadLauncher {
         readonly Canvas carousel = new Canvas { ClipToBounds = true };
         readonly TextBlock title = new TextBlock();
         readonly TextBlock collectionText = new TextBlock();
-        readonly TextBox search = new TextBox();
-        readonly Border searchPanel = new Border();
         readonly Border notice = new Border();
         readonly TextBlock noticeText = new TextBlock();
         readonly Dictionary<string,BitmapSource> images = new Dictionary<string,BitmapSource>();
@@ -110,12 +108,10 @@ namespace PadLauncher {
         bool scanning, launching, demo, preview;
         ushort previousButtons;
         string previousInputSource;
-        readonly HoldButton refreshButton = new HoldButton();
         readonly HoldButton exitButton = new HoldButton();
         int previousDirection;
         bool previousFast;
         DateTime nextMove = DateTime.MinValue;
-        string query = "";
         bool exiting;
         Window helpWindow;
         public bool Idle { get { return !IsVisible && !controllerTimer.IsEnabled; } }
@@ -143,7 +139,7 @@ namespace PadLauncher {
             Closing += (s,e) => {
                 if (!exiting) {
                     e.Cancel=true; Save(); controllerTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); previousInputSource=null;
-                    notice.Visibility=Visibility.Collapsed; refreshButton.Reset(); exitButton.Reset(); previousButtons=0; previousDirection=0;
+                    notice.Visibility=Visibility.Collapsed; exitButton.Reset(); previousButtons=0; previousDirection=0;
                     launching=false; Hide();
                 }
             };
@@ -170,7 +166,7 @@ namespace PadLauncher {
         }
         public void ShowOverlay() {
             if (exiting) return;
-            launching=false; refreshButton.Reset(); exitButton.Reset(); previousButtons=0; previousDirection=0;
+            launching=false; exitButton.Reset(); previousButtons=0; previousDirection=0;
             var monitor=preview ? null : ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
             if(monitor!=null) PlaceOnMonitor(monitor);
             Show();
@@ -246,6 +242,18 @@ namespace PadLauncher {
             catch { settings.ShowGameTitle=previous; throw; }
             title.Visibility=show ? Visibility.Visible : Visibility.Collapsed;
         }
+        public void SetSteamUserId(string userId) {
+            if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
+            string selected=String.IsNullOrWhiteSpace(userId) ? null : userId.Trim();
+            if(selected!=null) {
+                string steam=settings.SteamPath ?? SteamLibrary.DetectSteam();
+                if(String.IsNullOrEmpty(steam) || !SteamLibrary.Users(steam).Contains(selected))
+                    throw new InvalidOperationException("Choose a user ID from the selected Steam installation.");
+            }
+            var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            next.UserId=selected; next.CollectionId="all"; next.SelectedId=null;
+            Storage.Write("settings.json",next); settings=next;
+        }
         public Window CreateHelpWindow() {
             var dialog=new Window {
                 Title="Pad Launcher · Help & Settings",Width=540,Height=720,MinWidth=480,MinHeight=500,
@@ -259,28 +267,6 @@ namespace PadLauncher {
             layout.Children.Clear();
             var names=Prompts.Buttons(settings);
             var heading=Label("Help & Settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
-            var steamCaption=Label("Steam folder",14,mint); steamCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(steamCaption);
-            var steamPath=new TextBox {Text=settings.SteamPath ?? SteamLibrary.DetectSteam() ?? "",FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"}; layout.Children.Add(steamPath);
-            var steamActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
-            var browseSteam=new Button {Content="Browse…",FontSize=13,Padding=new Thickness(14,7,14,7),Margin=new Thickness(0,0,8,0)};
-            var saveSteam=new Button {Content="Save & refresh",FontSize=13,Padding=new Thickness(14,7,14,7)};
-            var steamStatus=Label("Select the Steam installation, not an individual library drive.",12,muted); steamStatus.TextWrapping=TextWrapping.Wrap; steamStatus.Margin=new Thickness(0,7,0,0);
-            browseSteam.Click+=(s,e) => {
-                using(var picker=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the Steam installation folder",SelectedPath=steamPath.Text}) {
-                    if(picker.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).EnsureHandle()))==System.Windows.Forms.DialogResult.OK) steamPath.Text=picker.SelectedPath;
-                }
-            };
-            saveSteam.Click+=(s,e) => {
-                try { steamPath.Text=SetSteamFolder(steamPath.Text); steamStatus.Text="Steam folder saved."; steamStatus.Foreground=mint; RefreshLibrary(true); }
-                catch(Exception error) { steamStatus.Text=error.Message; steamStatus.Foreground=new SolidColorBrush(Color.FromRgb(255,172,153)); }
-            };
-            steamActions.Children.Add(browseSteam); steamActions.Children.Add(saveSteam); layout.Children.Add(steamActions); layout.Children.Add(steamStatus);
-            var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,2)};
-            titleToggle.Click+=(s,e) => {
-                try { SetShowGameTitle(titleToggle.IsChecked==true); }
-                catch(Exception error) { titleToggle.IsChecked=settings.ShowGameTitle; MessageBox.Show(dialog,"Could not save title preference: "+error.Message,"Settings"); }
-            };
-            layout.Children.Add(titleToggle);
             var monitorCaption=Label("Open on monitor",14,mint); monitorCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(monitorCaption);
             var monitorOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
             var displays=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
@@ -317,17 +303,16 @@ namespace PadLauncher {
                 styles.Children.Add(choice);
             }
             layout.Children.Add(styles);
-            var explanation=Label("Labels change; button positions stay the same.\nNintendo: bottom B plays, right A dismisses, top X searches.",12,muted); explanation.TextWrapping=TextWrapping.Wrap; explanation.Margin=new Thickness(0,0,0,22); layout.Children.Add(explanation);
+            var explanation=Label("Labels change; button positions stay the same.\nNintendo: bottom B plays, right A dismisses, tap top X to refresh.",12,muted); explanation.TextWrapping=TextWrapping.Wrap; explanation.Margin=new Thickness(0,0,0,22); layout.Children.Add(explanation);
             string[][] rows={
                 new[]{"Left stick / D-pad","Browse games"},
                 new[]{"Right stick","Browse games at 3× speed"},
                 new[]{names[0],"Launch selected game"},
-                new[]{"Tap "+names[1],"Clear search or dismiss overlay"},
+                new[]{"Tap "+names[1],"Dismiss overlay"},
                 new[]{"Hold "+names[1]+" · 1 sec","Exit app completely"},
                 new[]{names[2],"Switch collections"},
                 new[]{names[5],"Move overlay to the next monitor"},
-                new[]{"Tap "+names[3],"Open search (type with keyboard)"},
-                new[]{"Hold "+names[3]+" · 1 sec","Refresh games and collections"},
+                new[]{"Tap "+names[3],"Refresh games and collections"},
                 new[]{names[4],"Briefly show control hints"}
             };
             foreach(var row in rows) {
@@ -338,8 +323,57 @@ namespace PadLauncher {
                 var description=Label(row[1],14,white); description.TextWrapping=TextWrapping.Wrap; Grid.SetColumn(description,1); grid.Children.Add(description);
                 layout.Children.Add(grid);
             }
-            var keyboard=Label("Keyboard: ← / → browse · Enter play · Esc dismiss\nPage Up / Down collections · M next monitor\nF search · F5 refresh · F1 hints",12,muted);
+            var keyboard=Label("Keyboard: ← / → browse · Enter play · Esc dismiss\nPage Up / Down collections · M next monitor\nF5 refresh · F1 hints",12,muted);
             keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); layout.Children.Add(keyboard);
+            var steamCaption=Label("Steam path",14,mint); steamCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(steamCaption);
+            var steamPath=new TextBox {Text=settings.SteamPath ?? SteamLibrary.DetectSteam() ?? "",FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"}; layout.Children.Add(steamPath);
+            Action reloadUsers=null;
+            var steamActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
+            var browseSteam=new Button {Content="Browse…",FontSize=13,Padding=new Thickness(14,7,14,7),Margin=new Thickness(0,0,8,0)};
+            var saveSteam=new Button {Content="Save & refresh",FontSize=13,Padding=new Thickness(14,7,14,7)};
+            var steamStatus=Label("Select the Steam installation, not an individual library drive.",12,muted); steamStatus.TextWrapping=TextWrapping.Wrap; steamStatus.Margin=new Thickness(0,7,0,0);
+            browseSteam.Click+=(s,e) => {
+                using(var picker=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the Steam installation folder",SelectedPath=steamPath.Text}) {
+                    if(picker.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).EnsureHandle()))==System.Windows.Forms.DialogResult.OK) steamPath.Text=picker.SelectedPath;
+                }
+            };
+            saveSteam.Click+=(s,e) => {
+                try { steamPath.Text=SetSteamFolder(steamPath.Text); reloadUsers(); steamStatus.Text="Steam folder saved."; steamStatus.Foreground=mint; RefreshLibrary(true); }
+                catch(Exception error) { steamStatus.Text=error.Message; steamStatus.Foreground=new SolidColorBrush(Color.FromRgb(255,172,153)); }
+            };
+            steamActions.Children.Add(browseSteam); steamActions.Children.Add(saveSteam); layout.Children.Add(steamActions); layout.Children.Add(steamStatus);
+            var userCaption=Label("Steam user ID",14,mint); userCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(userCaption);
+            var userPicker=new ComboBox {DisplayMemberPath="Value",SelectedValuePath="Key",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
+            bool restoringUser=false;
+            reloadUsers=() => {
+                restoringUser=true;
+                try {
+                    var options=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Automatic (active Steam profile)")};
+                    string steam=settings.SteamPath ?? SteamLibrary.DetectSteam();
+                    if(!String.IsNullOrEmpty(steam)) foreach(string id in SteamLibrary.Users(steam)) options.Add(new KeyValuePair<string,string>(id,id));
+                    string selected=settings.UserId ?? "";
+                    if(!options.Any(p => p.Key==selected)) options.Add(new KeyValuePair<string,string>(selected,selected+" (unavailable)"));
+                    userPicker.ItemsSource=options; userPicker.SelectedValue=selected;
+                } finally { restoringUser=false; }
+            };
+            reloadUsers();
+            userPicker.SelectionChanged+=(s,e) => {
+                if(restoringUser) return;
+                string selected=userPicker.SelectedValue as string,previous=settings.UserId ?? "";
+                if(selected==null || selected==previous) return;
+                try { SetSteamUserId(selected); steamStatus.Text="Steam user saved."; steamStatus.Foreground=mint; RefreshLibrary(true); }
+                catch(Exception error) {
+                    restoringUser=true; userPicker.SelectedValue=previous; restoringUser=false;
+                    steamStatus.Text=error.Message; steamStatus.Foreground=new SolidColorBrush(Color.FromRgb(255,172,153));
+                }
+            };
+            layout.Children.Add(userPicker);
+            var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,24)};
+            titleToggle.Click+=(s,e) => {
+                try { SetShowGameTitle(titleToggle.IsChecked==true); }
+                catch(Exception error) { titleToggle.IsChecked=settings.ShowGameTitle; MessageBox.Show(dialog,"Could not save title preference: "+error.Message,"Settings"); }
+            };
+            layout.Children.Add(titleToggle);
             var note=Label("The overlay opens on your chosen monitor (the cursor's monitor by default).\nThe library refreshes automatically whenever you open the overlay.\nThe app stays ready after you dismiss it. Hold "+names[1]+" for 1 second while the overlay is open, or use the tray menu, to exit completely.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,20); layout.Children.Add(note);
             var close=new Button {Content="Got it",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,IsCancel=true};
@@ -375,12 +409,6 @@ namespace PadLauncher {
             title.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius=16,ShadowDepth=1,Opacity=.95 };
             title.Visibility = settings.ShowGameTitle ? Visibility.Visible : Visibility.Collapsed;
             scene.Children.Add(title);
-            searchPanel.Background = new SolidColorBrush(Color.FromArgb(235,21,35,44)); searchPanel.CornerRadius = new CornerRadius(10);
-            searchPanel.Padding = new Thickness(20); searchPanel.Width = 600; searchPanel.VerticalAlignment = VerticalAlignment.Top;
-            searchPanel.Margin = new Thickness(0,65,0,0); searchPanel.Visibility = Visibility.Collapsed;
-            search.FontSize = 23; search.Foreground = white; search.Background = Brushes.Transparent; search.BorderThickness = new Thickness(0);
-            search.ToolTip = "Search game names"; search.TextChanged += (s,e) => { query = search.Text; FilterGames(false); };
-            searchPanel.Child = search; scene.Children.Add(searchPanel);
             notice.Background = new SolidColorBrush(Color.FromArgb(235,18,31,40)); notice.CornerRadius = new CornerRadius(8);
             notice.Padding = new Thickness(24,15,24,15); notice.VerticalAlignment = VerticalAlignment.Bottom;
             notice.HorizontalAlignment = HorizontalAlignment.Center; notice.Margin = new Thickness(0,0,0,55);
@@ -400,7 +428,8 @@ namespace PadLauncher {
             try {
                 string user = settings.UserId;
                 var next = await Task.Run(() => SteamLibrary.Scan(path,user));
-                library = next; settings.SteamPath = next.SteamPath; settings.UserId = next.UserId;
+                library = next; settings.SteamPath = next.SteamPath;
+                if(!String.IsNullOrEmpty(user)) settings.UserId=next.UserId;
                 Storage.Write("library.json", library); images.Clear(); ApplyLibrary(); Save();
                 if (feedback) ShowNotice("Refreshed · " + filters[collectionIndex].Name + " · " + visible.Count + " games");
                 if (library.Warnings.Count > 0) ShowNotice(library.Warnings[0]);
@@ -416,7 +445,7 @@ namespace PadLauncher {
         void FilterGames(bool remember) {
             Collection filter = filters[collectionIndex];
             string oldId = remember ? settings.SelectedId : visible.Count > selected ? visible[selected].Id : null;
-            visible = library.Games.Where(g => (filter.Id == "all" || (!filter.UnsupportedDynamic && filter.Games.Contains(g.Id))) && (query.Length == 0 || g.Name.IndexOf(query,StringComparison.CurrentCultureIgnoreCase) >= 0)).ToList();
+            visible = library.Games.Where(g => filter.Id == "all" || (!filter.UnsupportedDynamic && filter.Games.Contains(g.Id))).ToList();
             selected = Math.Max(0, visible.FindIndex(g => g.Id == oldId));
             cards.Clear(); carousel.Children.Clear(); Render(false);
         }
@@ -436,7 +465,7 @@ namespace PadLauncher {
             collectionText.Text = filters[collectionIndex].Name;
             if (visible.Count == 0) {
                 carousel.Children.Clear(); cards.Clear();
-                title.Text = filters[collectionIndex].UnsupportedDynamic ? "This collection needs an unsupported filter" : query.Length > 0 ? "No games match your search" : library.Games.Count > 0 ? "No installed games in this collection" : "Your next game starts here";
+                title.Text = filters[collectionIndex].UnsupportedDynamic ? "This collection needs an unsupported filter" : library.Games.Count > 0 ? "No installed games in this collection" : "Your next game starts here";
                 return;
             }
             Game current = visible[selected]; settings.SelectedId = current.Id;
@@ -503,10 +532,6 @@ namespace PadLauncher {
                 if (images.Count>70) images.Clear(); images[key]=bitmap; return bitmap;
             } catch { images[key]=null; return null; }
         }
-        void ToggleSearch() {
-            if (searchPanel.Visibility==Visibility.Visible) { searchPanel.Visibility=Visibility.Collapsed; Focus(); }
-            else { searchPanel.Visibility=Visibility.Visible; search.Focus(); }
-        }
         void LaunchSelected() {
             if (launching || visible.Count==0) return;
             if (demo) { ShowNotice("Preview mode · connect your Steam library to launch games."); return; }
@@ -522,19 +547,13 @@ namespace PadLauncher {
         void Save() { if (demo) return; try { Storage.Write("settings.json",settings); } catch { } }
         void OnKey(object sender, System.Windows.Input.KeyEventArgs e) {
             var key=e.Key;
-            if (search.IsKeyboardFocusWithin) {
-                if (key==System.Windows.Input.Key.Escape) { search.Clear(); searchPanel.Visibility=Visibility.Collapsed; Focus(); e.Handled=true; }
-                else if (key==System.Windows.Input.Key.Enter) { searchPanel.Visibility=Visibility.Collapsed; Focus(); e.Handled=true; }
-                return;
-            }
             switch (key) {
                 case System.Windows.Input.Key.Left: Move(-1); break;
                 case System.Windows.Input.Key.Right: Move(1); break;
                 case System.Windows.Input.Key.Enter: if (!e.IsRepeat) LaunchSelected(); break;
-                case System.Windows.Input.Key.Escape: if (query.Length>0) search.Clear(); else Close(); break;
+                case System.Windows.Input.Key.Escape: Close(); break;
                 case System.Windows.Input.Key.PageUp: ChangeCollection(-1); break;
                 case System.Windows.Input.Key.PageDown: ChangeCollection(1); break;
-                case System.Windows.Input.Key.F: ToggleSearch(); break;
                 case System.Windows.Input.Key.F5: if (!e.IsRepeat) RefreshLibrary(true); break;
                 case System.Windows.Input.Key.F1: ShowControls(); break;
                 case System.Windows.Input.Key.M: if(!e.IsRepeat) CycleMonitor(); break;
@@ -543,12 +562,12 @@ namespace PadLauncher {
             e.Handled=true;
         }
         void PollController(object sender,EventArgs e) {
-            if (!IsActive || preview) { refreshButton.Reset(); exitButton.Reset(); previousButtons=0; previousDirection=0; nextMove=DateTime.UtcNow.AddMilliseconds(180); return; }
+            if (!IsActive || preview) { exitButton.Reset(); previousButtons=0; previousDirection=0; nextMove=DateTime.UtcNow.AddMilliseconds(180); return; }
             PadState pad; bool found=Gamepad.Read(out pad);
-            if (!found) { refreshButton.Reset(); exitButton.Reset(); previousButtons=0; previousDirection=0; return; }
+            if (!found) { exitButton.Reset(); previousButtons=0; previousDirection=0; return; }
             if(previousInputSource!=Gamepad.Source) {
                 previousInputSource=Gamepad.Source; previousButtons=pad.Buttons;
-                previousDirection=0; refreshButton.Reset(); exitButton.Reset();
+                previousDirection=0; exitButton.Reset();
             }
             ushort buttons=pad.Buttons;
             int rightDirection=pad.RX < -16000 ? -1 : pad.RX > 16000 ? 1 : 0;
@@ -568,17 +587,14 @@ namespace PadLauncher {
             ButtonGesture exitGesture=exitButton.Update((buttons&0x2000)!=0,milliseconds);
             if(exitGesture==ButtonGesture.Hold) { ExitApp(); return; }
             if(exitGesture==ButtonGesture.Tap) {
-                if(searchPanel.Visibility==Visibility.Visible || query.Length>0) { search.Clear(); searchPanel.Visibility=Visibility.Collapsed; Focus(); }
-                else Close();
+                Close();
                 return;
             }
             if ((pressed&0x1000)!=0) { LaunchSelected(); return; }
             if ((pressed&0x4000)!=0) CycleMonitor();
             if ((pressed&0x0100)!=0) ChangeCollection(-1);
             if ((pressed&0x0200)!=0) ChangeCollection(1);
-            ButtonGesture gesture=refreshButton.Update((buttons&0x8000)!=0,milliseconds);
-            if (gesture==ButtonGesture.Hold) RefreshLibrary(true);
-            if (gesture==ButtonGesture.Tap) { ToggleSearch(); }
+            if ((pressed&0x8000)!=0) RefreshLibrary(true);
             if ((pressed&0x0010)!=0) ShowControls();
         }
         static Library Demo() {

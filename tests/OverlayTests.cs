@@ -38,14 +38,14 @@ public static class OverlayTests {
             Check(Storage.Read<Settings>("settings.json").OpenMonitor=="\\\\.\\DISPLAY2","Selected display preference survives saving and reopening");
             Check(Prompts.Help(restored).Contains("LB / RB") && !Prompts.Help(restored).Contains("△"),"Xbox preference survives configuration save and reload");
             var hold=new HoldButton();
-            Check(hold.Update(true,0)==ButtonGesture.None && hold.Update(false,200)==ButtonGesture.Tap,"Quick triangle press searches on release");
-            Check(hold.Update(true,300)==ButtonGesture.None && hold.Update(true,1300)==ButtonGesture.Hold && hold.Update(true,1400)==ButtonGesture.None && hold.Update(false,1500)==ButtonGesture.None,"Hold refreshes once without opening search on release");
+            Check(hold.Update(true,0)==ButtonGesture.None && hold.Update(false,200)==ButtonGesture.Tap,"Quick button press produces a tap on release");
+            Check(hold.Update(true,300)==ButtonGesture.None && hold.Update(true,1300)==ButtonGesture.Hold && hold.Update(true,1400)==ButtonGesture.None && hold.Update(false,1500)==ButtonGesture.None,"Hold triggers once and does not also trigger a tap on release");
             hold.Update(true,2000); hold.Reset();
             Check(hold.Update(false,4000)==ButtonGesture.None,"Focus loss or controller disconnect cancels a pending gesture");
-            Check(Prompts.Help(defaults).Contains("Hold Y") && Prompts.Help(new Settings()).Contains("Hold △"),"Refresh gesture appears in the selected controller hint style");
+            Check(Prompts.Help(defaults).Contains("Tap Y") && Prompts.Help(new Settings()).Contains("Tap △"),"Tap refresh appears in the selected controller hint style");
             var nintendo=new Settings {ButtonPrompts="Nintendo"};
             Check(Prompts.Buttons(nintendo)[0]=="B" && Prompts.Buttons(nintendo)[1]=="A" && Prompts.Buttons(nintendo)[3]=="X" && Prompts.Buttons(nintendo)[4]=="+","Nintendo labels follow the same physical button positions");
-            Check(Prompts.Help(nintendo).Contains("B  Play") && Prompts.Help(nintendo).Contains("Hold X"),"Nintendo help uses its face buttons and refresh label");
+            Check(Prompts.Help(nintendo).Contains("B  Play") && Prompts.Help(nintendo).Contains("Tap X"),"Nintendo help uses its face buttons and refresh label");
             window=new Launcher(true,true);
             Check(window.AllowsTransparency && window.Background==Brushes.Transparent && window.WindowStyle==WindowStyle.None,"Native overlay window supports desktop transparency without a frame");
             Check(window.Topmost && !window.ShowInTaskbar,"Overlay stays above desktop without a taskbar entry");
@@ -84,6 +84,14 @@ public static class OverlayTests {
             var steamSettings=Storage.Read<Settings>("settings.json");
             Check(selectedSteam==Path.GetFullPath(steam) && steamSettings.SteamPath==selectedSteam,"Steam folder setting validates and persists the selected installation");
             Check(steamSettings.UserId==null && steamSettings.CollectionId=="all" && steamSettings.SelectedId==null,"Changing Steam installations resets profile and collection selection for rediscovery");
+            Directory.CreateDirectory(Path.Combine(steam,"userdata","123")); Directory.CreateDirectory(Path.Combine(steam,"userdata","456"));
+            window.SetSteamUserId("456");
+            Check(Storage.Read<Settings>("settings.json").UserId=="456","Selected local Steam user ID is saved");
+            string userBefore=File.ReadAllText(Path.Combine(Storage.Root,"settings.json"));
+            bool invalidUser=false; try { window.SetSteamUserId("999"); } catch(InvalidOperationException) { invalidUser=true; }
+            Check(invalidUser && File.ReadAllText(Path.Combine(Storage.Root,"settings.json"))==userBefore,"User IDs outside the selected installation are rejected without changing settings");
+            window.SetSteamUserId(null);
+            Check(Storage.Read<Settings>("settings.json").UserId==null,"Automatic Steam profile selection is saved without a fixed user ID");
             string legacy=Path.Combine(Storage.Root,"legacy"); Directory.CreateDirectory(legacy);
             string oldSettings=Path.Combine(legacy,"settings.json"); File.WriteAllText(oldSettings,"{\"ButtonPrompts\":\"Nintendo\"}");
             File.SetLastWriteTimeUtc(oldSettings,DateTime.UtcNow.AddMinutes(1));
