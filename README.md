@@ -42,12 +42,6 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 | Brief control hint | Options / Start | F1 |
 | Refresh games, artwork and collection membership | Hold Triangle / Y for 1 second | F5 |
 
-Mouse clicks and the scroll wheel also work. Search appears only when invoked, and text entry uses a keyboard in this version. Controllers use XInput, including the virtual Xbox controller exposed by DS4Windows. The launcher does not change DS4Windows settings or install a PS-button binding.
-
-Tap Circle to dismiss on release; hold it for one second to exit the entire app, including the tray process and icon. Xbox uses B; Nintendo uses A. Exiting saves your selection and shuts down normally.
-
-After changing a collection in Steam, hold **Triangle** for one second (Xbox: **Y**) to reread it without reopening the overlay. A short tap still opens search. A brief notice confirms the refresh and shows the current collection's game count. Your collection and selected game are kept when they still exist; a removed collection falls back to All games. Steam must save its changes locally before they can be read.
-
 ## Build and verify
 
 For development, run `./build.ps1` from PowerShell. This uses Windows' .NET Framework C# compiler, with no package downloads, and produces `bin/PadLauncher.exe`. `./build.ps1 -Test` also checks library discovery, binary/text VDF, shortcuts, artwork, collections, corrupt-file handling, transparent overlay rendering and button-style configuration. Downloads above are already built.
