@@ -86,6 +86,34 @@ public static class OverlayTests {
             Check(!panelBody.Clip.FillContains(new Point(1,1)) && Storage.Read<Settings>("settings.json").CarouselLayout=="angled","Switching back restores the original slanted panels");
             bool invalidLayout=false; try { window.SetCarouselLayout("unknown"); } catch(ArgumentException) { invalidLayout=true; }
             Check(invalidLayout && Storage.Read<Settings>("settings.json").CarouselLayout=="angled","Invalid layouts preserve the saved choice");
+            window.SetCarouselLayout("grid");
+            content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
+            Check(panels.Children.Count==9 && Canvas.GetTop(panels.Children[0])==10 && Canvas.GetTop(panels.Children[5])==255 && ((FrameworkElement)panels.Children[0]).Width==150,"Grid places game covers in two rows of five");
+            Check(Storage.Read<Settings>("settings.json").CarouselLayout=="grid" && ((Grid)((Grid)panels.Children[0]).Children[0]).Clip.FillContains(new Point(1,1)),"Grid layout is saved and uses rectangular artwork panels");
+            var gridImage=new RenderTargetBitmap(1600,900,96,96,PixelFormats.Pbgra32); gridImage.Render(content);
+            var gridPng=new PngBitmapEncoder(); gridPng.Frames.Add(BitmapFrame.Create(gridImage));
+            using(var stream=File.Create(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"grid-test-preview.png"))) gridPng.Save(stream);
+            var handle=new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+            var inputSource=System.Windows.Interop.HwndSource.FromHwnd(handle);
+            window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.Down) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
+            Check(((TextBlock)gameTitle).Text=="Sekiro","Grid down navigation selects the game in the next row");
+            window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.Up) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
+            Check(((TextBlock)gameTitle).Text=="The Witcher 3","Grid up navigation returns to the same column");
+            Check(defaults.GridColumns==5,"Older settings keep five grid columns");
+            window.SetGridColumns(3);
+            content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
+            Check(panels.Children.Count==6 && Canvas.GetTop(panels.Children[3])==255 && Storage.Read<Settings>("settings.json").GridColumns==3,"Three columns updates both rows, page size and saved preference");
+            window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.Down) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
+            Check(((TextBlock)gameTitle).Text=="Red Dead Redemption 2" && panels.Children.Count==3,"Row navigation uses the chosen column count and advances to the next page");
+            window.SetGridColumns(10);
+            content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
+            bool gridFits=true;
+            foreach(FrameworkElement tile in panels.Children) gridFits &= Canvas.GetLeft(tile)>=0 && Canvas.GetLeft(tile)+tile.Width<=1600;
+            Check(gridFits && panels.Children.Count==9 && ((FrameworkElement)panels.Children[0]).Width<150,"Ten columns shrinks covers to keep the grid within the overlay");
+            bool invalidColumns=false; try { window.SetGridColumns(11); } catch(ArgumentOutOfRangeException) { invalidColumns=true; }
+            Check(invalidColumns && Storage.Read<Settings>("settings.json").GridColumns==10,"Invalid grid column counts preserve the saved setting");
+            window.SetGridColumns(5);
+            window.SetCarouselLayout("angled");
             window.SetDefaultCollection("couch"); window.ShowOverlay();
             Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="Couch games","Chosen default collection is used when reopening the overlay");
             window.Close(); window.SetDefaultCollection("all"); window.ShowOverlay();

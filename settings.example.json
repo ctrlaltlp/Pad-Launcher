@@ -6,6 +6,7 @@
   "DefaultCollectionId": "remember",
   "CarouselScale": 1.0,
   "CarouselLayout": "angled",
+  "GridColumns": 5,
   "SteamPath": null,
   "UserId": null,
   "CollectionId": "all",

@@ -206,11 +206,19 @@ namespace PadLauncher {
             ApplyCarouselScale();
         }
         public void SetCarouselLayout(string layout) {
-            if(layout!="angled" && layout!="rectangular") throw new ArgumentException("Choose an angled or rectangular layout.");
+            if(layout!="angled" && layout!="rectangular" && layout!="grid") throw new ArgumentException("Choose an angled, rectangular or grid layout.");
             string previous=settings.CarouselLayout;
             try { settings.CarouselLayout=layout; Storage.Write("settings.json",settings); }
             catch { settings.CarouselLayout=previous; throw; }
             cards.Clear(); carousel.Children.Clear(); Render(false);
+        }
+        int GridColumns { get { return settings.GridColumns>=2 && settings.GridColumns<=10 ? settings.GridColumns : 5; } }
+        public void SetGridColumns(int columns) {
+            if(columns<2 || columns>10) throw new ArgumentOutOfRangeException("columns","Choose between 2 and 10 columns.");
+            int previous=settings.GridColumns;
+            try { settings.GridColumns=columns; Storage.Write("settings.json",settings); }
+            catch { settings.GridColumns=previous; throw; }
+            if(settings.CarouselLayout=="grid") { cards.Clear(); carousel.Children.Clear(); Render(false); }
         }
         void ApplyCarouselScale() {
             double scale=settings.CarouselScale;
@@ -350,7 +358,7 @@ namespace PadLauncher {
                 var description=Label(row[1],14,white); description.TextWrapping=TextWrapping.Wrap; Grid.SetColumn(description,1); grid.Children.Add(description);
                 layout.Children.Add(grid);
             }
-            var keyboard=Label("Keyboard: ← / → browse · Enter play · Esc dismiss\nPage Up / Down collections · M next monitor\nF5 refresh · F1 hints",12,muted);
+            var keyboard=Label("Keyboard: ← / → browse · ↑ / ↓ grid rows\nEnter play · Esc dismiss · Page Up / Down collections\nM next monitor · F5 refresh · F1 hints",12,muted);
             keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); layout.Children.Add(keyboard);
             var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,24)};
             titleToggle.Click+=(s,e) => {
@@ -403,16 +411,28 @@ namespace PadLauncher {
             layout.Children.Add(monitorPicker);
             var monitorTip=Label("Applies the next time you open the overlay. If the chosen display is disconnected, the cursor's monitor is used.",12,muted); monitorTip.TextWrapping=TextWrapping.Wrap; monitorTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(monitorTip);
             var layoutCaption=Label("Carousel layout",14,mint); layoutCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(layoutCaption);
-            var layoutPicker=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled (original)"),new KeyValuePair<string,string>("rectangular","Rectangular")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var columnsControls=new StackPanel {IsEnabled=settings.CarouselLayout=="grid"};
+            var layoutPicker=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled (original)"),new KeyValuePair<string,string>("rectangular","Rectangular"),new KeyValuePair<string,string>("grid","Grid")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
             bool restoringLayout=false;
             layoutPicker.SelectionChanged+=(s,e) => {
                 if(restoringLayout) return;
-                string choice=layoutPicker.SelectedValue as string,previous=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled";
+                string choice=layoutPicker.SelectedValue as string,previous=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled";
                 if(choice==null || choice==previous) return;
-                try { SetCarouselLayout(choice); }
+                try { SetCarouselLayout(choice); columnsControls.IsEnabled=choice=="grid"; }
                 catch(Exception error) { restoringLayout=true; layoutPicker.SelectedValue=previous; restoringLayout=false; MessageBox.Show(dialog,error.Message,"Settings"); }
             };
             layout.Children.Add(layoutPicker);
+            var columnsCaption=Label("Grid columns",14,mint); columnsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(columnsCaption);
+            var columnsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToArray(),SelectedItem=GridColumns,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            bool restoringColumns=false;
+            columnsPicker.SelectionChanged+=(s,e) => {
+                if(restoringColumns || columnsPicker.SelectedItem==null) return;
+                int previous=GridColumns,columns=(int)columnsPicker.SelectedItem;
+                if(columns==previous) return;
+                try { SetGridColumns(columns); }
+                catch(Exception error) { restoringColumns=true; columnsPicker.SelectedItem=previous; restoringColumns=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            columnsControls.Children.Add(columnsPicker); layout.Children.Add(columnsControls);
             var sizeCaption=Label("Carousel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
             double scale=settings.CarouselScale>=.6 && settings.CarouselScale<=1.4 ? settings.CarouselScale : 1;
             var sizeLabel=Label(Math.Round(scale*100)+"%",13,white);
@@ -562,6 +582,14 @@ namespace PadLauncher {
             selected = (selected + delta + visible.Count) % visible.Count;
             Render(true);
         }
+        void MoveGridRow(int delta) {
+            if(visible.Count==0 || launching) return;
+            int column=selected%GridColumns,next=selected+delta*GridColumns;
+            if(next>=visible.Count) next=column;
+            if(next<0) next=column+((visible.Count-1-column)/GridColumns)*GridColumns;
+            selected=next;
+            Render(false);
+        }
         void Render(bool animate) {
             if (filters.Count == 0) SetFilters();
             collectionText.Text = filters[collectionIndex].Name;
@@ -573,9 +601,12 @@ namespace PadLauncher {
             Game current = visible[selected]; settings.SelectedId = current.Id;
             title.Text = current.Name;
             var keep = new HashSet<string>();
-            int count = Math.Min(9,visible.Count), start = -(count/2);
+            bool gridLayout=settings.CarouselLayout=="grid";
+            int pageSize=GridColumns*2,pageStart=(selected/pageSize)*pageSize;
+            int count = gridLayout ? Math.Min(pageSize,visible.Count-pageStart) : Math.Min(9,visible.Count), start = -(count/2);
             for (int slot = 0; slot < count; slot++) {
-                int offset=start+slot, i=(selected+offset+visible.Count)%visible.Count;
+                int offset=start+slot, i=gridLayout ? pageStart+slot : (selected+offset+visible.Count)%visible.Count;
+                bool active=i==selected;
                 Game game = visible[i]; keep.Add(game.Id);
                 FrameworkElement card;
                 double h = offset == 0 ? 490 : 390 - Math.Min(3,Math.Abs(offset))*16;
@@ -584,17 +615,23 @@ namespace PadLauncher {
                 if(rectangular) w=offset==0 ? 300 : 250;
                 double x = 800 - w/2 + offset*(rectangular ? 285 : 254);
                 double y = offset == 0 ? 0 : (490-h)/2;
+                if(gridLayout) {
+                    w=Math.Min(150,(1440.0-(GridColumns-1)*28)/GridColumns); h=w*1.5;
+                    double gridWidth=GridColumns*w+(GridColumns-1)*28;
+                    x=(1600-gridWidth)/2+(slot%GridColumns)*(w+28);
+                    y=(490-(h*2+20))/2+(slot/GridColumns)*(h+20);
+                }
                 if (!cards.TryGetValue(game.Id,out card)) {
-                    card = Card(game, i, w,h,offset==0); cards[game.Id] = card; carousel.Children.Add(card);
+                    card = Card(game, i, w,h,active); cards[game.Id] = card; carousel.Children.Add(card);
                     Canvas.SetLeft(card,x + (animate ? Math.Sign(offset)*45 : 0)); Canvas.SetTop(card,y); card.Width = w; card.Height = h;
                 }
                 // Geometry changes with the card's layout, so artwork stays upright.
                 Panel.SetZIndex(card, 10-Math.Abs(offset));
                 SetAnimation(card, Canvas.LeftProperty,x,animate); SetAnimation(card, Canvas.TopProperty,y,animate);
-                SetAnimation(card, WidthProperty,w,animate); SetAnimation(card, HeightProperty,h,animate); SetAnimation(card, OpacityProperty,offset==0 ? 1 : .48,animate);
+                SetAnimation(card, WidthProperty,w,animate); SetAnimation(card, HeightProperty,h,animate); SetAnimation(card, OpacityProperty,active ? 1 : gridLayout ? .72 : .48,animate);
                 var border = card as Grid;
                 var outline = border.Children[border.Children.Count-1] as System.Windows.Shapes.Path;
-                if (outline != null) { outline.Stroke = offset==0 ? mint : new SolidColorBrush(Color.FromArgb(70,180,206,213)); outline.StrokeThickness = offset==0 ? 2 : 1; }
+                if (outline != null) { outline.Stroke = active ? mint : new SolidColorBrush(Color.FromArgb(70,180,206,213)); outline.StrokeThickness = active ? 2 : 1; }
             }
             foreach (string id in cards.Keys.Where(k => !keep.Contains(k)).ToArray()) { carousel.Children.Remove(cards[id]); cards.Remove(id); }
         }
@@ -613,13 +650,14 @@ namespace PadLauncher {
             if (bitmap != null) body.Children.Add(new Image { Source = bitmap, Stretch = Stretch.UniformToFill, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch });
             else {
                 body.Children.Add(new System.Windows.Shapes.Ellipse { Width=330,Height=330,Fill=new SolidColorBrush(Color.FromArgb(22,163,240,205)),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,-120,-160,0) });
-                var words = Label(game.Name,31,white); words.FontWeight=FontWeights.SemiBold; words.TextWrapping=TextWrapping.Wrap; words.Margin=new Thickness(58,60,40,75); words.VerticalAlignment=VerticalAlignment.Center; body.Children.Add(words);
+                bool gridLayout=settings.CarouselLayout=="grid";
+                var words = Label(game.Name,gridLayout ? 18 : 31,white); words.FontWeight=FontWeights.SemiBold; words.TextWrapping=TextWrapping.Wrap; words.Margin=gridLayout ? new Thickness(12) : new Thickness(58,60,40,75); words.VerticalAlignment=VerticalAlignment.Center; body.Children.Add(words);
             }
             body.Children.Add(new System.Windows.Shapes.Rectangle { Fill = new LinearGradientBrush(Color.FromArgb(0,0,0,0),Color.FromArgb(210,5,13,20),90) });
             var outline = new System.Windows.Shapes.Path { Fill=Brushes.Transparent,IsHitTestVisible=false,Stroke=mint,StrokeThickness=2 }; grid.Children.Add(outline);
             Action geometry = () => {
                 double w=grid.ActualWidth,h=grid.ActualHeight;
-                double slant=settings.CarouselLayout=="rectangular" ? 0 : 73;
+                double slant=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? 0 : 73;
                 var shape = new StreamGeometry();
                 using (var ctx=shape.Open()) { ctx.BeginFigure(new Point(slant,0),true,true); ctx.LineTo(new Point(w,0),true,false); ctx.LineTo(new Point(w-slant,h),true,false); ctx.LineTo(new Point(0,h),true,false); }
                 shape.Freeze(); body.Clip=shape; outline.Data=shape;
@@ -655,6 +693,8 @@ namespace PadLauncher {
             switch (key) {
                 case System.Windows.Input.Key.Left: Move(-1); break;
                 case System.Windows.Input.Key.Right: Move(1); break;
+                case System.Windows.Input.Key.Up: if(settings.CarouselLayout=="grid") MoveGridRow(-1); break;
+                case System.Windows.Input.Key.Down: if(settings.CarouselLayout=="grid") MoveGridRow(1); break;
                 case System.Windows.Input.Key.Enter: if (!e.IsRepeat) LaunchSelected(); break;
                 case System.Windows.Input.Key.Escape: Close(); break;
                 case System.Windows.Input.Key.PageUp: ChangeCollection(-1); break;
@@ -676,12 +716,15 @@ namespace PadLauncher {
             }
             ushort buttons=pad.Buttons;
             int rightDirection=pad.RX < -16000 ? -1 : pad.RX > 16000 ? 1 : 0;
-            bool fast=rightDirection!=0;
+            int rightVertical=pad.RY > 16000 ? -1 : pad.RY < -16000 ? 1 : 0;
+            bool gridLayout=settings.CarouselLayout=="grid";
+            bool fast=rightDirection!=0 || (gridLayout && rightVertical!=0);
             int direction=fast ? rightDirection : (buttons&0x0004)!=0 || pad.LX < -16000 ? -1 : (buttons&0x0008)!=0 || pad.LX > 16000 ? 1 : 0;
+            if(gridLayout && direction==0) direction=GridColumns*(fast ? rightVertical : (buttons&0x0001)!=0 || pad.LY>16000 ? -1 : (buttons&0x0002)!=0 || pad.LY < -16000 ? 1 : 0);
             var now=DateTime.UtcNow;
             bool changed=direction!=previousDirection || fast!=previousFast;
             if (direction!=0 && (changed || now>=nextMove)) {
-                Move(direction);
+                if(gridLayout && Math.Abs(direction)==GridColumns) MoveGridRow(Math.Sign(direction)); else Move(direction);
                 double repeat=125.0/(fast ? 3 : 1);
                 nextMove=changed ? now.AddMilliseconds(330.0/(fast ? 3 : 1)) : nextMove.AddMilliseconds(repeat);
                 if(nextMove<now.AddMilliseconds(-repeat*3)) nextMove=now.AddMilliseconds(repeat);
@@ -718,7 +761,7 @@ namespace PadLauncher {
     }
     public sealed class ControllerRouter {
         string owner;
-        public static bool Active(PadState pad) { return pad.Buttons!=0 || Math.Abs((int)pad.LX)>16000 || Math.Abs((int)pad.RX)>16000; }
+        public static bool Active(PadState pad) { return pad.Buttons!=0 || Math.Abs((int)pad.LX)>16000 || Math.Abs((int)pad.RX)>16000 || Math.Abs((int)pad.LY)>16000 || Math.Abs((int)pad.RY)>16000; }
         public bool Select(List<KeyValuePair<string,PadState>> pads,out PadState state,out string identity) {
             int chosen=pads.FindIndex(p => p.Key==owner && Active(p.Value));
             if(chosen<0) chosen=pads.FindIndex(p => Active(p.Value));

@@ -55,7 +55,8 @@ namespace PadLauncher {
         public string DefaultCollectionId { get; set; }
         public double CarouselScale { get; set; }
         public string CarouselLayout { get; set; }
-        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; }
+        public int GridColumns { get; set; }
+        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; GridColumns=5; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
