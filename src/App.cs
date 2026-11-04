@@ -487,6 +487,7 @@ namespace PadLauncher {
                     steamStatus.Text=error.Message; steamStatus.Foreground=new SolidColorBrush(Color.FromRgb(255,172,153));
                 }
             };
+            userPicker.Margin=new Thickness(0,0,0,24);
             layout.Children.Add(userPicker);
             var note=Label("The overlay opens on your chosen monitor (the cursor's monitor by default).\nThe library refreshes automatically whenever you open the overlay.\nThe app stays ready after you dismiss it. Hold "+names[1]+" for 1 second while the overlay is open, or use the tray menu, to exit completely.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,20); layout.Children.Add(note);
