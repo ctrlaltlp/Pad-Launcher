@@ -6,7 +6,7 @@ A transparent Windows overlay for Steam with an angled artwork carousel. Shows y
 
 ## Usage
 
-**[Download PadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit), save it in a folder of your choice, and double-click it.
+**[Download PadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit).
 
 The first launch puts the app in your notification area. Bind a controller button to launch the .exe; that opens the carousel.
 
