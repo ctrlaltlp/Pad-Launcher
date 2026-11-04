@@ -6,7 +6,7 @@ A transparent Windows overlay for Steam with an angled artwork carousel. Shows y
 
 ## Usage
 
-**[Download PadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit).
+**[Download SteamPadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/SteamPadLauncher.exe)** for Windows 10/11 (64-bit).
 
 The first launch puts the app in your notification area. Bind a controller button to launch the .exe; that opens the carousel.
 
@@ -35,8 +35,7 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 | Brief control hint | Options / Start | F1 |
 | Refresh games, artwork and collection membership | Hold Triangle / Y for 1 second | F5 |
 
-
-## Configuration
+## Manual Configuration
 
 The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app completely before editing it. `settings.example.json` in this project shows the available fields.
 
