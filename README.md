@@ -47,3 +47,7 @@ The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app complet
 ## Known bugs
 
 Weird behaviour when more than 1 controller is connected.
+
+## Inspiration
+
+https://github.com/motor-dev/wallpaperCarousel
