@@ -20,18 +20,9 @@ If you have non-steam games without artwork: Create an account on: https://www.s
 
 The first launch starts quietly in the tray and prepares the library without displaying the overlay. **Double-click the tray icon to toggle the overlay on/off.** The app keeps the overlay, library and decoded artwork in memory when dismissed with Circle/B or after launching a game. Running the executable again signals the existing process to show the overlay.
 
-## Configuration
-
-The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app completely before editing it. `settings.example.json` in this project shows the available fields.
-
-- `"ButtonPrompts": "PlayStation"` is the default. Set it to `"Xbox"` or `"Nintendo"` for those labels, or use the tray settings buttons. This changes optional help hints independently of the controller DS4Windows exposes.
-- `"ShowGameTitle": true` shows the selected game's title below the carousel. Set it to `false` to leave only artwork and the collection name.
-- `"OpenMonitor": "cursor"` is the default. Use the **Open on monitor** dropdown to choose a specific display; the app saves its Windows device name.
-- `SteamPath` and `UserId` override automatic Steam/profile detection.
+## Controls
 
 The normal overlay displays no control prompts. Press **Options** (Xbox: Start) or **F1** to briefly show the controls in your chosen button style. No settings dialog opens.
-
-## Controls
 
 | Action | Controller | Keyboard |
 | --- | --- | --- |
@@ -45,3 +36,13 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 | Exit app completely (overlay open) | Hold Circle / Xbox B / Nintendo A for 1 second | — |
 | Brief control hint | Options / Start | F1 |
 | Refresh games, artwork and collection membership | Hold Triangle / Y for 1 second | F5 |
+
+
+## Configuration
+
+The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app completely before editing it. `settings.example.json` in this project shows the available fields.
+
+- `"ButtonPrompts": "PlayStation"` is the default. Set it to `"Xbox"` or `"Nintendo"` for those labels, or use the tray settings buttons. This changes optional help hints independently of the controller DS4Windows exposes.
+- `"ShowGameTitle": true` shows the selected game's title below the carousel. Set it to `false` to leave only artwork and the collection name.
+- `"OpenMonitor": "cursor"` is the default. Use the **Open on monitor** dropdown to choose a specific display; the app saves its Windows device name.
+- `SteamPath` and `UserId` override automatic Steam/profile detection.
