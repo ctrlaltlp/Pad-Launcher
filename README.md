@@ -14,7 +14,7 @@ Steam is detected automatically. If detection fails, set Steam installation fold
 
 ## Recommendation for non-steam games artwork
 
-If you have non-steam games without artwork: Create an account on: https://www.steamgriddb.com/. Download either BoilR https://github.com/PhilipK/BoilR or SGDBoop https://www.steamgriddb.com/boop (more manual way of adding artwork) to add artwork to your games. Although I have both, I totally recommend BoilR. You just need to set your steamgriddb API key in BoilR from https://www.steamgriddb.com/profile/preferences/api.
+Create an account on: https://www.steamgriddb.com/. Download either BoilR https://github.com/PhilipK/BoilR or SGDBoop https://www.steamgriddb.com/boop to add artwork to your games. For BoilR you need to set your steamgriddb API key in BoilR from https://www.steamgriddb.com/profile/preferences/api. For SGDBoop, the easiest way of using artwork after installing is find your game in sgdb, click 'View original steam assets' and click 'Boop 'em all' - or do it manually through either program.
 
 ## Tray and overlay
 
