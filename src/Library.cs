@@ -46,6 +46,7 @@ namespace PadLauncher {
     public class Settings {
         public string ButtonPrompts { get; set; }
         public bool ShowGameTitle { get; set; }
+        public bool ShowCollectionName { get; set; }
         public string OpenMonitor { get; set; }
         public string SteamPath { get; set; }
         public string UserId { get; set; }
@@ -54,7 +55,7 @@ namespace PadLauncher {
         public string DefaultCollectionId { get; set; }
         public double CarouselScale { get; set; }
         public string CarouselLayout { get; set; }
-        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; }
+        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {

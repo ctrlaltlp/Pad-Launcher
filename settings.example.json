@@ -1,6 +1,7 @@
 {
   "ButtonPrompts": "PlayStation",
   "ShowGameTitle": true,
+  "ShowCollectionName": true,
   "OpenMonitor": "cursor",
   "DefaultCollectionId": "remember",
   "CarouselScale": 1.0,

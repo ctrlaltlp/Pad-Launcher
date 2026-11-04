@@ -267,6 +267,12 @@ namespace PadLauncher {
             Storage.Write("settings.json",next); settings=next; demo=false;
             return folder;
         }
+        public void SetShowCollectionName(bool show) {
+            bool previous=settings.ShowCollectionName;
+            try { settings.ShowCollectionName=show; Storage.Write("settings.json",settings); }
+            catch { settings.ShowCollectionName=previous; throw; }
+            collectionText.Visibility=show ? Visibility.Visible : Visibility.Collapsed;
+        }
         public void SetShowGameTitle(bool show) {
             bool previous=settings.ShowGameTitle;
             try { settings.ShowGameTitle=show; Storage.Write("settings.json",settings); }
@@ -298,67 +304,6 @@ namespace PadLauncher {
             layout.Children.Clear();
             var names=Prompts.Buttons(settings);
             var heading=Label("Help & Settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
-            var monitorCaption=Label("Open on monitor",14,mint); monitorCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(monitorCaption);
-            var monitorOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
-            var displays=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
-            for(int i=0;i<displays.Length;i++) {
-                var display=displays[i];
-                monitorOptions.Add(new KeyValuePair<string,string>(display.DeviceName,"Monitor "+(i+1)+" · "+display.Bounds.Width+" × "+display.Bounds.Height+(display.Primary ? " (primary)" : "")));
-            }
-            string monitorPreference=String.IsNullOrEmpty(settings.OpenMonitor) ? "cursor" : settings.OpenMonitor;
-            if(!monitorOptions.Any(p => p.Key==monitorPreference)) monitorOptions.Add(new KeyValuePair<string,string>(monitorPreference,"Saved monitor (disconnected)"));
-            var monitorPicker=new ComboBox {ItemsSource=monitorOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=monitorPreference,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
-            bool restoringMonitor=false;
-            monitorPicker.SelectionChanged+=(s,e) => {
-                if(restoringMonitor) return;
-                string next=monitorPicker.SelectedValue as string,previous=settings.OpenMonitor;
-                if(next==null || next==previous) return;
-                try { settings.OpenMonitor=next; Storage.Write("settings.json",settings); }
-                catch(Exception error) {
-                    settings.OpenMonitor=previous; restoringMonitor=true; monitorPicker.SelectedValue=previous ?? "cursor"; restoringMonitor=false;
-                    MessageBox.Show(dialog,"Could not save monitor preference: "+error.Message,"Settings");
-                }
-            };
-            layout.Children.Add(monitorPicker);
-            var monitorTip=Label("Applies the next time you open the overlay. If the chosen display is disconnected, the cursor's monitor is used.",12,muted); monitorTip.TextWrapping=TextWrapping.Wrap; monitorTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(monitorTip);
-            var defaultCaption=Label("Default collection",14,mint); defaultCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(defaultCaption);
-            var collectionOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last collection"),new KeyValuePair<string,string>("all","All games")};
-            foreach(var collection in library.Collections) collectionOptions.Add(new KeyValuePair<string,string>(collection.Id,collection.Name));
-            string defaultId=String.IsNullOrEmpty(settings.DefaultCollectionId) ? "remember" : settings.DefaultCollectionId;
-            if(!collectionOptions.Any(p => p.Key==defaultId)) collectionOptions.Add(new KeyValuePair<string,string>(defaultId,"Saved collection (unavailable)"));
-            var defaultPicker=new ComboBox {ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
-            bool restoringDefault=false;
-            defaultPicker.SelectionChanged+=(s,e) => {
-                if(restoringDefault) return;
-                string id=defaultPicker.SelectedValue as string,previous=settings.DefaultCollectionId ?? "remember";
-                if(id==null || id==previous) return;
-                try { SetDefaultCollection(id); }
-                catch(Exception error) { restoringDefault=true; defaultPicker.SelectedValue=previous; restoringDefault=false; MessageBox.Show(dialog,error.Message,"Settings"); }
-            };
-            layout.Children.Add(defaultPicker);
-            var layoutCaption=Label("Carousel layout",14,mint); layoutCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(layoutCaption);
-            var layoutPicker=new ComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled (original)"),new KeyValuePair<string,string>("rectangular","Rectangular")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
-            bool restoringLayout=false;
-            layoutPicker.SelectionChanged+=(s,e) => {
-                if(restoringLayout) return;
-                string choice=layoutPicker.SelectedValue as string,previous=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled";
-                if(choice==null || choice==previous) return;
-                try { SetCarouselLayout(choice); }
-                catch(Exception error) { restoringLayout=true; layoutPicker.SelectedValue=previous; restoringLayout=false; MessageBox.Show(dialog,error.Message,"Settings"); }
-            };
-            layout.Children.Add(layoutPicker);
-            var sizeCaption=Label("Carousel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
-            double scale=settings.CarouselScale>=.6 && settings.CarouselScale<=1.4 ? settings.CarouselScale : 1;
-            var sizeLabel=Label(Math.Round(scale*100)+"%",13,white);
-            var sizePicker=new Slider {Minimum=.6,Maximum=1.4,Value=scale,TickFrequency=.05,SmallChange=.05,LargeChange=.1,IsSnapToTickEnabled=true,Margin=new Thickness(0,4,0,8)};
-            bool restoringSize=false;
-            sizePicker.ValueChanged+=(s,e) => {
-                if(restoringSize) return;
-                double previous=settings.CarouselScale;
-                try { SetCarouselScale(sizePicker.Value); sizeLabel.Text=Math.Round(sizePicker.Value*100)+"%"; }
-                catch(Exception error) { restoringSize=true; sizePicker.Value=previous; restoringSize=false; MessageBox.Show(dialog,error.Message,"Settings"); }
-            };
-            layout.Children.Add(sizeLabel); layout.Children.Add(sizePicker);
             var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,14,0,10); layout.Children.Add(caption);
             var styles=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
             foreach(string style in new[]{"PlayStation","Xbox","Nintendo"}) {
@@ -394,6 +339,73 @@ namespace PadLauncher {
             }
             var keyboard=Label("Keyboard: ← / → browse · Enter play · Esc dismiss\nPage Up / Down collections · M next monitor\nF5 refresh · F1 hints",12,muted);
             keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); layout.Children.Add(keyboard);
+            var defaultCaption=Label("Default collection",14,mint); defaultCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(defaultCaption);
+            var collectionOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last collection"),new KeyValuePair<string,string>("all","All games")};
+            foreach(var collection in library.Collections) collectionOptions.Add(new KeyValuePair<string,string>(collection.Id,collection.Name));
+            string defaultId=String.IsNullOrEmpty(settings.DefaultCollectionId) ? "remember" : settings.DefaultCollectionId;
+            if(!collectionOptions.Any(p => p.Key==defaultId)) collectionOptions.Add(new KeyValuePair<string,string>(defaultId,"Saved collection (unavailable)"));
+            var defaultPicker=new ComboBox {ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            bool restoringDefault=false;
+            defaultPicker.SelectionChanged+=(s,e) => {
+                if(restoringDefault) return;
+                string id=defaultPicker.SelectedValue as string,previous=settings.DefaultCollectionId ?? "remember";
+                if(id==null || id==previous) return;
+                try { SetDefaultCollection(id); }
+                catch(Exception error) { restoringDefault=true; defaultPicker.SelectedValue=previous; restoringDefault=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            layout.Children.Add(defaultPicker);
+            var collectionToggle=new CheckBox {Content="Show collection name",IsChecked=settings.ShowCollectionName,FontSize=14,Foreground=white,Margin=new Thickness(0,12,0,8)};
+            collectionToggle.Click+=(s,e) => {
+                try { SetShowCollectionName(collectionToggle.IsChecked==true); }
+                catch(Exception error) { collectionToggle.IsChecked=settings.ShowCollectionName; MessageBox.Show(dialog,"Could not save collection name preference: "+error.Message,"Settings"); }
+            };
+            layout.Children.Add(collectionToggle);
+            var monitorCaption=Label("Open on monitor",14,mint); monitorCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(monitorCaption);
+            var monitorOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
+            var displays=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
+            for(int i=0;i<displays.Length;i++) {
+                var display=displays[i];
+                monitorOptions.Add(new KeyValuePair<string,string>(display.DeviceName,"Monitor "+(i+1)+" · "+display.Bounds.Width+" × "+display.Bounds.Height+(display.Primary ? " (primary)" : "")));
+            }
+            string monitorPreference=String.IsNullOrEmpty(settings.OpenMonitor) ? "cursor" : settings.OpenMonitor;
+            if(!monitorOptions.Any(p => p.Key==monitorPreference)) monitorOptions.Add(new KeyValuePair<string,string>(monitorPreference,"Saved monitor (disconnected)"));
+            var monitorPicker=new ComboBox {ItemsSource=monitorOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=monitorPreference,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
+            bool restoringMonitor=false;
+            monitorPicker.SelectionChanged+=(s,e) => {
+                if(restoringMonitor) return;
+                string next=monitorPicker.SelectedValue as string,previous=settings.OpenMonitor;
+                if(next==null || next==previous) return;
+                try { settings.OpenMonitor=next; Storage.Write("settings.json",settings); }
+                catch(Exception error) {
+                    settings.OpenMonitor=previous; restoringMonitor=true; monitorPicker.SelectedValue=previous ?? "cursor"; restoringMonitor=false;
+                    MessageBox.Show(dialog,"Could not save monitor preference: "+error.Message,"Settings");
+                }
+            };
+            layout.Children.Add(monitorPicker);
+            var monitorTip=Label("Applies the next time you open the overlay. If the chosen display is disconnected, the cursor's monitor is used.",12,muted); monitorTip.TextWrapping=TextWrapping.Wrap; monitorTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(monitorTip);
+            var layoutCaption=Label("Carousel layout",14,mint); layoutCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(layoutCaption);
+            var layoutPicker=new ComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled (original)"),new KeyValuePair<string,string>("rectangular","Rectangular")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            bool restoringLayout=false;
+            layoutPicker.SelectionChanged+=(s,e) => {
+                if(restoringLayout) return;
+                string choice=layoutPicker.SelectedValue as string,previous=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled";
+                if(choice==null || choice==previous) return;
+                try { SetCarouselLayout(choice); }
+                catch(Exception error) { restoringLayout=true; layoutPicker.SelectedValue=previous; restoringLayout=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            layout.Children.Add(layoutPicker);
+            var sizeCaption=Label("Carousel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
+            double scale=settings.CarouselScale>=.6 && settings.CarouselScale<=1.4 ? settings.CarouselScale : 1;
+            var sizeLabel=Label(Math.Round(scale*100)+"%",13,white);
+            var sizePicker=new Slider {Minimum=.6,Maximum=1.4,Value=scale,TickFrequency=.05,SmallChange=.05,LargeChange=.1,IsSnapToTickEnabled=true,Margin=new Thickness(0,4,0,8)};
+            bool restoringSize=false;
+            sizePicker.ValueChanged+=(s,e) => {
+                if(restoringSize) return;
+                double previous=settings.CarouselScale;
+                try { SetCarouselScale(sizePicker.Value); sizeLabel.Text=Math.Round(sizePicker.Value*100)+"%"; }
+                catch(Exception error) { restoringSize=true; sizePicker.Value=previous; restoringSize=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            layout.Children.Add(sizeLabel); layout.Children.Add(sizePicker);
             var steamCaption=Label("Steam path",14,mint); steamCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(steamCaption);
             var steamPath=new TextBox {Text=settings.SteamPath ?? SteamLibrary.DetectSteam() ?? "",FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"}; layout.Children.Add(steamPath);
             Action reloadUsers=null;
@@ -465,6 +477,7 @@ namespace PadLauncher {
                 }), IsHitTestVisible = false
             });
             collectionText.Name="SelectedCollection"; collectionText.FontSize = 20; collectionText.Foreground = white;
+            collectionText.Visibility=settings.ShowCollectionName ? Visibility.Visible : Visibility.Collapsed;
             collectionText.HorizontalAlignment = HorizontalAlignment.Center;
             collectionText.VerticalAlignment = VerticalAlignment.Top;
             collectionText.Margin = new Thickness(0,130,0,0);

@@ -54,6 +54,11 @@ public static class OverlayTests {
             content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
             Check(!ContainsButton(content),"Overlay contains no visible or hidden desktop buttons");
             var gameTitle=FindElement(content,"SelectedGameTitle");
+            Check(defaults.ShowCollectionName,"Older settings keep the collection name visible");
+            window.SetShowCollectionName(false);
+            Check(FindElement(content,"SelectedCollection").Visibility==Visibility.Collapsed && !Storage.Read<Settings>("settings.json").ShowCollectionName,"Collection name can be hidden immediately and the preference is saved");
+            window.SetShowCollectionName(true);
+            Check(FindElement(content,"SelectedCollection").Visibility==Visibility.Visible && Storage.Read<Settings>("settings.json").ShowCollectionName,"Collection name can be restored immediately and the preference is saved");
             window.SetShowGameTitle(false);
             Check(gameTitle.Visibility==Visibility.Collapsed && !Storage.Read<Settings>("settings.json").ShowGameTitle,"Show game title setting hides the title immediately and saves the choice");
             window.SetShowGameTitle(true);
