@@ -31,8 +31,6 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 | Launch selected game | Cross / A | Enter |
 | Change collection | L1 / R1, LB / RB | Page Up / Page Down |
 | Move to next monitor | Square / Xbox X / Nintendo Y | M |
-| Search | Triangle / Y | F |
-| Close search / clear search / exit | Circle / B | Escape |
 | Exit app completely (overlay open) | Hold Circle / Xbox B / Nintendo A for 1 second | — |
 | Brief control hint | Options / Start | F1 |
 | Refresh games, artwork and collection membership | Hold Triangle / Y for 1 second | F5 |
