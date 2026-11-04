@@ -53,8 +53,8 @@ namespace PadLauncher {
         public string SelectedId { get; set; }
         public string DefaultCollectionId { get; set; }
         public double CarouselScale { get; set; }
-        public string OpenShortcut { get; set; }
-        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; OpenShortcut="off"; }
+        public string CarouselLayout { get; set; }
+        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -75,16 +75,6 @@ namespace PadLauncher {
         }
     }
     public enum ButtonGesture { None, Tap, Hold }
-    public class OpenShortcutGesture {
-        readonly HoldButton chord=new HoldButton();
-        bool guideDown;
-        public void Reset() { chord.Reset(); guideDown=false; }
-        public bool Update(string shortcut,ushort buttons,long milliseconds) {
-            if(shortcut=="options-share") return chord.Update((buttons&0x0030)==0x0030,milliseconds)==ButtonGesture.Hold;
-            if(shortcut=="ps") { bool down=(buttons&0x0400)!=0,rising=down&&!guideDown; guideDown=down; return rising; }
-            Reset(); return false;
-        }
-    }
     public class HoldButton {
         bool pressed, fired;
         long started;

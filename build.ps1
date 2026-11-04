@@ -15,7 +15,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 $builtExecutable = Get-Item $stagedExecutable
 $newestSource = @($librarySources + $appSources + (Join-Path $PSScriptRoot 'src\App.manifest')) | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if ($builtExecutable.LastWriteTimeUtc -lt $newestSource.LastWriteTimeUtc) { throw 'The executable is older than the source. Close any running launcher and rebuild.' }
+$helperSources=@((Join-Path $PSScriptRoot 'companion\TapLauncher\TapLauncher.cs'),(Join-Path $PSScriptRoot 'companion\TapLauncher\Settings.cs'))
+& $compiler /nologo /target:winexe /platform:anycpu /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Xml.Linq.dll ('/out:' + (Join-Path $out 'TapLauncher.exe')) $helperSources
+if ($LASTEXITCODE -ne 0) { throw 'TapLauncher build failed.' }
 if ($args -contains '-Test') {
+    & (Join-Path $out 'TapLauncher.exe') --self-test | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'TapLauncher tests failed. See bin\TapLauncher.log.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'LibraryTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\LibraryTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Test build failed.' }
     & (Join-Path $out 'LibraryTests.exe')

@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.1.6.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.6.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.6")]
+[assembly: System.Reflection.AssemblyVersion("0.1.7.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.7.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.7")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
@@ -100,8 +100,6 @@ namespace PadLauncher {
         readonly Dictionary<string,FrameworkElement> cards = new Dictionary<string,FrameworkElement>();
         readonly DispatcherTimer controllerTimer = new DispatcherTimer();
         readonly DispatcherTimer noticeTimer = new DispatcherTimer();
-        readonly DispatcherTimer shortcutTimer = new DispatcherTimer();
-        readonly OpenShortcutGesture openGesture = new OpenShortcutGesture();
         Settings settings;
         Library library = new Library();
         List<Game> visible = new List<Game>();
@@ -138,18 +136,16 @@ namespace PadLauncher {
             ApplyCarouselScale();
             PreviewKeyDown += OnKey;
             MouseWheel += (s,e) => { Move(e.Delta < 0 ? 1 : -1); };
-            Closed += (s,e) => { controllerTimer.Stop(); shortcutTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); Save(); };
+            Closed += (s,e) => { controllerTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
                 if (!exiting) {
                     e.Cancel=true; Save(); controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
                     notice.Visibility=Visibility.Collapsed; exitButton.Reset(); previousButtons=0; previousDirection=0;
-                    launching=false; Hide(); ConfigureOpenShortcut();
+                    launching=false; Hide(); Gamepad.StopNative();
                 }
             };
             controllerTimer.Interval = TimeSpan.FromMilliseconds(16);
             controllerTimer.Tick += PollController;
-            shortcutTimer.Interval=TimeSpan.FromMilliseconds(80);
-            shortcutTimer.Tick+=PollOpenShortcut;
             noticeTimer.Interval = TimeSpan.FromSeconds(5);
             noticeTimer.Tick += (s,e) => { notice.Visibility = Visibility.Collapsed; noticeTimer.Stop(); };
             if (demo) { library = Demo(); settings.SelectedId="4"; ApplyLibrary(true); }
@@ -161,7 +157,7 @@ namespace PadLauncher {
         }
         public void PrepareTray() {
             controllerTimer.Stop();
-            ConfigureOpenShortcut();
+            Gamepad.StopNative();
             var content=Content as FrameworkElement;
             if(content!=null) { content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout(); }
             if(!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
@@ -183,33 +179,6 @@ namespace PadLauncher {
             // Paint retained artwork first, then reread Steam's saved changes.
             if (!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
         }
-        void ConfigureOpenShortcut() {
-            if(preview || exiting) return;
-            if(settings.OpenShortcut=="options-share" || settings.OpenShortcut=="ps") {
-                Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle());
-                shortcutTimer.Start();
-            } else {
-                shortcutTimer.Stop(); openGesture.Reset();
-                if(!IsVisible) Gamepad.StopNative();
-            }
-        }
-        void PollOpenShortcut(object sender,EventArgs args) {
-            if(exiting) return;
-            PadState pad;
-            if(!Gamepad.ReadShortcut(settings.OpenShortcut=="ps",out pad)) { openGesture.Reset(); return; }
-            long now=(long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency);
-            if(openGesture.Update(settings.OpenShortcut,pad.Buttons,now)) {
-                if(helpWindow!=null) helpWindow.Close();
-                ToggleOverlay();
-            }
-        }
-        public void SetOpenShortcut(string shortcut) {
-            if(shortcut!="off" && shortcut!="options-share" && shortcut!="ps") throw new ArgumentException("Choose a listed controller shortcut.");
-            string previous=settings.OpenShortcut;
-            try { settings.OpenShortcut=shortcut; Storage.Write("settings.json",settings); }
-            catch { settings.OpenShortcut=previous; throw; }
-            openGesture.Reset(); ConfigureOpenShortcut();
-        }
         public void SetDefaultCollection(string id) {
             if(id!="remember" && id!="all" && !library.Collections.Any(c => c.Id==id)) throw new ArgumentException("Choose an available collection.");
             string previous=settings.DefaultCollectionId;
@@ -222,6 +191,13 @@ namespace PadLauncher {
             try { settings.CarouselScale=scale; Storage.Write("settings.json",settings); }
             catch { settings.CarouselScale=previous; throw; }
             ApplyCarouselScale();
+        }
+        public void SetCarouselLayout(string layout) {
+            if(layout!="angled" && layout!="rectangular") throw new ArgumentException("Choose an angled or rectangular layout.");
+            string previous=settings.CarouselLayout;
+            try { settings.CarouselLayout=layout; Storage.Write("settings.json",settings); }
+            catch { settings.CarouselLayout=previous; throw; }
+            cards.Clear(); carousel.Children.Clear(); Render(false);
         }
         void ApplyCarouselScale() {
             double scale=settings.CarouselScale;
@@ -360,6 +336,17 @@ namespace PadLauncher {
                 catch(Exception error) { restoringDefault=true; defaultPicker.SelectedValue=previous; restoringDefault=false; MessageBox.Show(dialog,error.Message,"Settings"); }
             };
             layout.Children.Add(defaultPicker);
+            var layoutCaption=Label("Carousel layout",14,mint); layoutCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(layoutCaption);
+            var layoutPicker=new ComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled (original)"),new KeyValuePair<string,string>("rectangular","Rectangular")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            bool restoringLayout=false;
+            layoutPicker.SelectionChanged+=(s,e) => {
+                if(restoringLayout) return;
+                string choice=layoutPicker.SelectedValue as string,previous=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled";
+                if(choice==null || choice==previous) return;
+                try { SetCarouselLayout(choice); }
+                catch(Exception error) { restoringLayout=true; layoutPicker.SelectedValue=previous; restoringLayout=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            layout.Children.Add(layoutPicker);
             var sizeCaption=Label("Carousel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
             double scale=settings.CarouselScale>=.6 && settings.CarouselScale<=1.4 ? settings.CarouselScale : 1;
             var sizeLabel=Label(Math.Round(scale*100)+"%",13,white);
@@ -372,20 +359,6 @@ namespace PadLauncher {
                 catch(Exception error) { restoringSize=true; sizePicker.Value=previous; restoringSize=false; MessageBox.Show(dialog,error.Message,"Settings"); }
             };
             layout.Children.Add(sizeLabel); layout.Children.Add(sizePicker);
-            var shortcutCaption=Label("Controller shortcut",14,mint); shortcutCaption.Margin=new Thickness(0,10,0,10); layout.Children.Add(shortcutCaption);
-            string chord=Prompts.Style(settings)=="Xbox" ? "Hold Start + Back (1 sec)" : Prompts.Style(settings)=="Nintendo" ? "Hold + and − (1 sec)" : "Hold Options + Share (1 sec)";
-            var shortcutOptions=new[]{new KeyValuePair<string,string>("off","Off"),new KeyValuePair<string,string>("options-share",chord),new KeyValuePair<string,string>("ps","PS button (native PlayStation input)")};
-            var shortcutPicker=new ComboBox {ItemsSource=shortcutOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.OpenShortcut ?? "off",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
-            bool restoringShortcut=false;
-            shortcutPicker.SelectionChanged+=(s,e) => {
-                if(restoringShortcut) return;
-                string shortcut=shortcutPicker.SelectedValue as string,previous=settings.OpenShortcut ?? "off";
-                if(shortcut==null || shortcut==previous) return;
-                try { SetOpenShortcut(shortcut); }
-                catch(Exception error) { restoringShortcut=true; shortcutPicker.SelectedValue=previous; restoringShortcut=false; MessageBox.Show(dialog,error.Message,"Settings"); }
-            };
-            layout.Children.Add(shortcutPicker);
-            var shortcutTip=Label("Shows or hides the overlay from another app. When enabled, controller listening continues while the overlay is hidden.",12,muted); shortcutTip.TextWrapping=TextWrapping.Wrap; shortcutTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(shortcutTip);
             var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,14,0,10); layout.Children.Add(caption);
             var styles=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
             foreach(string style in new[]{"PlayStation","Xbox","Nintendo"}) {
@@ -581,7 +554,9 @@ namespace PadLauncher {
                 FrameworkElement card;
                 double h = offset == 0 ? 490 : 390 - Math.Min(3,Math.Abs(offset))*16;
                 double w = offset == 0 ? 355 : 300;
-                double x = 800 - w/2 + offset*254;
+                bool rectangular=settings.CarouselLayout=="rectangular";
+                if(rectangular) w=offset==0 ? 300 : 250;
+                double x = 800 - w/2 + offset*(rectangular ? 285 : 254);
                 double y = offset == 0 ? 0 : (490-h)/2;
                 if (!cards.TryGetValue(game.Id,out card)) {
                     card = Card(game, i, w,h,offset==0); cards[game.Id] = card; carousel.Children.Add(card);
@@ -609,7 +584,7 @@ namespace PadLauncher {
             byte hue = (byte)(Math.Abs((long)hash)%90);
             body.Background = new LinearGradientBrush(Color.FromRgb((byte)(28+hue/2),(byte)(65+hue/3),(byte)(82+hue/2)), Color.FromRgb(11,21,33),60);
             var bitmap = LoadImage(game.Art,700);
-            if (bitmap != null) body.Children.Add(new Image { Source = bitmap, Stretch = Stretch.Uniform, Margin=new Thickness(32,16,32,16), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch });
+            if (bitmap != null) body.Children.Add(new Image { Source = bitmap, Stretch = Stretch.UniformToFill, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch });
             else {
                 body.Children.Add(new System.Windows.Shapes.Ellipse { Width=330,Height=330,Fill=new SolidColorBrush(Color.FromArgb(22,163,240,205)),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,-120,-160,0) });
                 var words = Label(game.Name,31,white); words.FontWeight=FontWeights.SemiBold; words.TextWrapping=TextWrapping.Wrap; words.Margin=new Thickness(58,60,40,75); words.VerticalAlignment=VerticalAlignment.Center; body.Children.Add(words);
@@ -618,8 +593,9 @@ namespace PadLauncher {
             var outline = new System.Windows.Shapes.Path { Fill=Brushes.Transparent,IsHitTestVisible=false,Stroke=mint,StrokeThickness=2 }; grid.Children.Add(outline);
             Action geometry = () => {
                 double w=grid.ActualWidth,h=grid.ActualHeight;
+                double slant=settings.CarouselLayout=="rectangular" ? 0 : 73;
                 var shape = new StreamGeometry();
-                using (var ctx=shape.Open()) { ctx.BeginFigure(new Point(73,0),true,true); ctx.LineTo(new Point(w,0),true,false); ctx.LineTo(new Point(w-73,h),true,false); ctx.LineTo(new Point(0,h),true,false); }
+                using (var ctx=shape.Open()) { ctx.BeginFigure(new Point(slant,0),true,true); ctx.LineTo(new Point(w,0),true,false); ctx.LineTo(new Point(w-slant,h),true,false); ctx.LineTo(new Point(0,h),true,false); }
                 shape.Freeze(); body.Clip=shape; outline.Data=shape;
             };
             grid.SizeChanged += (s,e) => geometry();
@@ -669,7 +645,7 @@ namespace PadLauncher {
             PadState pad; bool found=Gamepad.Read(out pad);
             if (!found) { exitButton.Reset(); previousButtons=0; previousDirection=0; return; }
             if(previousInputSource!=Gamepad.Source) {
-                previousInputSource=Gamepad.Source; previousButtons=pad.Buttons;
+                previousInputSource=Gamepad.Source; previousButtons=0;
                 previousDirection=0; exitButton.Reset();
             }
             ushort buttons=pad.Buttons;
@@ -714,36 +690,42 @@ namespace PadLauncher {
         public byte LT,RT;
         public short LX,LY,RX,RY;
     }
+    public sealed class ControllerRouter {
+        string owner;
+        public static bool Active(PadState pad) { return pad.Buttons!=0 || Math.Abs((int)pad.LX)>16000 || Math.Abs((int)pad.RX)>16000; }
+        public bool Select(List<KeyValuePair<string,PadState>> pads,out PadState state,out string identity) {
+            int chosen=pads.FindIndex(p => p.Key==owner && Active(p.Value));
+            if(chosen<0) chosen=pads.FindIndex(p => Active(p.Value));
+            if(chosen<0) chosen=pads.FindIndex(p => p.Key==owner);
+            if(chosen<0 && pads.Count>0) chosen=0;
+            identity=chosen>=0 ? pads[chosen].Key : null; state=chosen>=0 ? pads[chosen].Value : new PadState(); owner=identity;
+            return chosen>=0;
+        }
+        public void Reset() { owner=null; }
+    }
     public static class Gamepad {
         [DllImport("xinput1_4.dll",EntryPoint="XInputGetState")] static extern uint Read14(uint index,out PadState state);
         [DllImport("xinput1_3.dll",EntryPoint="XInputGetState")] static extern uint Read13(uint index,out PadState state);
         [DllImport("xinput9_1_0.dll",EntryPoint="XInputGetState")] static extern uint Read91(uint index,out PadState state);
         static int version;
         static readonly PlayStationInput sony=new PlayStationInput();
+        static readonly ControllerRouter router=new ControllerRouter();
         public static string Source { get; private set; }
         public static void StartNative(IntPtr window) { sony.Start(window); }
-        public static void StopNative() { sony.Stop(); Source=null; }
-        public static bool ReadShortcut(bool nativeGuide,out PadState state) {
-            if(!nativeGuide) return Read(out state);
-            string identity; return sony.Read(out state,out identity);
-        }
+        public static void StopNative() { sony.Stop(); router.Reset(); Source=null; }
         public static bool Read(out PadState state) {
-            if(ReadXbox(out state)) return true;
-            string identity;
-            if(sony.Read(out state,out identity)) { Source=identity; return true; }
-            Source=null; return false;
+            var pads=sony.ReadAll();
+            for(uint i=0;i<4;i++) { PadState pad; if(ReadXbox(i,out pad)) pads.Add(new KeyValuePair<string,PadState>("xinput:"+i,pad)); }
+            string identity; bool found=router.Select(pads,out state,out identity); Source=identity; return found;
         }
-        static bool ReadXbox(out PadState state) {
+        static bool ReadXbox(uint i,out PadState state) {
             state=new PadState();
-            for (uint i=0;i<4;i++) {
-                try { if (version==0 || version==14) { uint r=Read14(i,out state); version=14; if (r==0) { Source="xinput:"+i; return true; } continue; } }
+                try { if (version==0 || version==14) { uint r=Read14(i,out state); version=14; return r==0; } }
                 catch (DllNotFoundException) { version=13; } catch (EntryPointNotFoundException) { version=13; }
-                try { if (version==13) { if (Read13(i,out state)==0) { Source="xinput:"+i; return true; } continue; } }
+                try { if (version==13) return Read13(i,out state)==0; }
                 catch (DllNotFoundException) { version=91; } catch (EntryPointNotFoundException) { version=91; }
-                try { if (Read91(i,out state)==0) { Source="xinput:"+i; return true; } }
+                try { return Read91(i,out state)==0; }
                 catch (DllNotFoundException) { return false; } catch (EntryPointNotFoundException) { return false; }
-            }
-            return false;
         }
     }
 }

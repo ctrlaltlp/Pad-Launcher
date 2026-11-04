@@ -84,10 +84,8 @@ namespace PadLauncher {
         static extern uint GetRawInputDeviceInfo(IntPtr device,uint command,ref DeviceInfo info,ref uint size);
         readonly Dictionary<IntPtr,SonyPadModel> models=new Dictionary<IntPtr,SonyPadModel>();
         HwndSource source;
-        IntPtr device;
-        PadState latest;
-        long received;
-        bool haveState;
+        sealed class Sample { public PadState State; public long Received; }
+        readonly Dictionary<IntPtr,Sample> pads=new Dictionary<IntPtr,Sample>();
         static long Milliseconds { get { return (long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency); } }
         public bool Start(IntPtr window) {
             if(source!=null && !source.IsDisposed && source.Handle==window) return true;
@@ -107,16 +105,22 @@ namespace PadLauncher {
                 if(!source.IsDisposed) source.RemoveHook(OnMessage);
                 source=null;
             }
-            models.Clear(); device=IntPtr.Zero; haveState=false; latest=new PadState();
+            models.Clear(); pads.Clear();
         }
         public bool Read(out PadState state,out string identity) {
-            state=latest; identity="sony:"+device.ToInt64();
-            return haveState && Milliseconds-received<=1000;
+            var states=ReadAll();
+            state=states.Count>0 ? states[0].Value : new PadState(); identity=states.Count>0 ? states[0].Key : null;
+            return states.Count>0;
+        }
+        public List<KeyValuePair<string,PadState>> ReadAll() {
+            var result=new List<KeyValuePair<string,PadState>>();
+            foreach(var pair in pads) if(Milliseconds-pair.Value.Received<=1000) result.Add(new KeyValuePair<string,PadState>("sony:"+pair.Key.ToInt64(),pair.Value.State));
+            return result;
         }
         IntPtr OnMessage(IntPtr window,int message,IntPtr wParam,IntPtr lParam,ref bool handled) {
             if(message==0x00fe && wParam.ToInt64()==2) {
                 models.Remove(lParam);
-                if(device==lParam) { device=IntPtr.Zero; haveState=false; }
+                pads.Remove(lParam);
             }
             if(message!=0x00ff) return IntPtr.Zero;
             uint headerSize=(uint)Marshal.SizeOf(typeof(RawHeader)),size=0;
@@ -140,8 +144,8 @@ namespace PadLauncher {
                 PadState decoded;
                 if(!SonyReports.Decode(model,report,out decoded)) continue;
                 long now=Milliseconds;
-                if(device!=IntPtr.Zero && device!=inputDevice && haveState && now-received<=1000) continue;
-                device=inputDevice; decoded.Packet=latest.Packet+1; latest=decoded; haveState=true; received=now;
+                Sample previous; decoded.Packet=pads.TryGetValue(inputDevice,out previous) ? previous.State.Packet+1 : 1;
+                pads[inputDevice]=new Sample {State=decoded,Received=now};
             }
             return IntPtr.Zero;
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows.Interop;
 using PadLauncher;
 
@@ -14,6 +15,17 @@ public static class ControllerTests {
         Launcher window=null;
         var reader=new PlayStationInput();
         try {
+            var router=new ControllerRouter(); PadState routed; string routedSource;
+            var pads=new List<KeyValuePair<string,PadState>> {new KeyValuePair<string,PadState>("pad0",new PadState()),new KeyValuePair<string,PadState>("pad1",new PadState {Buttons=0x1000})};
+            Check(router.Select(pads,out routed,out routedSource) && routedSource=="pad1" && routed.Buttons==0x1000,"An idle first controller does not block a second controller");
+            pads[0]=new KeyValuePair<string,PadState>("pad0",new PadState {Buttons=0x4000});
+            Check(router.Select(pads,out routed,out routedSource) && routedSource=="pad1","Simultaneous input keeps the current controller until it releases");
+            pads[1]=new KeyValuePair<string,PadState>("pad1",new PadState());
+            Check(router.Select(pads,out routed,out routedSource) && routedSource=="pad0","Another controller takes over when the current controller releases");
+            pads.RemoveAt(0);
+            Check(router.Select(pads,out routed,out routedSource) && routedSource=="pad1","Disconnecting the current controller leaves other controllers usable");
+            pads.Clear();
+            Check(!router.Select(pads,out routed,out routedSource) && routedSource==null,"Disconnecting every controller clears input");
             Check(SonyReports.Model(0x054c,0x05c4)==SonyPadModel.DualShock4 && SonyReports.Model(0x054c,0x09cc)==SonyPadModel.DualShock4,"Identify both DualShock 4 revisions");
             Check(SonyReports.Model(0x054c,0x0ce6)==SonyPadModel.DualSense && SonyReports.Model(0x054c,0x0df2)==SonyPadModel.DualSense,"Identify DualSense and DualSense Edge");
             Check(SonyReports.Model(0x1234,0x05c4)==SonyPadModel.Unknown && SonyReports.Model(0x054c,0xffff)==SonyPadModel.Unknown,"Unrecognised HID devices are not interpreted as Sony controllers");
@@ -47,14 +59,7 @@ public static class ControllerTests {
             Check(!SonyReports.Decode(SonyPadModel.DualSense,Report(64,0x31,2,9),out state) && !SonyReports.Decode(SonyPadModel.DualShock4,Report(64,0x11,3,7),out state),"Truncated extended Bluetooth reports are rejected");
             Check(!SonyReports.Decode(SonyPadModel.DualSense,new byte[78],out state),"Unrecognised report IDs cannot produce button actions");
             ds5[8]=8; ds5[10]=1;
-            Check(SonyReports.Decode(SonyPadModel.DualSense,ds5,out state) && (state.Buttons&0x0400)!=0,"Native PS button is available for the opening shortcut");
-            var shortcut=new OpenShortcutGesture();
-            Check(!shortcut.Update("options-share",0x0030,0) && shortcut.Update("options-share",0x0030,1000) && !shortcut.Update("options-share",0x0030,2000),"Opening chord fires once per hold without repeated toggles");
-            shortcut.Update("options-share",0,2100);
-            Check(!shortcut.Update("options-share",0x0030,2200) && shortcut.Update("options-share",0x0030,3200),"Opening chord can fire again after release");
-            shortcut.Reset();
-            Check(shortcut.Update("ps",0x0400,0) && !shortcut.Update("ps",0x0400,100),"PS opening shortcut fires on a new press");
-            Check(!shortcut.Update("off",0x0430,1000),"Disabled opening shortcut never opens the overlay");
+            Check(SonyReports.Decode(SonyPadModel.DualSense,ds5,out state) && (state.Buttons&0x0400)!=0,"Native PS button report decodes correctly");
             window=new Launcher(true,true);
             var handle=new WindowInteropHelper(window).EnsureHandle();
             Check(reader.Start(handle),"Register native gamepad input on an invisible launcher window");

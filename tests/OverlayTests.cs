@@ -30,7 +30,7 @@ public static class OverlayTests {
             var defaults=Storage.Json().Deserialize<Settings>("{\"CollectionId\":\"all\"}");
             Check(defaults.ButtonPrompts=="PlayStation" && defaults.ShowGameTitle,"Older configuration files default to PlayStation prompts and visible title");
             Check(defaults.OpenMonitor=="cursor","Older configuration files default to the cursor's monitor");
-            Check(defaults.DefaultCollectionId=="remember" && defaults.CarouselScale==1 && defaults.OpenShortcut=="off","Older settings preserve last-collection behaviour, normal size and disabled global shortcut");
+            Check(defaults.DefaultCollectionId=="remember" && defaults.CarouselScale==1,"Older settings preserve last-collection behaviour, normal size");
             Check(Prompts.Help(defaults).Contains("×") && !Prompts.Help(defaults).Contains("LB"),"PlayStation hint uses cross, circle and L1/R1");
             defaults.ButtonPrompts="Xbox";
             Storage.Write("settings.json",defaults);
@@ -69,14 +69,23 @@ public static class OverlayTests {
             bool invalidScale=false; try { window.SetCarouselScale(2); } catch(ArgumentOutOfRangeException) { invalidScale=true; }
             Check(invalidScale && Storage.Read<Settings>("settings.json").CarouselScale==.8,"Out-of-range carousel sizes do not overwrite the last valid size");
             window.SetCarouselScale(1);
+            Check(defaults.CarouselLayout=="angled","Older settings preserve the original angled layout");
+            window.SetCarouselLayout("rectangular");
+            content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
+            var panels=(Canvas)FindElement(content,"GameCarousel");
+            var panelBody=(Grid)((Grid)panels.Children[0]).Children[0];
+            Check(panelBody.Clip.FillContains(new Point(1,1)) && Storage.Read<Settings>("settings.json").CarouselLayout=="rectangular","Rectangular panels have square corners and the choice is saved");
+            window.SetCarouselLayout("angled");
+            content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
+            panelBody=(Grid)((Grid)panels.Children[0]).Children[0];
+            Check(!panelBody.Clip.FillContains(new Point(1,1)) && Storage.Read<Settings>("settings.json").CarouselLayout=="angled","Switching back restores the original slanted panels");
+            bool invalidLayout=false; try { window.SetCarouselLayout("unknown"); } catch(ArgumentException) { invalidLayout=true; }
+            Check(invalidLayout && Storage.Read<Settings>("settings.json").CarouselLayout=="angled","Invalid layouts preserve the saved choice");
             window.SetDefaultCollection("couch"); window.ShowOverlay();
             Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="Couch games","Chosen default collection is used when reopening the overlay");
             window.Close(); window.SetDefaultCollection("all"); window.ShowOverlay();
             Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="All games","All games can be selected as the opening collection");
             window.Close(); window.SetDefaultCollection("remember");
-            window.SetOpenShortcut("options-share");
-            Check(Storage.Read<Settings>("settings.json").OpenShortcut=="options-share","Controller opening shortcut preference is saved");
-            window.SetOpenShortcut("off");
             window.ShowControls(); // Exercises optional hint with no settings dialog.
             var resident=new Launcher(true,true);
             resident.PrepareTray();
