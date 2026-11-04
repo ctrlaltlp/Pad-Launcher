@@ -39,11 +39,6 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 
 The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app completely before editing it. `settings.example.json` in this project shows the available fields.
 
-- `"ButtonPrompts": "PlayStation"` is the default. Set it to `"Xbox"` or `"Nintendo"` for those labels, or use the tray settings buttons. This changes optional help hints independently of the controller DS4Windows exposes.
-- `"ShowGameTitle": true` shows the selected game's title below the carousel. Set it to `false` to leave only artwork and the collection name.
-- `"OpenMonitor": "cursor"` is the default. Use the **Open on monitor** dropdown to choose a specific display; the app saves its Windows device name.
-- `SteamPath` and `UserId` override automatic Steam/profile detection.
-
 ## Known bugs
 
 Weird behaviour when more than 1 controller is connected.
