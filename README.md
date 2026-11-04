@@ -43,3 +43,7 @@ The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app complet
 - `"ShowGameTitle": true` shows the selected game's title below the carousel. Set it to `false` to leave only artwork and the collection name.
 - `"OpenMonitor": "cursor"` is the default. Use the **Open on monitor** dropdown to choose a specific display; the app saves its Windows device name.
 - `SteamPath` and `UserId` override automatic Steam/profile detection.
+
+## Known bugs
+
+Weird behaviour when more than 1 controller is connected.
