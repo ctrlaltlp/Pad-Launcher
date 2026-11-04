@@ -433,7 +433,7 @@ namespace PadLauncher {
                 catch(Exception error) { restoringColumns=true; columnsPicker.SelectedItem=previous; restoringColumns=false; MessageBox.Show(dialog,error.Message,"Settings"); }
             };
             columnsControls.Children.Add(columnsPicker); layout.Children.Add(columnsControls);
-            var sizeCaption=Label("Carousel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
+            var sizeCaption=Label("Panel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
             double scale=settings.CarouselScale>=.6 && settings.CarouselScale<=1.4 ? settings.CarouselScale : 1;
             var sizeLabel=Label(Math.Round(scale*100)+"%",13,white);
             var sizePicker=new Slider {Minimum=.6,Maximum=1.4,Value=scale,TickFrequency=.05,SmallChange=.05,LargeChange=.1,IsSnapToTickEnabled=true,Margin=new Thickness(0,4,0,8)};
