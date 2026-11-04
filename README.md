@@ -8,7 +8,7 @@ A transparent Windows overlay for Steam with an angled artwork carousel. Shows y
 
 **[Download SteamPadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/SteamPadLauncher.exe)** for Windows 10/11 (64-bit).
 
-The first launch puts the app in your notification area. Bind a controller button to launch the .exe; that opens the carousel.
+The first launch puts the app in your notification area, so it's best if you have it on auto-start on windows, then bind a controller button to launch the .exe; that opens the carousel.
 
 Steam is detected automatically. If detection fails, set Steam installation folder(the folder containing `steam.exe` and `steamapps`) in settings. Set `UserId` to choose a specific local Steam profile, or leave it null for automatic selection.
 
