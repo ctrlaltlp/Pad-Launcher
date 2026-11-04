@@ -24,12 +24,14 @@ public static class LibraryTests {
             File.WriteAllText(Path.Combine(root,"steamapps","appmanifest_30.acf"),"\"AppState\" { \"appid\" \"30\" \"name\" \"Not installed\" \"StateFlags\" \"1\" }");
             File.WriteAllText(Path.Combine(root,"steamapps","appmanifest_40.acf"),"\"AppState\" { \"appid\" \"40\" \"name\" \"Proton 10.0\" \"StateFlags\" \"4\" }");
             string config=Path.Combine(root,"userdata","123","config"); Directory.CreateDirectory(config);
+            string shortcutFolder=Path.Combine(root,"My Game"); Directory.CreateDirectory(shortcutFolder);
+            string shortcutTarget=Path.Combine(shortcutFolder,"game.exe"); File.WriteAllBytes(shortcutTarget,new byte[0]);
             using (var w=new BinaryWriter(File.Create(Path.Combine(config,"shortcuts.vdf")))) {
                 w.Write((byte)0); CString(w,"shortcuts");
                 for (int i=0;i<2;i++) {
                     w.Write((byte)0); CString(w,i.ToString());
                     w.Write((byte)2); CString(w,"appid"); w.Write(3000000000U+(uint)i);
-                    String(w,"AppName",i==0 ? "Shortcut Ω" : "Other shortcut"); String(w,"exe","\"D:\\My Game\\game.exe\"");
+                    String(w,"AppName",i==0 ? "Shortcut Ω" : "Other shortcut"); String(w,"exe",i==0 ? "\""+shortcutTarget+"\"" : "\"D:\\My Game\\game.exe\"");
                     w.Write((byte)0); CString(w,"tags"); String(w,"0","Local tag"); String(w,"1","Couch"); w.Write((byte)8);
                     w.Write((byte)8);
                 }
@@ -58,6 +60,9 @@ public static class LibraryTests {
             Check(!library.Games.Any(g => g.Id=="30"),"Uninstalled manifests excluded");
             Check(!library.Games.Any(g => g.Id=="40"),"Compatibility runtimes excluded");
             Check(library.Games.Single(g => g.Id=="3000000000").Name=="Shortcut Ω","Binary VDF Unicode and unsigned shortcut IDs");
+            Check(library.Games.Single(g => g.Id=="3000000000").ShortcutInstalled && library.Games.Single(g => g.Id=="3000000000").ShortcutTarget==shortcutTarget,"Existing non-Steam executable with spaces is marked installed");
+            Check(!library.Games.Single(g => g.Id=="3000000001").ShortcutInstalled,"Missing non-Steam executable is not marked installed");
+            Check(SteamLibrary.ShortcutTargetPath("game.exe",shortcutFolder)==shortcutTarget,"Relative shortcut executables resolve against their start directory");
             Check(library.Games.Single(g => g.Id=="3000000000").LaunchId=="12884901888033554432","64-bit non-Steam Steam launch ID");
             Check(library.Games.Single(g => g.Id=="3000000000").Art==custom,"Existing custom shortcut artwork preferred");
             Check(library.Games.Single(g => g.Id=="10").Hero==hero,"Nested hashed Steam library artwork");

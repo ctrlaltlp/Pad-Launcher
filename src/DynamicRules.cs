@@ -52,7 +52,7 @@ namespace PadLauncher {
         }
         static bool Matches(Game game,int group,string option) {
             if (group==1) {
-                if (option=="1") return !game.Shortcut; // Steam Installed excludes non-Steam entries.
+                if (option=="1") return !game.Shortcut || game.ShortcutInstalled;
                 if (option=="3") return game.LastPlayed>0;
                 if (option=="4") return game.LastPlayed==0;
             }

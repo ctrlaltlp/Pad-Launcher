@@ -30,6 +30,7 @@ public static class OverlayTests {
             var defaults=Storage.Json().Deserialize<Settings>("{\"CollectionId\":\"all\"}");
             Check(defaults.ButtonPrompts=="PlayStation" && defaults.ShowGameTitle,"Older configuration files default to PlayStation prompts and visible title");
             Check(defaults.OpenMonitor=="cursor","Older configuration files default to the cursor's monitor");
+            Check(defaults.DefaultCollectionId=="remember" && defaults.CarouselScale==1 && defaults.OpenShortcut=="off","Older settings preserve last-collection behaviour, normal size and disabled global shortcut");
             Check(Prompts.Help(defaults).Contains("×") && !Prompts.Help(defaults).Contains("LB"),"PlayStation hint uses cross, circle and L1/R1");
             defaults.ButtonPrompts="Xbox";
             Storage.Write("settings.json",defaults);
@@ -62,6 +63,20 @@ public static class OverlayTests {
             Check(pixel[3]==0,"Rendered screen corner is fully transparent");
             bitmap.CopyPixels(new Int32Rect(800,450,1,1),pixel,4,0);
             Check(pixel[3]>0,"Carousel artwork and shadow remain visible over the transparent desktop");
+            window.SetCarouselScale(.8);
+            var transform=FindElement(content,"GameCarousel").RenderTransform as ScaleTransform;
+            Check(transform!=null && transform.ScaleX==.8 && Storage.Read<Settings>("settings.json").CarouselScale==.8,"Carousel size is applied immediately and saved");
+            bool invalidScale=false; try { window.SetCarouselScale(2); } catch(ArgumentOutOfRangeException) { invalidScale=true; }
+            Check(invalidScale && Storage.Read<Settings>("settings.json").CarouselScale==.8,"Out-of-range carousel sizes do not overwrite the last valid size");
+            window.SetCarouselScale(1);
+            window.SetDefaultCollection("couch"); window.ShowOverlay();
+            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="Couch games","Chosen default collection is used when reopening the overlay");
+            window.Close(); window.SetDefaultCollection("all"); window.ShowOverlay();
+            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="All games","All games can be selected as the opening collection");
+            window.Close(); window.SetDefaultCollection("remember");
+            window.SetOpenShortcut("options-share");
+            Check(Storage.Read<Settings>("settings.json").OpenShortcut=="options-share","Controller opening shortcut preference is saved");
+            window.SetOpenShortcut("off");
             window.ShowControls(); // Exercises optional hint with no settings dialog.
             var resident=new Launcher(true,true);
             resident.PrepareTray();

@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.1.5.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.5.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.5")]
+[assembly: System.Reflection.AssemblyVersion("0.1.6.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.1.6.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.1.6")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
@@ -91,7 +91,7 @@ namespace PadLauncher {
         readonly Brush muted = new SolidColorBrush(Color.FromRgb(141,161,168));
         readonly Brush mint = new SolidColorBrush(Color.FromRgb(163,240,205));
         readonly Grid scene = new Grid { Width = 1600, Height = 900, Background = Brushes.Transparent };
-        readonly Canvas carousel = new Canvas { ClipToBounds = true };
+        readonly Canvas carousel = new Canvas { Name="GameCarousel",ClipToBounds = true };
         readonly TextBlock title = new TextBlock();
         readonly TextBlock collectionText = new TextBlock();
         readonly Border notice = new Border();
@@ -100,6 +100,8 @@ namespace PadLauncher {
         readonly Dictionary<string,FrameworkElement> cards = new Dictionary<string,FrameworkElement>();
         readonly DispatcherTimer controllerTimer = new DispatcherTimer();
         readonly DispatcherTimer noticeTimer = new DispatcherTimer();
+        readonly DispatcherTimer shortcutTimer = new DispatcherTimer();
+        readonly OpenShortcutGesture openGesture = new OpenShortcutGesture();
         Settings settings;
         Library library = new Library();
         List<Game> visible = new List<Game>();
@@ -133,29 +135,33 @@ namespace PadLauncher {
             FontFamily = new FontFamily("Segoe UI");
             Content = new Viewbox { Stretch = Stretch.Uniform, Child = scene };
             BuildScene();
+            ApplyCarouselScale();
             PreviewKeyDown += OnKey;
             MouseWheel += (s,e) => { Move(e.Delta < 0 ? 1 : -1); };
-            Closed += (s,e) => { controllerTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); Save(); };
+            Closed += (s,e) => { controllerTimer.Stop(); shortcutTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
                 if (!exiting) {
-                    e.Cancel=true; Save(); controllerTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); previousInputSource=null;
+                    e.Cancel=true; Save(); controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
                     notice.Visibility=Visibility.Collapsed; exitButton.Reset(); previousButtons=0; previousDirection=0;
-                    launching=false; Hide();
+                    launching=false; Hide(); ConfigureOpenShortcut();
                 }
             };
             controllerTimer.Interval = TimeSpan.FromMilliseconds(16);
             controllerTimer.Tick += PollController;
+            shortcutTimer.Interval=TimeSpan.FromMilliseconds(80);
+            shortcutTimer.Tick+=PollOpenShortcut;
             noticeTimer.Interval = TimeSpan.FromSeconds(5);
             noticeTimer.Tick += (s,e) => { notice.Visibility = Visibility.Collapsed; noticeTimer.Stop(); };
-            if (demo) { library = Demo(); settings.SelectedId="4"; ApplyLibrary(); }
+            if (demo) { library = Demo(); settings.SelectedId="4"; ApplyLibrary(true); }
             else {
                 var cached = Storage.Read<Library>("library.json");
-                if (cached != null && (String.IsNullOrEmpty(settings.SteamPath) || String.Equals(cached.SteamPath, settings.SteamPath, StringComparison.OrdinalIgnoreCase)) && (String.IsNullOrEmpty(settings.UserId) || cached.UserId == settings.UserId)) { library = cached; ApplyLibrary(); }
+                if (cached != null && (String.IsNullOrEmpty(settings.SteamPath) || String.Equals(cached.SteamPath, settings.SteamPath, StringComparison.OrdinalIgnoreCase)) && (String.IsNullOrEmpty(settings.UserId) || cached.UserId == settings.UserId)) { library = cached; ApplyLibrary(true); }
                 else { SetFilters(); Render(false); }
             }
         }
         public void PrepareTray() {
             controllerTimer.Stop();
+            ConfigureOpenShortcut();
             var content=Content as FrameworkElement;
             if(content!=null) { content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout(); }
             if(!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
@@ -167,6 +173,7 @@ namespace PadLauncher {
         public void ShowOverlay() {
             if (exiting) return;
             launching=false; exitButton.Reset(); previousButtons=0; previousDirection=0;
+            ApplyLibrary(true);
             var monitor=preview ? null : ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
             if(monitor!=null) PlaceOnMonitor(monitor);
             Show();
@@ -175,6 +182,54 @@ namespace PadLauncher {
             if (!preview) { Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle()); controllerTimer.Start(); }
             // Paint retained artwork first, then reread Steam's saved changes.
             if (!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
+        }
+        void ConfigureOpenShortcut() {
+            if(preview || exiting) return;
+            if(settings.OpenShortcut=="options-share" || settings.OpenShortcut=="ps") {
+                Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle());
+                shortcutTimer.Start();
+            } else {
+                shortcutTimer.Stop(); openGesture.Reset();
+                if(!IsVisible) Gamepad.StopNative();
+            }
+        }
+        void PollOpenShortcut(object sender,EventArgs args) {
+            if(exiting) return;
+            PadState pad;
+            if(!Gamepad.ReadShortcut(settings.OpenShortcut=="ps",out pad)) { openGesture.Reset(); return; }
+            long now=(long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency);
+            if(openGesture.Update(settings.OpenShortcut,pad.Buttons,now)) {
+                if(helpWindow!=null) helpWindow.Close();
+                ToggleOverlay();
+            }
+        }
+        public void SetOpenShortcut(string shortcut) {
+            if(shortcut!="off" && shortcut!="options-share" && shortcut!="ps") throw new ArgumentException("Choose a listed controller shortcut.");
+            string previous=settings.OpenShortcut;
+            try { settings.OpenShortcut=shortcut; Storage.Write("settings.json",settings); }
+            catch { settings.OpenShortcut=previous; throw; }
+            openGesture.Reset(); ConfigureOpenShortcut();
+        }
+        public void SetDefaultCollection(string id) {
+            if(id!="remember" && id!="all" && !library.Collections.Any(c => c.Id==id)) throw new ArgumentException("Choose an available collection.");
+            string previous=settings.DefaultCollectionId;
+            try { settings.DefaultCollectionId=id; Storage.Write("settings.json",settings); }
+            catch { settings.DefaultCollectionId=previous; throw; }
+        }
+        public void SetCarouselScale(double scale) {
+            if(Double.IsNaN(scale) || Double.IsInfinity(scale) || scale<0.6 || scale>1.4) throw new ArgumentOutOfRangeException("scale","Choose a size between 60% and 140%.");
+            double previous=settings.CarouselScale;
+            try { settings.CarouselScale=scale; Storage.Write("settings.json",settings); }
+            catch { settings.CarouselScale=previous; throw; }
+            ApplyCarouselScale();
+        }
+        void ApplyCarouselScale() {
+            double scale=settings.CarouselScale;
+            if(Double.IsNaN(scale) || Double.IsInfinity(scale) || scale<0.6 || scale>1.4) scale=1;
+            carousel.RenderTransformOrigin=new Point(.5,.5);
+            carousel.RenderTransform=new ScaleTransform(scale,scale);
+            collectionText.Margin=new Thickness(0,Math.Max(40,130+(1-scale)*250),0,0);
+            title.Margin=new Thickness(0,726+(scale-1)*240,0,0);
         }
         [DllImport("user32.dll",SetLastError=true)]
         static extern bool SetWindowPos(IntPtr window,IntPtr insertAfter,int x,int y,int width,int height,uint flags);
@@ -290,6 +345,47 @@ namespace PadLauncher {
             };
             layout.Children.Add(monitorPicker);
             var monitorTip=Label("Applies the next time you open the overlay. If the chosen display is disconnected, the cursor's monitor is used.",12,muted); monitorTip.TextWrapping=TextWrapping.Wrap; monitorTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(monitorTip);
+            var defaultCaption=Label("Default collection",14,mint); defaultCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(defaultCaption);
+            var collectionOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last collection"),new KeyValuePair<string,string>("all","All games")};
+            foreach(var collection in library.Collections) collectionOptions.Add(new KeyValuePair<string,string>(collection.Id,collection.Name));
+            string defaultId=String.IsNullOrEmpty(settings.DefaultCollectionId) ? "remember" : settings.DefaultCollectionId;
+            if(!collectionOptions.Any(p => p.Key==defaultId)) collectionOptions.Add(new KeyValuePair<string,string>(defaultId,"Saved collection (unavailable)"));
+            var defaultPicker=new ComboBox {ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            bool restoringDefault=false;
+            defaultPicker.SelectionChanged+=(s,e) => {
+                if(restoringDefault) return;
+                string id=defaultPicker.SelectedValue as string,previous=settings.DefaultCollectionId ?? "remember";
+                if(id==null || id==previous) return;
+                try { SetDefaultCollection(id); }
+                catch(Exception error) { restoringDefault=true; defaultPicker.SelectedValue=previous; restoringDefault=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            layout.Children.Add(defaultPicker);
+            var sizeCaption=Label("Carousel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
+            double scale=settings.CarouselScale>=.6 && settings.CarouselScale<=1.4 ? settings.CarouselScale : 1;
+            var sizeLabel=Label(Math.Round(scale*100)+"%",13,white);
+            var sizePicker=new Slider {Minimum=.6,Maximum=1.4,Value=scale,TickFrequency=.05,SmallChange=.05,LargeChange=.1,IsSnapToTickEnabled=true,Margin=new Thickness(0,4,0,8)};
+            bool restoringSize=false;
+            sizePicker.ValueChanged+=(s,e) => {
+                if(restoringSize) return;
+                double previous=settings.CarouselScale;
+                try { SetCarouselScale(sizePicker.Value); sizeLabel.Text=Math.Round(sizePicker.Value*100)+"%"; }
+                catch(Exception error) { restoringSize=true; sizePicker.Value=previous; restoringSize=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            layout.Children.Add(sizeLabel); layout.Children.Add(sizePicker);
+            var shortcutCaption=Label("Controller shortcut",14,mint); shortcutCaption.Margin=new Thickness(0,10,0,10); layout.Children.Add(shortcutCaption);
+            string chord=Prompts.Style(settings)=="Xbox" ? "Hold Start + Back (1 sec)" : Prompts.Style(settings)=="Nintendo" ? "Hold + and − (1 sec)" : "Hold Options + Share (1 sec)";
+            var shortcutOptions=new[]{new KeyValuePair<string,string>("off","Off"),new KeyValuePair<string,string>("options-share",chord),new KeyValuePair<string,string>("ps","PS button (native PlayStation input)")};
+            var shortcutPicker=new ComboBox {ItemsSource=shortcutOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.OpenShortcut ?? "off",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            bool restoringShortcut=false;
+            shortcutPicker.SelectionChanged+=(s,e) => {
+                if(restoringShortcut) return;
+                string shortcut=shortcutPicker.SelectedValue as string,previous=settings.OpenShortcut ?? "off";
+                if(shortcut==null || shortcut==previous) return;
+                try { SetOpenShortcut(shortcut); }
+                catch(Exception error) { restoringShortcut=true; shortcutPicker.SelectedValue=previous; restoringShortcut=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            layout.Children.Add(shortcutPicker);
+            var shortcutTip=Label("Shows or hides the overlay from another app. When enabled, controller listening continues while the overlay is hidden.",12,muted); shortcutTip.TextWrapping=TextWrapping.Wrap; shortcutTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(shortcutTip);
             var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,14,0,10); layout.Children.Add(caption);
             var styles=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
             foreach(string style in new[]{"PlayStation","Xbox","Nintendo"}) {
@@ -395,7 +491,7 @@ namespace PadLauncher {
                     new GradientStop(Color.FromArgb(0,4,10,16),1)
                 }), IsHitTestVisible = false
             });
-            collectionText.FontSize = 20; collectionText.Foreground = white;
+            collectionText.Name="SelectedCollection"; collectionText.FontSize = 20; collectionText.Foreground = white;
             collectionText.HorizontalAlignment = HorizontalAlignment.Center;
             collectionText.VerticalAlignment = VerticalAlignment.Top;
             collectionText.Margin = new Thickness(0,130,0,0);
@@ -436,7 +532,14 @@ namespace PadLauncher {
             } catch (Exception e) { ShowNotice(e.Message); }
             finally { scanning = false; }
         }
-        void ApplyLibrary() { SetFilters(); FilterGames(true); }
+        void ApplyLibrary(bool opening=false) {
+            SetFilters();
+            if(opening && !String.IsNullOrEmpty(settings.DefaultCollectionId) && settings.DefaultCollectionId!="remember") {
+                collectionIndex=Math.Max(0,filters.FindIndex(c => c.Id==settings.DefaultCollectionId));
+                settings.CollectionId=filters[collectionIndex].Id;
+            }
+            FilterGames(true);
+        }
         void SetFilters() {
             filters = new List<Collection> { new Collection { Id = "all", Name = "All games" } };
             filters.AddRange(library.Collections ?? new List<Collection>());
@@ -506,7 +609,7 @@ namespace PadLauncher {
             byte hue = (byte)(Math.Abs((long)hash)%90);
             body.Background = new LinearGradientBrush(Color.FromRgb((byte)(28+hue/2),(byte)(65+hue/3),(byte)(82+hue/2)), Color.FromRgb(11,21,33),60);
             var bitmap = LoadImage(game.Art,700);
-            if (bitmap != null) body.Children.Add(new Image { Source = bitmap, Stretch = Stretch.UniformToFill, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch });
+            if (bitmap != null) body.Children.Add(new Image { Source = bitmap, Stretch = Stretch.Uniform, Margin=new Thickness(32,16,32,16), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch });
             else {
                 body.Children.Add(new System.Windows.Shapes.Ellipse { Width=330,Height=330,Fill=new SolidColorBrush(Color.FromArgb(22,163,240,205)),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,-120,-160,0) });
                 var words = Label(game.Name,31,white); words.FontWeight=FontWeights.SemiBold; words.TextWrapping=TextWrapping.Wrap; words.Margin=new Thickness(58,60,40,75); words.VerticalAlignment=VerticalAlignment.Center; body.Children.Add(words);
@@ -595,7 +698,7 @@ namespace PadLauncher {
             if ((pressed&0x0100)!=0) ChangeCollection(-1);
             if ((pressed&0x0200)!=0) ChangeCollection(1);
             if ((pressed&0x8000)!=0) RefreshLibrary(true);
-            if ((pressed&0x0010)!=0) ShowControls();
+            if ((pressed&0x0010)!=0 && (buttons&0x0020)==0) ShowControls();
         }
         static Library Demo() {
             var library=new Library();
@@ -620,6 +723,10 @@ namespace PadLauncher {
         public static string Source { get; private set; }
         public static void StartNative(IntPtr window) { sony.Start(window); }
         public static void StopNative() { sony.Stop(); Source=null; }
+        public static bool ReadShortcut(bool nativeGuide,out PadState state) {
+            if(!nativeGuide) return Read(out state);
+            string identity; return sony.Read(out state,out identity);
+        }
         public static bool Read(out PadState state) {
             if(ReadXbox(out state)) return true;
             string identity;

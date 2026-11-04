@@ -13,6 +13,8 @@ namespace PadLauncher {
         public string Name { get; set; }
         public string LaunchId { get; set; }
         public bool Shortcut { get; set; }
+        public bool ShortcutInstalled { get; set; }
+        public string ShortcutTarget { get; set; }
         public string Art { get; set; }
         public string Hero { get; set; }
         public List<string> Tags { get; set; }
@@ -49,7 +51,10 @@ namespace PadLauncher {
         public string UserId { get; set; }
         public string CollectionId { get; set; }
         public string SelectedId { get; set; }
-        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; OpenMonitor = "cursor"; }
+        public string DefaultCollectionId { get; set; }
+        public double CarouselScale { get; set; }
+        public string OpenShortcut { get; set; }
+        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; OpenShortcut="off"; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -70,6 +75,16 @@ namespace PadLauncher {
         }
     }
     public enum ButtonGesture { None, Tap, Hold }
+    public class OpenShortcutGesture {
+        readonly HoldButton chord=new HoldButton();
+        bool guideDown;
+        public void Reset() { chord.Reset(); guideDown=false; }
+        public bool Update(string shortcut,ushort buttons,long milliseconds) {
+            if(shortcut=="options-share") return chord.Update((buttons&0x0030)==0x0030,milliseconds)==ButtonGesture.Hold;
+            if(shortcut=="ps") { bool down=(buttons&0x0400)!=0,rising=down&&!guideDown; guideDown=down; return rising; }
+            Reset(); return false;
+        }
+    }
     public class HoldButton {
         bool pressed, fired;
         long started;
@@ -177,6 +192,26 @@ namespace PadLauncher {
         }
     }
     public static class SteamLibrary {
+        public static string ShortcutTargetPath(string executable,string startDirectory) {
+            string target=(executable ?? "").Trim();
+            if(target.StartsWith("\"")) {
+                int end=target.IndexOf('"',1); if(end<0) return null;
+                target=target.Substring(1,end-1);
+            } else if(!File.Exists(target)) {
+                int end=target.IndexOf(".exe",StringComparison.OrdinalIgnoreCase);
+                if(end>=0) target=target.Substring(0,end+4);
+            }
+            if(String.IsNullOrWhiteSpace(target)) return null;
+            target=Environment.ExpandEnvironmentVariables(target);
+            try {
+                if(!Path.IsPathRooted(target)) {
+                    string start=Environment.ExpandEnvironmentVariables((startDirectory ?? "").Trim().Trim('"'));
+                    if(String.IsNullOrEmpty(start)) return null;
+                    target=Path.Combine(start,target);
+                }
+                return Path.GetFullPath(target);
+            } catch(ArgumentException) { return null; } catch(NotSupportedException) { return null; }
+        }
         public static string DetectSteam() {
             foreach (RegistryView view in new [] { RegistryView.Registry32, RegistryView.Registry64 }) {
                 foreach (RegistryHive hive in new [] { RegistryHive.CurrentUser, RegistryHive.LocalMachine }) {
@@ -255,6 +290,8 @@ namespace PadLauncher {
                             uint id; if (!UInt32.TryParse(Vdf.Str(shortcut, "appid"), out id)) id = ShortcutId(Vdf.Str(shortcut, "exe"), name);
                             long lastPlayed; Int64.TryParse(Vdf.Str(shortcut,"LastPlayTime"),out lastPlayed);
                             var game = new Game { Id = id.ToString(), LaunchId = ShortcutLaunchId(id), Name = name, Shortcut = true, LastPlayed = lastPlayed, HasPlayHistory = Vdf.Get(shortcut,"LastPlayTime") != null };
+                            game.ShortcutTarget=ShortcutTargetPath(Vdf.Str(shortcut,"exe"),Vdf.Str(shortcut,"StartDir"));
+                            game.ShortcutInstalled=!String.IsNullOrEmpty(game.ShortcutTarget) && File.Exists(game.ShortcutTarget);
                             game.Tags = Vdf.Map(Vdf.Get(shortcut, "tags")).Values.Select(Convert.ToString).Where(s => !String.IsNullOrWhiteSpace(s)).ToList();
                             result.Games.Add(game);
                         }

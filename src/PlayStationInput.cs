@@ -54,6 +54,7 @@ namespace PadLauncher {
             if((extra&0x20)!=0) bits|=0x0010; // Options
             if((extra&0x40)!=0) bits|=0x0040;
             if((extra&0x80)!=0) bits|=0x0080;
+            if((report[buttons+2]&1)!=0) bits|=0x0400; // PS button (native reports only)
             if(pad.LT==0 && (extra&4)!=0) pad.LT=255;
             if(pad.RT==0 && (extra&8)!=0) pad.RT=255;
             pad.Buttons=bits;
@@ -89,6 +90,7 @@ namespace PadLauncher {
         bool haveState;
         static long Milliseconds { get { return (long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency); } }
         public bool Start(IntPtr window) {
+            if(source!=null && !source.IsDisposed && source.Handle==window) return true;
             Stop();
             source=HwndSource.FromHwnd(window);
             if(source==null) return false;

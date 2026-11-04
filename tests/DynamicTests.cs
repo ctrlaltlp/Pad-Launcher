@@ -23,7 +23,10 @@ public static class DynamicTests {
                 new Game { Id="20",Name="Second Game",HasMetadata=true,HasPlayHistory=true,StoreTags=new List<string>{"100"},Categories=new List<string>{"18"} },
                 new Game { Id="30",Name="My Shortcut",Shortcut=true,HasPlayHistory=true }
             };
-            Check(Match(Spec(1,new[]{1},false,""),games).SequenceEqual(new[]{"10","20"}),"Installed dynamic rule excludes non-Steam shortcuts like Steam");
+            Check(Match(Spec(1,new[]{1},false,""),games).SequenceEqual(new[]{"10","20"}),"Installed dynamic rule excludes shortcuts whose executable is missing");
+            games[2].ShortcutInstalled=true;
+            Check(Match(Spec(1,new[]{1},false,""),games).SequenceEqual(new[]{"10","20","30"}),"Installed collections include non-Steam shortcuts with an existing target");
+            games[2].ShortcutInstalled=false;
             Check(Match(Spec(1,new[]{3},false,""),games).SequenceEqual(new[]{"10"}),"Played dynamic rule uses profile history");
             Check(Match(Spec(1,new[]{4},false,""),games).SequenceEqual(new[]{"20","30"}),"Unplayed dynamic rule includes unplayed shortcuts");
             Check(Match(Spec(4,new[]{100,200},false,""),games).SequenceEqual(new[]{"10"}),"All-tag rules require every selected tag");

@@ -46,6 +46,15 @@ public static class ControllerTests {
             Check(!SonyReports.Decode(SonyPadModel.DualSense,new byte[9],out state) && !SonyReports.Decode(SonyPadModel.DualShock4,null,out state),"Truncated and null reports are rejected safely");
             Check(!SonyReports.Decode(SonyPadModel.DualSense,Report(64,0x31,2,9),out state) && !SonyReports.Decode(SonyPadModel.DualShock4,Report(64,0x11,3,7),out state),"Truncated extended Bluetooth reports are rejected");
             Check(!SonyReports.Decode(SonyPadModel.DualSense,new byte[78],out state),"Unrecognised report IDs cannot produce button actions");
+            ds5[8]=8; ds5[10]=1;
+            Check(SonyReports.Decode(SonyPadModel.DualSense,ds5,out state) && (state.Buttons&0x0400)!=0,"Native PS button is available for the opening shortcut");
+            var shortcut=new OpenShortcutGesture();
+            Check(!shortcut.Update("options-share",0x0030,0) && shortcut.Update("options-share",0x0030,1000) && !shortcut.Update("options-share",0x0030,2000),"Opening chord fires once per hold without repeated toggles");
+            shortcut.Update("options-share",0,2100);
+            Check(!shortcut.Update("options-share",0x0030,2200) && shortcut.Update("options-share",0x0030,3200),"Opening chord can fire again after release");
+            shortcut.Reset();
+            Check(shortcut.Update("ps",0x0400,0) && !shortcut.Update("ps",0x0400,100),"PS opening shortcut fires on a new press");
+            Check(!shortcut.Update("off",0x0430,1000),"Disabled opening shortcut never opens the overlay");
             window=new Launcher(true,true);
             var handle=new WindowInteropHelper(window).EnsureHandle();
             Check(reader.Start(handle),"Register native gamepad input on an invisible launcher window");
