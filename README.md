@@ -2,7 +2,7 @@
 
 ![Pad Launcher showing the .Installed Steam collection over a Windows desktop with the taskbar visible](assets/preview.png)
 
-A transparent Windows overlay with an angled artwork carousel, the current collection and optionally a game title. Your desktop stays visible around the cards. The app lives in the tray and keeps library data and artwork ready in memory. It reads your existing Steam library, non-Steam shortcuts, custom artwork and collections.
+A transparent Windows overlay for Steam with an angled artwork carousel. Shows your games, the current collection and optionally a game title. It reads your existing Steam library, non-Steam shortcuts, custom artwork and collections.
 
 ## Usage
 
