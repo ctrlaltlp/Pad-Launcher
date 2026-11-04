@@ -17,9 +17,22 @@ using System.Windows.Threading;
 [assembly: System.Reflection.AssemblyVersion("0.1.7.0")]
 [assembly: System.Reflection.AssemblyFileVersion("0.1.7.0")]
 [assembly: System.Reflection.AssemblyInformationalVersion("0.1.7")]
+[assembly: System.Reflection.AssemblyTitle("Steam Pad Launcher")]
+[assembly: System.Reflection.AssemblyProduct("Steam Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
+    public sealed class SettingsComboBox : ComboBox {
+        protected override void OnPreviewMouseWheel(System.Windows.Input.MouseWheelEventArgs e) {
+            e.Handled=true;
+            DependencyObject parent=VisualTreeHelper.GetParent(this);
+            while(parent!=null) {
+                var scroll=parent as ScrollViewer;
+                if(scroll!=null) { scroll.ScrollToVerticalOffset(scroll.VerticalOffset-e.Delta*48.0/120); break; }
+                parent=VisualTreeHelper.GetParent(parent);
+            }
+        }
+    }
     public static class Entry {
         static Mutex instance;
         [STAThread] public static void Main(string[] args) {
@@ -48,7 +61,7 @@ namespace PadLauncher {
             var app = new Application();
             app.DispatcherUnhandledException += (s,e) => {
                 try { Directory.CreateDirectory(Storage.Root); File.AppendAllText(System.IO.Path.Combine(Storage.Root, "error.log"), DateTime.Now + " " + e.Exception + Environment.NewLine); } catch { }
-                MessageBox.Show(e.Exception.Message, "Pad Launcher"); e.Handled = true;
+                MessageBox.Show(e.Exception.Message, "Steam Pad Launcher"); e.Handled = true;
             };
             var window = new Launcher(args.Contains("--demo") || (args.Contains("--render-preview") && !args.Contains("--live-preview")), args.Contains("--render-preview"));
             RegisteredWaitHandle showWait=null,exitWait=null;
@@ -56,7 +69,7 @@ namespace PadLauncher {
             if (!args.Contains("--render-preview")) {
                 showWait=ThreadPool.RegisterWaitForSingleObject(showSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ShowOverlay)),null,Timeout.Infinite,false);
                 exitWait=ThreadPool.RegisterWaitForSingleObject(exitSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ExitApp)),null,Timeout.Infinite,false);
-                tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text="Pad Launcher",Visible=true };
+                tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text="Steam Pad Launcher",Visible=true };
                 var menu=new System.Windows.Forms.ContextMenuStrip();
                 menu.Items.Add("Show launcher",null,(s,e) => window.ShowOverlay());
                 menu.Items.Add("Show help && settings",null,(s,e) => window.ShowHelpWindow());
@@ -119,7 +132,7 @@ namespace PadLauncher {
         public Launcher(bool demoMode, bool renderPreview) {
             demo = demoMode; preview = renderPreview;
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
-            Title = "Pad Launcher"; Foreground = white;
+            Title = "Steam Pad Launcher"; Foreground = white;
             using(var iconStream=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PadLauncher.ico")) {
                 if(iconStream!=null) { var decoder=new IconBitmapDecoder(iconStream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad); Icon=decoder.Frames[decoder.Frames.Count-1]; }
             }
@@ -293,7 +306,7 @@ namespace PadLauncher {
         }
         public Window CreateHelpWindow() {
             var dialog=new Window {
-                Title="Pad Launcher · Help & Settings",Width=540,Height=720,MinWidth=480,MinHeight=500,
+                Title="Steam Pad Launcher · Help & Settings",Width=540,Height=720,MinWidth=480,MinHeight=500,
                 WindowStartupLocation=WindowStartupLocation.CenterScreen,ResizeMode=ResizeMode.CanResize,
                 Background=new SolidColorBrush(Color.FromRgb(13,25,34)),Foreground=white,FontFamily=FontFamily,
                 ShowInTaskbar=false,Topmost=true,Icon=Icon
@@ -344,7 +357,7 @@ namespace PadLauncher {
             foreach(var collection in library.Collections) collectionOptions.Add(new KeyValuePair<string,string>(collection.Id,collection.Name));
             string defaultId=String.IsNullOrEmpty(settings.DefaultCollectionId) ? "remember" : settings.DefaultCollectionId;
             if(!collectionOptions.Any(p => p.Key==defaultId)) collectionOptions.Add(new KeyValuePair<string,string>(defaultId,"Saved collection (unavailable)"));
-            var defaultPicker=new ComboBox {ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var defaultPicker=new SettingsComboBox {ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
             bool restoringDefault=false;
             defaultPicker.SelectionChanged+=(s,e) => {
                 if(restoringDefault) return;
@@ -369,7 +382,7 @@ namespace PadLauncher {
             }
             string monitorPreference=String.IsNullOrEmpty(settings.OpenMonitor) ? "cursor" : settings.OpenMonitor;
             if(!monitorOptions.Any(p => p.Key==monitorPreference)) monitorOptions.Add(new KeyValuePair<string,string>(monitorPreference,"Saved monitor (disconnected)"));
-            var monitorPicker=new ComboBox {ItemsSource=monitorOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=monitorPreference,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
+            var monitorPicker=new SettingsComboBox {ItemsSource=monitorOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=monitorPreference,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
             bool restoringMonitor=false;
             monitorPicker.SelectionChanged+=(s,e) => {
                 if(restoringMonitor) return;
@@ -384,7 +397,7 @@ namespace PadLauncher {
             layout.Children.Add(monitorPicker);
             var monitorTip=Label("Applies the next time you open the overlay. If the chosen display is disconnected, the cursor's monitor is used.",12,muted); monitorTip.TextWrapping=TextWrapping.Wrap; monitorTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(monitorTip);
             var layoutCaption=Label("Carousel layout",14,mint); layoutCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(layoutCaption);
-            var layoutPicker=new ComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled (original)"),new KeyValuePair<string,string>("rectangular","Rectangular")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var layoutPicker=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled (original)"),new KeyValuePair<string,string>("rectangular","Rectangular")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
             bool restoringLayout=false;
             layoutPicker.SelectionChanged+=(s,e) => {
                 if(restoringLayout) return;
@@ -424,7 +437,7 @@ namespace PadLauncher {
             };
             steamActions.Children.Add(browseSteam); steamActions.Children.Add(saveSteam); layout.Children.Add(steamActions); layout.Children.Add(steamStatus);
             var userCaption=Label("Steam user ID",14,mint); userCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(userCaption);
-            var userPicker=new ComboBox {DisplayMemberPath="Value",SelectedValuePath="Key",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
+            var userPicker=new SettingsComboBox {DisplayMemberPath="Value",SelectedValuePath="Key",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
             bool restoringUser=false;
             reloadUsers=() => {
                 restoringUser=true;
@@ -497,7 +510,7 @@ namespace PadLauncher {
             notice.MaxWidth = 1050; notice.Visibility = Visibility.Collapsed; noticeText.Foreground = white;
             noticeText.FontSize = 16; noticeText.TextWrapping = TextWrapping.Wrap; notice.Child = noticeText; scene.Children.Add(notice);
         }
-        public void ShowControls() { ShowNotice(Prompts.Help(settings) + "\nPad Launcher"); }
+        public void ShowControls() { ShowNotice(Prompts.Help(settings) + "\nSteam Pad Launcher"); }
         void ShowNotice(string text) { noticeText.Text = text; notice.Visibility = Visibility.Visible; noticeTimer.Stop(); noticeTimer.Start(); }
         async void RefreshLibrary(bool feedback = false) {
             if (demo) { if (feedback) ShowNotice("Preview library · refresh is available with your Steam library."); return; }
