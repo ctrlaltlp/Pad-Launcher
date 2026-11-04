@@ -4,6 +4,8 @@
 
 A transparent Windows overlay for Steam with an angled artwork carousel. Shows your games, the current collection and optionally a game title. It reads your existing Steam library, non-Steam shortcuts, custom artwork and collections.
 
+Demo: https://www.youtube.com/watch?v=rmBuhIfx8JU
+
 ## Usage
 
 **[Download SteamPadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/SteamPadLauncher.exe)** for Windows 10/11 (64-bit).
