@@ -39,10 +39,6 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 
 The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app completely before editing it. `settings.example.json` in this project shows the available fields.
 
-## Known bugs
-
-Weird behaviour when more than 1 controller is connected.
-
 ## Inspiration
 
 https://github.com/motor-dev/wallpaperCarousel
