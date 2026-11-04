@@ -7,7 +7,7 @@ New-Item -ItemType Directory -Force $out | Out-Null
 $refs = @('System.dll','System.Core.dll','System.Web.Extensions.dll','System.Windows.Forms.dll','System.Drawing.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
 $librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'))
 $appSources = @((Join-Path $PSScriptRoot 'src\App.cs'),(Join-Path $PSScriptRoot 'src\PlayStationInput.cs'))
-$executableName = 'PadLauncher'
+$executableName = 'SteamPadLauncher'
 $stagedExecutable = Join-Path $out ($executableName + '.build.exe')
 $iconPath = Join-Path $PSScriptRoot 'assets\PadLauncher.ico'
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ ('/win32manifest:' + (Join-Path $PSScriptRoot 'src\App.manifest')) ('/win32icon:' + $iconPath) ('/resource:' + $iconPath + ',PadLauncher.ico') ('/out:' + $stagedExecutable) $refs $librarySources $appSources
