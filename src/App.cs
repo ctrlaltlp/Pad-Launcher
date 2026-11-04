@@ -352,6 +352,12 @@ namespace PadLauncher {
             }
             var keyboard=Label("Keyboard: ← / → browse · Enter play · Esc dismiss\nPage Up / Down collections · M next monitor\nF5 refresh · F1 hints",12,muted);
             keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); layout.Children.Add(keyboard);
+            var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,24)};
+            titleToggle.Click+=(s,e) => {
+                try { SetShowGameTitle(titleToggle.IsChecked==true); }
+                catch(Exception error) { titleToggle.IsChecked=settings.ShowGameTitle; MessageBox.Show(dialog,"Could not save title preference: "+error.Message,"Settings"); }
+            };
+            layout.Children.Add(titleToggle);
             var defaultCaption=Label("Default collection",14,mint); defaultCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(defaultCaption);
             var collectionOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last collection"),new KeyValuePair<string,string>("all","All games")};
             foreach(var collection in library.Collections) collectionOptions.Add(new KeyValuePair<string,string>(collection.Id,collection.Name));
@@ -462,12 +468,6 @@ namespace PadLauncher {
                 }
             };
             layout.Children.Add(userPicker);
-            var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,24)};
-            titleToggle.Click+=(s,e) => {
-                try { SetShowGameTitle(titleToggle.IsChecked==true); }
-                catch(Exception error) { titleToggle.IsChecked=settings.ShowGameTitle; MessageBox.Show(dialog,"Could not save title preference: "+error.Message,"Settings"); }
-            };
-            layout.Children.Add(titleToggle);
             var note=Label("The overlay opens on your chosen monitor (the cursor's monitor by default).\nThe library refreshes automatically whenever you open the overlay.\nThe app stays ready after you dismiss it. Hold "+names[1]+" for 1 second while the overlay is open, or use the tray menu, to exit completely.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,20); layout.Children.Add(note);
             var close=new Button {Content="Got it",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,IsCancel=true};
