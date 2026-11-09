@@ -4,7 +4,7 @@
 
 A transparent Windows overlay for Steam with an angled artwork carousel. Shows your games, the current collection and optionally a game title. It reads your existing Steam library, non-Steam shortcuts, custom artwork and collections.
 
-Demo: https://www.youtube.com/watch?v=rmBuhIfx8JU
+Demo: [https://www.youtube.com/watch?v=rmBuhIfx8JU](https://www.youtube.com/watch?v=rmBuhIfx8JU)
 
 ## Usage
 
