@@ -208,7 +208,7 @@ public static class OverlayTests {
             var helpTabs=(TabControl)FindElement(helpRoot,"HelpSettingsTabs");
             var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[0]).Content;
             var settingsPage=(ScrollViewer)((TabItem)helpTabs.Items[1]).Content;
-            Check(helpTabs.Items.Count==2 && (string)((TabItem)helpTabs.Items[0]).Header=="Help & layout" && (string)((TabItem)helpTabs.Items[1]).Header=="Panel settings","Help and panel settings have separate named tabs");
+            Check(helpTabs.Items.Count==2 && (string)((TabItem)helpTabs.Items[0]).Header=="Help & layout" && (string)((TabItem)helpTabs.Items[1]).Header=="Settings","Help and settings have separate named tabs");
             Check(helpPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto && settingsPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto,"Both tabs show their slim scrollbar only when scrolling is needed");
             helpTabs.SelectedIndex=1;
             helpRoot.Measure(new Size(540,650)); helpRoot.Arrange(new Rect(0,0,540,650)); helpRoot.UpdateLayout();

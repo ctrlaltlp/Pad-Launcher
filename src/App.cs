@@ -429,13 +429,13 @@ namespace PadLauncher {
                 </ControlTemplate></Setter.Value></Setter>
             </Style>");
             tabs.Items.Add(new TabItem {Header="Help & layout",Content=helpScroll});
-            tabs.Items.Add(new TabItem {Header="Panel settings",Content=settingsScroll});
+            tabs.Items.Add(new TabItem {Header="Settings",Content=settingsScroll});
             tabs.SelectedIndex=0;
             Action rebuild=null;
             rebuild=() => {
             layout.Children.Clear(); helpLayout.Children.Clear();
             var names=Prompts.Buttons(settings);
-            var heading=Label("Panel settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
+            var heading=Label("Settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
             var helpHeading=Label("Help & layout",26,white); helpHeading.FontWeight=FontWeights.SemiBold; helpHeading.Margin=new Thickness(0,0,0,22); helpLayout.Children.Add(helpHeading);
             var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,0,0,10); helpLayout.Children.Add(caption);
             var styles=new StackPanel {Name="ButtonStyleChoices",Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
