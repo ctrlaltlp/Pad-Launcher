@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.1.7.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.1.7.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.1.7")]
+[assembly: System.Reflection.AssemblyVersion("0.2.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.2.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.2.0")]
 [assembly: System.Reflection.AssemblyTitle("Steam Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Steam Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -35,10 +35,30 @@ namespace PadLauncher {
     }
     public static class Entry {
         static Mutex instance;
+#if ARTWORK_TEST
+        const string InstanceName=@"Local\SteamPadLauncher.ArtworkTest";
+        public const string AppName="Steam Pad Launcher - Artwork test";
+#else
+        const string InstanceName=@"Local\PadLauncher";
+        public const string AppName="Steam Pad Launcher";
+#endif
         [STAThread] public static void Main(string[] args) {
             string dataPath = Argument(args,"--data");
             if (!String.IsNullOrEmpty(dataPath)) Storage.Root = System.IO.Path.GetFullPath(dataPath);
-            else Storage.MigrateFrom(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PadLauncherBackground"));
+            else {
+#if ARTWORK_TEST
+                string normalRoot=Storage.Root;
+                Storage.Root=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"SteamPadLauncher-ArtworkTest");
+                if(!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json"))) {
+                    Settings testSettings=null;
+                    try { testSettings=Storage.Json().Deserialize<Settings>(File.ReadAllText(System.IO.Path.Combine(normalRoot,"settings.json"))); } catch { }
+                    testSettings=testSettings ?? new Settings(); testSettings.CollectionId="all"; testSettings.DefaultCollectionId="all"; testSettings.EnabledCollectionIds=null;
+                    Storage.Write("settings.json",testSettings);
+                }
+#else
+                Storage.MigrateFrom(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PadLauncherBackground"));
+#endif
+            }
             if (args.Contains("--scan")) {
                 try {
                     string path = Argument(args, "--steam") ?? SteamLibrary.DetectSteam();
@@ -49,9 +69,9 @@ namespace PadLauncher {
                 return;
             }
             bool first;
-            var showSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\PadLauncher.Show");
-            var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\PadLauncher.Exit");
-            instance = new Mutex(true, @"Local\PadLauncher", out first);
+            var showSignal=new EventWaitHandle(false,EventResetMode.AutoReset,InstanceName+".Show");
+            var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,InstanceName+".Exit");
+            instance = new Mutex(true, InstanceName, out first);
             if (!first) {
                 foreach (var process in Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName)) if (process.Id!=Process.GetCurrentProcess().Id) AllowSetForegroundWindow(process.Id);
                 if (args.Contains("--quit")) exitSignal.Set(); else showSignal.Set();
@@ -69,7 +89,7 @@ namespace PadLauncher {
             if (!args.Contains("--render-preview")) {
                 showWait=ThreadPool.RegisterWaitForSingleObject(showSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ShowOverlay)),null,Timeout.Infinite,false);
                 exitWait=ThreadPool.RegisterWaitForSingleObject(exitSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ExitApp)),null,Timeout.Infinite,false);
-                tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text="Steam Pad Launcher",Visible=true };
+                tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text=AppName,Visible=true };
                 var menu=new System.Windows.Forms.ContextMenuStrip();
                 menu.Items.Add("Show launcher",null,(s,e) => window.ShowOverlay());
                 menu.Items.Add("Show help && settings",null,(s,e) => window.ShowHelpWindow());
@@ -87,6 +107,9 @@ namespace PadLauncher {
             } else {
                 app.MainWindow=window; app.ShutdownMode=ShutdownMode.OnMainWindowClose;
                 window.PrepareTray();
+#if ARTWORK_TEST
+                window.ShowOverlay();
+#endif
                 app.Run();
             }
             if (showWait!=null) showWait.Unregister(null);
@@ -105,34 +128,37 @@ namespace PadLauncher {
         readonly Brush mint = new SolidColorBrush(Color.FromRgb(163,240,205));
         readonly Grid scene = new Grid { Width = 1600, Height = 900, Background = Brushes.Transparent };
         readonly Canvas carousel = new Canvas { Name="GameCarousel",ClipToBounds = true };
+        readonly Grid carouselHost=new Grid {Name="CarouselViewport"};
         readonly TextBlock title = new TextBlock();
         readonly TextBlock collectionText = new TextBlock();
         readonly Border notice = new Border();
         readonly TextBlock noticeText = new TextBlock();
         readonly Dictionary<string,BitmapSource> images = new Dictionary<string,BitmapSource>();
         readonly Dictionary<string,FrameworkElement> cards = new Dictionary<string,FrameworkElement>();
-        readonly DispatcherTimer controllerTimer = new DispatcherTimer();
+        readonly DispatcherTimer controllerTimer = new DispatcherTimer(DispatcherPriority.Input);
         readonly DispatcherTimer noticeTimer = new DispatcherTimer();
         Settings settings;
         Library library = new Library();
         List<Game> visible = new List<Game>();
         List<Collection> filters = new List<Collection>();
         int selected, collectionIndex;
+        int gridScrollPage=-1;
+        double gridScrollOffset;
+        double gridViewportHeight=490;
         bool scanning, launching, demo, preview;
         ushort previousButtons;
         string previousInputSource;
         readonly HoldButton exitButton = new HoldButton();
-        int previousDirection;
-        bool previousFast;
-        DateTime nextMove = DateTime.MinValue;
+        readonly NavigationRepeat navigation = new NavigationRepeat();
         bool exiting;
+        bool saveQueued;
         Window helpWindow;
         public bool Idle { get { return !IsVisible && !controllerTimer.IsEnabled; } }
 
         public Launcher(bool demoMode, bool renderPreview) {
             demo = demoMode; preview = renderPreview;
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
-            Title = "Steam Pad Launcher"; Foreground = white;
+            Title = Entry.AppName; Foreground = white;
             using(var iconStream=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PadLauncher.ico")) {
                 if(iconStream!=null) { var decoder=new IconBitmapDecoder(iconStream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad); Icon=decoder.Frames[decoder.Frames.Count-1]; }
             }
@@ -147,14 +173,16 @@ namespace PadLauncher {
             Content = new Viewbox { Stretch = Stretch.Uniform, Child = scene };
             BuildScene();
             ApplyCarouselScale();
+            SizeChanged+=(s,e) => { if(settings.CarouselLayout=="grid") Render(false); };
             PreviewKeyDown += OnKey;
             MouseWheel += (s,e) => { Move(e.Delta < 0 ? 1 : -1); };
             Closed += (s,e) => { controllerTimer.Stop(); noticeTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
                 if (!exiting) {
-                    e.Cancel=true; Save(); controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
-                    notice.Visibility=Visibility.Collapsed; exitButton.Reset(); previousButtons=0; previousDirection=0;
+                    e.Cancel=true; controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
+                    notice.Visibility=Visibility.Collapsed; exitButton.Reset(); previousButtons=0; navigation.Reset();
                     launching=false; Hide(); Gamepad.StopNative();
+                    QueueSave();
                 }
             };
             controllerTimer.Interval = TimeSpan.FromMilliseconds(16);
@@ -181,7 +209,8 @@ namespace PadLauncher {
         }
         public void ShowOverlay() {
             if (exiting) return;
-            launching=false; exitButton.Reset(); previousButtons=0; previousDirection=0;
+            if (IsVisible) { Activate(); Focus(); return; }
+            launching=false; exitButton.Reset(); previousButtons=0; navigation.Reset();
             ApplyLibrary(true);
             var monitor=preview ? null : ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
             if(monitor!=null) PlaceOnMonitor(monitor);
@@ -193,10 +222,27 @@ namespace PadLauncher {
             if (!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
         }
         public void SetDefaultCollection(string id) {
-            if(id!="remember" && id!="all" && !library.Collections.Any(c => c.Id==id)) throw new ArgumentException("Choose an available collection.");
+            if(id!="remember" && !CollectionOptions().Any(c => c.Id==id && CollectionEnabled(id))) throw new ArgumentException("Choose an available collection.");
             string previous=settings.DefaultCollectionId;
             try { settings.DefaultCollectionId=id; Storage.Write("settings.json",settings); }
             catch { settings.DefaultCollectionId=previous; throw; }
+        }
+        List<Collection> CollectionOptions() {
+            var options=new List<Collection> {new Collection {Id="all",Name="All games"}};
+            options.AddRange(library.Collections ?? new List<Collection>()); return options;
+        }
+        bool CollectionEnabled(string id) { return settings.EnabledCollectionIds==null || settings.EnabledCollectionIds.Contains(id); }
+        public void SetAvailableCollections(IEnumerable<string> ids) {
+            var chosen=ids==null ? null : ids.Distinct().ToList();
+            var options=CollectionOptions();
+            if(chosen!=null && (chosen.Count==0 || chosen.Any(id => !options.Any(c => c.Id==id)))) throw new ArgumentException("Select at least one available collection.");
+            var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            next.EnabledCollectionIds=chosen;
+            if(chosen!=null) {
+                if(!chosen.Contains(next.CollectionId)) next.CollectionId=options.First(c => chosen.Contains(c.Id)).Id;
+                if(next.DefaultCollectionId!="remember" && !chosen.Contains(next.DefaultCollectionId)) next.DefaultCollectionId="remember";
+            }
+            Storage.Write("settings.json",next); settings=next; ApplyLibrary();
         }
         public void SetCarouselScale(double scale) {
             if(Double.IsNaN(scale) || Double.IsInfinity(scale) || scale<0.6 || scale>1.4) throw new ArgumentOutOfRangeException("scale","Choose a size between 60% and 140%.");
@@ -204,6 +250,7 @@ namespace PadLauncher {
             try { settings.CarouselScale=scale; Storage.Write("settings.json",settings); }
             catch { settings.CarouselScale=previous; throw; }
             ApplyCarouselScale();
+            if(settings.CarouselLayout=="grid") Render(false);
         }
         public void SetCarouselLayout(string layout) {
             if(layout!="angled" && layout!="rectangular" && layout!="grid") throw new ArgumentException("Choose an angled, rectangular or grid layout.");
@@ -212,7 +259,22 @@ namespace PadLauncher {
             catch { settings.CarouselLayout=previous; throw; }
             cards.Clear(); carousel.Children.Clear(); Render(false);
         }
+        public void SetAngledPanelSizing(string sizing) {
+            if(sizing!="fixed" && sizing!="fit") throw new ArgumentException("Choose Fixed or Fit artwork.");
+            string previous=settings.AngledPanelSizing;
+            try { settings.AngledPanelSizing=sizing; Storage.Write("settings.json",settings); }
+            catch { settings.AngledPanelSizing=previous; throw; }
+            if(settings.CarouselLayout!="grid" && settings.CarouselLayout!="rectangular") { cards.Clear(); carousel.Children.Clear(); Render(false); }
+        }
         int GridColumns { get { return settings.GridColumns>=2 && settings.GridColumns<=10 ? settings.GridColumns : 5; } }
+        int GridRows { get { return settings.GridRows>=1 && settings.GridRows<=5 ? settings.GridRows : 2; } }
+        public void SetGridRows(int rows) {
+            if(rows<1 || rows>5) throw new ArgumentOutOfRangeException("rows","Choose between 1 and 5 rows.");
+            int previous=settings.GridRows;
+            try { settings.GridRows=rows; Storage.Write("settings.json",settings); }
+            catch { settings.GridRows=previous; throw; }
+            if(settings.CarouselLayout=="grid") { cards.Clear(); carousel.Children.Clear(); Render(false); }
+        }
         public void SetGridColumns(int columns) {
             if(columns<2 || columns>10) throw new ArgumentOutOfRangeException("columns","Choose between 2 and 10 columns.");
             int previous=settings.GridColumns;
@@ -225,8 +287,31 @@ namespace PadLauncher {
             if(Double.IsNaN(scale) || Double.IsInfinity(scale) || scale<0.6 || scale>1.4) scale=1;
             carousel.RenderTransformOrigin=new Point(.5,.5);
             carousel.RenderTransform=new ScaleTransform(scale,scale);
-            collectionText.Margin=new Thickness(0,Math.Max(40,130+(1-scale)*250),0,0);
-            title.Margin=new Thickness(0,726+(scale-1)*240,0,0);
+            ConfigureViewport();
+        }
+        void ConfigureViewport() {
+            double scale=settings.CarouselScale;
+            if(Double.IsNaN(scale) || Double.IsInfinity(scale) || scale<.6 || scale>1.4) scale=1;
+            if(settings.CarouselLayout!="grid") {
+                scene.Height=900;
+                carouselHost.Height=Double.NaN; carouselHost.VerticalAlignment=VerticalAlignment.Stretch; carouselHost.Margin=new Thickness(0,205,0,195); carouselHost.ClipToBounds=false;
+                carousel.Height=Double.NaN; carousel.Width=Double.NaN; carousel.VerticalAlignment=VerticalAlignment.Stretch;
+                collectionText.Margin=new Thickness(0,Math.Max(40,130+(1-scale)*250),0,0);
+                title.Margin=new Thickness(0,726+(scale-1)*240,0,0);
+                gridViewportHeight=490; return;
+            }
+            double windowWidth=ActualWidth>0 ? ActualWidth : Width,windowHeight=ActualHeight>0 ? ActualHeight : Height;
+            if(windowWidth>0 && windowHeight>0) scene.Height=1600*windowHeight/windowWidth;
+            double top=settings.ShowCollectionName ? 56 : 16,bottom=settings.ShowGameTitle ? 72 : 16;
+            double available=Math.Max(100,scene.Height-top-bottom);
+            double panelHeight=Math.Min(150,(1440.0-(GridColumns-1)*28)/GridColumns)*1.5;
+            double wanted=(panelHeight*GridRows+(GridRows-1)*20)*scale;
+            double viewport=Math.Min(available,Math.Max(490*scale,wanted));
+            gridViewportHeight=viewport/scale;
+            carouselHost.Height=viewport; carouselHost.VerticalAlignment=VerticalAlignment.Top; carouselHost.Margin=new Thickness(0,top+(available-viewport)/2,0,0); carouselHost.ClipToBounds=true;
+            carousel.Width=1600; carousel.Height=gridViewportHeight; carousel.VerticalAlignment=VerticalAlignment.Center;
+            collectionText.Margin=new Thickness(0,16,0,0);
+            title.Margin=new Thickness(0,Math.Max(0,scene.Height-52),0,0);
         }
         [DllImport("user32.dll",SetLastError=true)]
         static extern bool SetWindowPos(IntPtr window,IntPtr insertAfter,int x,int y,int width,int height,uint flags);
@@ -283,7 +368,7 @@ namespace PadLauncher {
             string previous=String.IsNullOrEmpty(settings.SteamPath) ? "" : settings.SteamPath.Replace('/','\\').TrimEnd('\\');
             next.SteamPath=folder;
             if(!String.Equals(previous,folder.TrimEnd('\\'),StringComparison.OrdinalIgnoreCase)) {
-                next.UserId=null; next.CollectionId="all"; next.SelectedId=null;
+                next.UserId=null; next.CollectionId="all"; next.SelectedId=null; next.EnabledCollectionIds=null; next.DefaultCollectionId="remember";
             }
             Storage.Write("settings.json",next); settings=next; demo=false;
             return folder;
@@ -293,12 +378,14 @@ namespace PadLauncher {
             try { settings.ShowCollectionName=show; Storage.Write("settings.json",settings); }
             catch { settings.ShowCollectionName=previous; throw; }
             collectionText.Visibility=show ? Visibility.Visible : Visibility.Collapsed;
+            if(settings.CarouselLayout=="grid") Render(false);
         }
         public void SetShowGameTitle(bool show) {
             bool previous=settings.ShowGameTitle;
             try { settings.ShowGameTitle=show; Storage.Write("settings.json",settings); }
             catch { settings.ShowGameTitle=previous; throw; }
             title.Visibility=show ? Visibility.Visible : Visibility.Collapsed;
+            if(settings.CarouselLayout=="grid") Render(false);
         }
         public void SetSteamUserId(string userId) {
             if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
@@ -309,7 +396,7 @@ namespace PadLauncher {
                     throw new InvalidOperationException("Choose a user ID from the selected Steam installation.");
             }
             var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-            next.UserId=selected; next.CollectionId="all"; next.SelectedId=null;
+            next.UserId=selected; next.CollectionId="all"; next.SelectedId=null; next.EnabledCollectionIds=null; next.DefaultCollectionId="remember";
             Storage.Write("settings.json",next); settings=next;
         }
         public Window CreateHelpWindow() {
@@ -319,14 +406,39 @@ namespace PadLauncher {
                 Background=new SolidColorBrush(Color.FromRgb(13,25,34)),Foreground=white,FontFamily=FontFamily,
                 ShowInTaskbar=false,Topmost=true,Icon=Icon
             };
+            dialog.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar),System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type ScrollBar}'>
+                <Setter Property='Width' Value='6'/><Setter Property='MinWidth' Value='6'/><Setter Property='Background' Value='Transparent'/>
+                <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type ScrollBar}'>
+                    <Grid Background='Transparent'><Track x:Name='PART_Track' IsDirectionReversed='True' Orientation='Vertical' Minimum='{TemplateBinding Minimum}' Maximum='{TemplateBinding Maximum}' Value='{TemplateBinding Value}' ViewportSize='{TemplateBinding ViewportSize}'>
+                        <Track.DecreaseRepeatButton><RepeatButton Command='{x:Static ScrollBar.PageUpCommand}' Opacity='0' Focusable='False'/></Track.DecreaseRepeatButton>
+                        <Track.Thumb><Thumb x:Name='MintThumb' Background='#A3F0CD' MinHeight='24'><Thumb.Template><ControlTemplate TargetType='{x:Type Thumb}'><Border Background='{TemplateBinding Background}' CornerRadius='3'/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                        <Track.IncreaseRepeatButton><RepeatButton Command='{x:Static ScrollBar.PageDownCommand}' Opacity='0' Focusable='False'/></Track.IncreaseRepeatButton>
+                    </Track></Grid>
+                </ControlTemplate></Setter.Value></Setter>
+            </Style>"));
             var layout=new StackPanel { Margin=new Thickness(28) };
+            var helpLayout=new StackPanel {Margin=new Thickness(28)};
+            var helpScroll=new ScrollViewer {Content=helpLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            var settingsScroll=new ScrollViewer {Content=layout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            var tabs=new TabControl {Name="HelpSettingsTabs",Background=dialog.Background,BorderThickness=new Thickness(0),Foreground=white,Margin=new Thickness(12,12,12,0)};
+            tabs.ItemContainerStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabItem}'>
+                <Setter Property='Background' Value='#22333F'/><Setter Property='Foreground' Value='#ECF3F2'/><Setter Property='FontSize' Value='15'/>
+                <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type TabItem}'>
+                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='22,11' Margin='0,0,8,0'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
+                    <ControlTemplate.Triggers><Trigger Property='IsSelected' Value='True'><Setter TargetName='TabBorder' Property='Background' Value='#A3F0CD'/><Setter Property='Foreground' Value='#0D1922'/></Trigger></ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value></Setter>
+            </Style>");
+            tabs.Items.Add(new TabItem {Header="Help & layout",Content=helpScroll});
+            tabs.Items.Add(new TabItem {Header="Panel settings",Content=settingsScroll});
+            tabs.SelectedIndex=0;
             Action rebuild=null;
             rebuild=() => {
-            layout.Children.Clear();
+            layout.Children.Clear(); helpLayout.Children.Clear();
             var names=Prompts.Buttons(settings);
-            var heading=Label("Help & Settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
-            var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,14,0,10); layout.Children.Add(caption);
-            var styles=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
+            var heading=Label("Panel settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
+            var helpHeading=Label("Help & layout",26,white); helpHeading.FontWeight=FontWeights.SemiBold; helpHeading.Margin=new Thickness(0,0,0,22); helpLayout.Children.Add(helpHeading);
+            var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,0,0,10); helpLayout.Children.Add(caption);
+            var styles=new StackPanel {Name="ButtonStyleChoices",Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
             foreach(string style in new[]{"PlayStation","Xbox","Nintendo"}) {
                 string selectedStyle=style; bool selected=Prompts.Style(settings)==style;
                 var choice=new Button {Content=(selected ? "✓ " : "")+style,FontSize=14,Padding=new Thickness(13,9,13,9),Margin=new Thickness(0,0,8,0),BorderThickness=new Thickness(0),Background=selected ? mint : new SolidColorBrush(Color.FromRgb(34,51,63)),Foreground=selected ? new SolidColorBrush(Color.FromRgb(13,25,34)) : white};
@@ -337,8 +449,8 @@ namespace PadLauncher {
                 };
                 styles.Children.Add(choice);
             }
-            layout.Children.Add(styles);
-            var explanation=Label("Labels change; button positions stay the same.\nNintendo: bottom B plays, right A dismisses, tap top X to refresh.",12,muted); explanation.TextWrapping=TextWrapping.Wrap; explanation.Margin=new Thickness(0,0,0,22); layout.Children.Add(explanation);
+            helpLayout.Children.Add(styles);
+            var explanation=Label("Labels change; button positions stay the same.",12,muted); explanation.TextWrapping=TextWrapping.Wrap; explanation.Margin=new Thickness(0,0,0,22); helpLayout.Children.Add(explanation);
             string[][] rows={
                 new[]{"Left stick / D-pad","Browse games"},
                 new[]{"Right stick","Browse games at 3× speed"},
@@ -355,20 +467,21 @@ namespace PadLauncher {
                 grid.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(145)});
                 grid.ColumnDefinitions.Add(new ColumnDefinition());
                 var key=Label(row[0],15,mint); key.FontWeight=FontWeights.SemiBold; grid.Children.Add(key);
+                if(row[1]=="Launch selected game") key.Name="LaunchButtonGuide";
                 var description=Label(row[1],14,white); description.TextWrapping=TextWrapping.Wrap; Grid.SetColumn(description,1); grid.Children.Add(description);
-                layout.Children.Add(grid);
+                helpLayout.Children.Add(grid);
             }
             var keyboard=Label("Keyboard: ← / → browse · ↑ / ↓ grid rows\nEnter play · Esc dismiss · Page Up / Down collections\nM next monitor · F5 refresh · F1 hints",12,muted);
-            keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); layout.Children.Add(keyboard);
-            var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,24)};
+            keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); helpLayout.Children.Add(keyboard);
+            var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,6)};
             titleToggle.Click+=(s,e) => {
                 try { SetShowGameTitle(titleToggle.IsChecked==true); }
                 catch(Exception error) { titleToggle.IsChecked=settings.ShowGameTitle; MessageBox.Show(dialog,"Could not save title preference: "+error.Message,"Settings"); }
             };
             layout.Children.Add(titleToggle);
             var defaultCaption=Label("Default collection",14,mint); defaultCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(defaultCaption);
-            var collectionOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last collection"),new KeyValuePair<string,string>("all","All games")};
-            foreach(var collection in library.Collections) collectionOptions.Add(new KeyValuePair<string,string>(collection.Id,collection.Name));
+            var collectionOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last collection")};
+            foreach(var collection in CollectionOptions().Where(c => CollectionEnabled(c.Id))) collectionOptions.Add(new KeyValuePair<string,string>(collection.Id,collection.Name));
             string defaultId=String.IsNullOrEmpty(settings.DefaultCollectionId) ? "remember" : settings.DefaultCollectionId;
             if(!collectionOptions.Any(p => p.Key==defaultId)) collectionOptions.Add(new KeyValuePair<string,string>(defaultId,"Saved collection (unavailable)"));
             var defaultPicker=new SettingsComboBox {ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
@@ -387,6 +500,26 @@ namespace PadLauncher {
                 catch(Exception error) { collectionToggle.IsChecked=settings.ShowCollectionName; MessageBox.Show(dialog,"Could not save collection name preference: "+error.Message,"Settings"); }
             };
             layout.Children.Add(collectionToggle);
+            var availableSection=new Expander {Header="Available collections",Foreground=white,FontSize=14,Margin=new Thickness(0,12,0,10)};
+            var availablePanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
+            var allCollections=new CheckBox {Content="Include all collections (including new ones)",Foreground=white,IsChecked=settings.EnabledCollectionIds==null,Margin=new Thickness(0,0,0,10)};
+            availablePanel.Children.Add(allCollections);
+            var collectionChecks=new StackPanel {IsEnabled=settings.EnabledCollectionIds!=null};
+            var collectionBoxes=new Dictionary<string,CheckBox>();
+            foreach(var collection in CollectionOptions()) {
+                var box=new CheckBox {Content=collection.Name,Foreground=white,IsChecked=CollectionEnabled(collection.Id),Margin=new Thickness(0,0,0,8)};
+                collectionBoxes[collection.Id]=box; collectionChecks.Children.Add(box);
+            }
+            allCollections.Click+=(s,e) => collectionChecks.IsEnabled=allCollections.IsChecked!=true;
+            availablePanel.Children.Add(new ScrollViewer {Content=collectionChecks,MaxHeight=220,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+            var saveCollections=new Button {Content="Save collections",FontSize=13,Padding=new Thickness(14,7,14,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0)};
+            saveCollections.Click+=(s,e) => {
+                try { SetAvailableCollections(allCollections.IsChecked==true ? null : collectionBoxes.Where(p => p.Value.IsChecked==true).Select(p => p.Key)); rebuild(); }
+                catch(Exception error) { MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            availablePanel.Children.Add(saveCollections);
+            var availableTip=Label("Only selected collections appear when switching collections. Select at least one. Hidden collections are also removed from Default collection.",12,muted); availableTip.TextWrapping=TextWrapping.Wrap; availableTip.Margin=new Thickness(0,8,0,0); availablePanel.Children.Add(availableTip);
+            availableSection.Content=availablePanel; layout.Children.Add(availableSection);
             var monitorCaption=Label("Open on monitor",14,mint); monitorCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(monitorCaption);
             var monitorOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
             var displays=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
@@ -411,17 +544,30 @@ namespace PadLauncher {
             layout.Children.Add(monitorPicker);
             var monitorTip=Label("Applies the next time you open the overlay. If the chosen display is disconnected, the cursor's monitor is used.",12,muted); monitorTip.TextWrapping=TextWrapping.Wrap; monitorTip.Margin=new Thickness(0,7,0,4); layout.Children.Add(monitorTip);
             var layoutCaption=Label("Carousel layout",14,mint); layoutCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(layoutCaption);
-            var columnsControls=new StackPanel {IsEnabled=settings.CarouselLayout=="grid"};
-            var layoutPicker=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled (original)"),new KeyValuePair<string,string>("rectangular","Rectangular"),new KeyValuePair<string,string>("grid","Grid")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var columnsControls=new StackPanel {Name="GridColumnsSettings",Visibility=settings.CarouselLayout=="grid" ? Visibility.Visible : Visibility.Collapsed};
+            bool angledSizingAvailable=settings.CarouselLayout!="grid" && settings.CarouselLayout!="rectangular";
+            var sizingControls=new StackPanel {Name="AngledPanelSizingSettings",Visibility=angledSizingAvailable ? Visibility.Visible : Visibility.Collapsed};
+            var layoutPicker=new SettingsComboBox {Name="CarouselLayoutSetting",ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular"),new KeyValuePair<string,string>("grid","Grid")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
             bool restoringLayout=false;
             layoutPicker.SelectionChanged+=(s,e) => {
                 if(restoringLayout) return;
                 string choice=layoutPicker.SelectedValue as string,previous=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled";
                 if(choice==null || choice==previous) return;
-                try { SetCarouselLayout(choice); columnsControls.IsEnabled=choice=="grid"; }
+                try { SetCarouselLayout(choice); columnsControls.Visibility=choice=="grid" ? Visibility.Visible : Visibility.Collapsed; sizingControls.Visibility=choice=="angled" ? Visibility.Visible : Visibility.Collapsed; }
                 catch(Exception error) { restoringLayout=true; layoutPicker.SelectedValue=previous; restoringLayout=false; MessageBox.Show(dialog,error.Message,"Settings"); }
             };
             layout.Children.Add(layoutPicker);
+            var sizingCaption=Label("Angled panel sizing",14,mint); sizingCaption.Margin=new Thickness(0,14,0,10); sizingControls.Children.Add(sizingCaption);
+            var sizingPicker=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("fixed","Fixed (blurred edges)"),new KeyValuePair<string,string>("fit","Fit artwork")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.AngledPanelSizing=="fixed" ? "fixed" : "fit",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            bool restoringSizing=false;
+            sizingPicker.SelectionChanged+=(s,e) => {
+                if(restoringSizing) return;
+                string choice=sizingPicker.SelectedValue as string,previous=settings.AngledPanelSizing=="fixed" ? "fixed" : "fit";
+                if(choice==null || choice==previous) return;
+                try { SetAngledPanelSizing(choice); }
+                catch(Exception error) { restoringSizing=true; sizingPicker.SelectedValue=previous; restoringSizing=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            sizingControls.Children.Add(sizingPicker); layout.Children.Add(sizingControls);
             var columnsCaption=Label("Grid columns",14,mint); columnsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(columnsCaption);
             var columnsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToArray(),SelectedItem=GridColumns,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
             bool restoringColumns=false;
@@ -432,7 +578,20 @@ namespace PadLauncher {
                 try { SetGridColumns(columns); }
                 catch(Exception error) { restoringColumns=true; columnsPicker.SelectedItem=previous; restoringColumns=false; MessageBox.Show(dialog,error.Message,"Settings"); }
             };
-            columnsControls.Children.Add(columnsPicker); layout.Children.Add(columnsControls);
+            columnsControls.Children.Add(columnsPicker);
+            var rowsCaption=Label("Grid rows",14,mint); rowsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(rowsCaption);
+            var rowsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(1,5).ToArray(),SelectedItem=GridRows,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            bool restoringRows=false;
+            rowsPicker.SelectionChanged+=(s,e) => {
+                if(restoringRows || rowsPicker.SelectedItem==null) return;
+                int previous=GridRows,rowCount=(int)rowsPicker.SelectedItem;
+                if(rowCount==previous) return;
+                try { SetGridRows(rowCount); }
+                catch(Exception error) { restoringRows=true; rowsPicker.SelectedItem=previous; restoringRows=false; MessageBox.Show(dialog,error.Message,"Settings"); }
+            };
+            columnsControls.Children.Add(rowsPicker);
+            var rowsTip=Label("Rows keep their panel size. The grid scrolls to keep the selected row visible.",12,muted); rowsTip.TextWrapping=TextWrapping.Wrap; rowsTip.Margin=new Thickness(0,7,0,0); columnsControls.Children.Add(rowsTip);
+            layout.Children.Add(columnsControls);
             var sizeCaption=Label("Panel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
             double scale=settings.CarouselScale>=.6 && settings.CarouselScale<=1.4 ? settings.CarouselScale : 1;
             var sizeLabel=Label(Math.Round(scale*100)+"%",13,white);
@@ -490,13 +649,14 @@ namespace PadLauncher {
             userPicker.Margin=new Thickness(0,0,0,24);
             layout.Children.Add(userPicker);
             var note=Label("The overlay opens on your chosen monitor (the cursor's monitor by default).\nThe library refreshes automatically whenever you open the overlay.\nThe app stays ready after you dismiss it. Hold "+names[1]+" for 1 second while the overlay is open, or use the tray menu, to exit completely.",12,muted);
-            note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,20); layout.Children.Add(note);
-            var close=new Button {Content="Got it",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,IsCancel=true};
-            close.Click+=(s,e) => dialog.Close(); layout.Children.Add(close);
+            note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,18,0,20); helpLayout.Children.Add(note);
             };
             rebuild();
             dialog.PreviewKeyDown+=(s,e) => { if(e.Key==System.Windows.Input.Key.Escape) { dialog.Close(); e.Handled=true; } };
-            dialog.Content=new ScrollViewer {Content=layout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
+            var root=new Grid(); root.RowDefinitions.Add(new RowDefinition()); root.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto}); root.Children.Add(tabs);
+            var close=new Button {Content="Got it",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(28,12,28,20),IsCancel=true};
+            close.Click+=(s,e) => dialog.Close(); Grid.SetRow(close,1); root.Children.Add(close);
+            dialog.Content=root;
             return dialog;
         }
         TextBlock Label(string text, double size, Brush color) { return new TextBlock { Text = text, FontSize = size, Foreground = color, VerticalAlignment = VerticalAlignment.Center }; }
@@ -517,7 +677,7 @@ namespace PadLauncher {
             collectionText.Margin = new Thickness(0,130,0,0);
             collectionText.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius=14,ShadowDepth=1,Opacity=.9 };
             scene.Children.Add(collectionText);
-            carousel.Margin = new Thickness(0,205,0,195); scene.Children.Add(carousel);
+            carouselHost.Margin = new Thickness(0,205,0,195); carouselHost.Children.Add(carousel); scene.Children.Add(carouselHost);
             title.Name="SelectedGameTitle"; title.Foreground = white; title.FontSize = 28; title.FontWeight = FontWeights.Medium;
             title.TextTrimming = TextTrimming.CharacterEllipsis; title.TextAlignment = TextAlignment.Center;
             title.HorizontalAlignment = HorizontalAlignment.Center; title.VerticalAlignment = VerticalAlignment.Top;
@@ -543,26 +703,35 @@ namespace PadLauncher {
             if (feedback) ShowNotice("Refreshing games and collections…");
             try {
                 string user = settings.UserId;
-                var next = await Task.Run(() => SteamLibrary.Scan(path,user));
+                var previous=library;
+                var refreshed = await Task.Run(() => {
+                    var result=SteamLibrary.Scan(path,user);
+                    bool changed=Storage.Json().Serialize(previous)!=Storage.Json().Serialize(result);
+                    if(changed) Storage.Write("library.json",result);
+                    return Tuple.Create(result,changed);
+                });
+                var next=refreshed.Item1;
                 library = next; settings.SteamPath = next.SteamPath;
                 if(!String.IsNullOrEmpty(user)) settings.UserId=next.UserId;
-                Storage.Write("library.json", library); images.Clear(); ApplyLibrary(); Save();
+                if(refreshed.Item2 || feedback) ApplyLibrary();
+                QueueSave();
                 if (feedback) ShowNotice("Refreshed · " + filters[collectionIndex].Name + " · " + visible.Count + " games");
                 if (library.Warnings.Count > 0) ShowNotice(library.Warnings[0]);
             } catch (Exception e) { ShowNotice(e.Message); }
             finally { scanning = false; }
         }
         void ApplyLibrary(bool opening=false) {
+            string previousFilter=filters.Count>0 ? filters[collectionIndex].Id : null;
             SetFilters();
             if(opening && !String.IsNullOrEmpty(settings.DefaultCollectionId) && settings.DefaultCollectionId!="remember") {
                 collectionIndex=Math.Max(0,filters.FindIndex(c => c.Id==settings.DefaultCollectionId));
                 settings.CollectionId=filters[collectionIndex].Id;
             }
-            FilterGames(true);
+            if(!opening || previousFilter!=filters[collectionIndex].Id || visible.Count==0) FilterGames(true);
         }
         void SetFilters() {
-            filters = new List<Collection> { new Collection { Id = "all", Name = "All games" } };
-            filters.AddRange(library.Collections ?? new List<Collection>());
+            filters=CollectionOptions().Where(c => CollectionEnabled(c.Id)).ToList();
+            if(filters.Count==0) filters.Add(new Collection {Id="unavailable-collections",Name="No available collections"});
             collectionIndex = Math.Max(0, filters.FindIndex(c => c.Id == settings.CollectionId));
         }
         void FilterGames(bool remember) {
@@ -592,19 +761,30 @@ namespace PadLauncher {
             Render(false);
         }
         void Render(bool animate) {
+            ConfigureViewport();
             if (filters.Count == 0) SetFilters();
             collectionText.Text = filters[collectionIndex].Name;
             if (visible.Count == 0) {
                 carousel.Children.Clear(); cards.Clear();
-                title.Text = filters[collectionIndex].UnsupportedDynamic ? "This collection needs an unsupported filter" : library.Games.Count > 0 ? "No installed games in this collection" : "Your next game starts here";
+                title.Text = filters[collectionIndex].Id=="unavailable-collections" ? "Choose available collections in Help & Settings" : filters[collectionIndex].UnsupportedDynamic ? "This collection needs an unsupported filter" : library.Games.Count > 0 ? "No installed games in this collection" : "Your next game starts here";
                 return;
             }
             Game current = visible[selected]; settings.SelectedId = current.Id;
             title.Text = current.Name;
             var keep = new HashSet<string>();
             bool gridLayout=settings.CarouselLayout=="grid";
-            int pageSize=GridColumns*2,pageStart=(selected/pageSize)*pageSize;
+            int pageSize=GridColumns*GridRows,pageStart=(selected/pageSize)*pageSize;
             int count = gridLayout ? Math.Min(pageSize,visible.Count-pageStart) : Math.Min(9,visible.Count), start = -(count/2);
+            double gridHeight=Math.Min(150,(1440.0-(GridColumns-1)*28)/GridColumns)*1.5;
+            double gridContentHeight=gridHeight*GridRows+(GridRows-1)*20;
+            if(gridLayout) {
+                if(gridScrollPage!=pageStart || cards.Count==0) gridScrollOffset=0;
+                gridScrollPage=pageStart;
+                double rowTop=((selected-pageStart)/GridColumns)*(gridHeight+20);
+                if(rowTop<gridScrollOffset) gridScrollOffset=rowTop;
+                if(rowTop+gridHeight>gridScrollOffset+gridViewportHeight) gridScrollOffset=rowTop+gridHeight-gridViewportHeight;
+                gridScrollOffset=Math.Max(0,Math.Min(Math.Max(0,gridContentHeight-gridViewportHeight),gridScrollOffset));
+            }
             for (int slot = 0; slot < count; slot++) {
                 int offset=start+slot, i=gridLayout ? pageStart+slot : (selected+offset+visible.Count)%visible.Count;
                 bool active=i==selected;
@@ -616,17 +796,26 @@ namespace PadLauncher {
                 if(rectangular) w=offset==0 ? 300 : 250;
                 double x = 800 - w/2 + offset*(rectangular ? 285 : 254);
                 double y = offset == 0 ? 0 : (490-h)/2;
+                if(!gridLayout && !rectangular && settings.AngledPanelSizing!="fixed") {
+                    FrameworkElement retainedCard;
+                    var image=cards.TryGetValue(game.Id,out retainedCard) ? retainedCard.Tag as BitmapSource : LoadImage(game.Art,700);
+                    if(image!=null && image.PixelWidth>0 && image.PixelHeight>0) {
+                        double fit=Math.Min((w-73)/image.PixelWidth,h/image.PixelHeight);
+                        w=image.PixelWidth*fit+73; h=image.PixelHeight*fit;
+                        x=800-w/2+offset*254; y=(490-h)/2;
+                    }
+                }
                 if(gridLayout) {
                     w=Math.Min(150,(1440.0-(GridColumns-1)*28)/GridColumns); h=w*1.5;
                     double gridWidth=GridColumns*w+(GridColumns-1)*28;
                     x=(1600-gridWidth)/2+(slot%GridColumns)*(w+28);
-                    y=(490-(h*2+20))/2+(slot/GridColumns)*(h+20);
+                    y=Math.Max(0,(gridViewportHeight-gridContentHeight)/2)+(slot/GridColumns)*(h+20)-gridScrollOffset;
                 }
                 if (!cards.TryGetValue(game.Id,out card)) {
                     card = Card(game, i, w,h,active); cards[game.Id] = card; carousel.Children.Add(card);
                     Canvas.SetLeft(card,x + (animate ? Math.Sign(offset)*45 : 0)); Canvas.SetTop(card,y); card.Width = w; card.Height = h;
                 }
-                // Geometry changes with the card's layout, so artwork stays upright.
+                // Geometry and artwork transform follow the animated panel size.
                 Panel.SetZIndex(card, 10-Math.Abs(offset));
                 SetAnimation(card, Canvas.LeftProperty,x,animate); SetAnimation(card, Canvas.TopProperty,y,animate);
                 SetAnimation(card, WidthProperty,w,animate); SetAnimation(card, HeightProperty,h,animate); SetAnimation(card, OpacityProperty,active ? 1 : gridLayout ? .72 : .48,animate);
@@ -648,7 +837,19 @@ namespace PadLauncher {
             byte hue = (byte)(Math.Abs((long)hash)%90);
             body.Background = new LinearGradientBrush(Color.FromRgb((byte)(28+hue/2),(byte)(65+hue/3),(byte)(82+hue/2)), Color.FromRgb(11,21,33),60);
             var bitmap = LoadImage(game.Art,700);
-            if (bitmap != null) body.Children.Add(new Image { Source = bitmap, Stretch = Stretch.UniformToFill, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch });
+            grid.Tag=bitmap;
+            Image artwork=null;
+            Grid artworkFrame=null;
+            Border artworkBackdrop=null;
+            if (bitmap != null) {
+                artworkFrame=new Grid {Name="ArtworkFrame",HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top,ClipToBounds=true};
+                if(settings.CarouselLayout!="rectangular" && settings.CarouselLayout!="grid") {
+                    artworkBackdrop=new Border {Name="ArtworkBackdrop",Background=ArtworkColours.Background(bitmap),IsHitTestVisible=false};
+                    artworkFrame.Children.Add(artworkBackdrop);
+                }
+                artwork=new Image {Name="GameArtwork",Source=bitmap,Stretch=Stretch.UniformToFill,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
+                artworkFrame.Children.Add(artwork); body.Children.Add(artworkFrame);
+            }
             else {
                 body.Children.Add(new System.Windows.Shapes.Ellipse { Width=330,Height=330,Fill=new SolidColorBrush(Color.FromArgb(22,163,240,205)),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,-120,-160,0) });
                 bool gridLayout=settings.CarouselLayout=="grid";
@@ -659,24 +860,50 @@ namespace PadLauncher {
             Action geometry = () => {
                 double w=grid.ActualWidth,h=grid.ActualHeight;
                 double slant=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? 0 : 73;
+                if(artwork!=null && h>0 && w>slant) {
+                    artworkFrame.Width=w-slant; artworkFrame.Height=h;
+                    artwork.Stretch=slant>0 ? Stretch.Uniform : Stretch.UniformToFill;
+                    artworkFrame.RenderTransform=new MatrixTransform(1,0,-slant/h,1,slant,0);
+                    if(artworkBackdrop!=null) {
+                        double fittedHeight=bitmap.PixelHeight*Math.Min((w-slant)/bitmap.PixelWidth,h/bitmap.PixelHeight);
+                        artworkBackdrop.Background=ArtworkColours.Fill(bitmap,h,fittedHeight);
+                    }
+                }
                 var shape = new StreamGeometry();
                 using (var ctx=shape.Open()) { ctx.BeginFigure(new Point(slant,0),true,true); ctx.LineTo(new Point(w,0),true,false); ctx.LineTo(new Point(w-slant,h),true,false); ctx.LineTo(new Point(0,h),true,false); }
-                shape.Freeze(); body.Clip=shape; outline.Data=shape;
+                shape.Freeze(); grid.Clip=shape; body.Clip=shape; outline.Data=shape;
             };
             grid.SizeChanged += (s,e) => geometry();
-            grid.MouseLeftButtonUp += (s,e) => { if (index==selected) LaunchSelected(); else { selected=index; Render(true); } e.Handled=true; };
+            bool panelPressed=false;
+            grid.MouseLeftButtonDown+=(s,e) => {
+                if(grid.Clip==null || !grid.Clip.FillContains(e.GetPosition(grid))) return;
+                panelPressed=grid.CaptureMouse(); e.Handled=true;
+            };
+            grid.LostMouseCapture+=(s,e) => panelPressed=false;
+            grid.MouseLeftButtonUp += (s,e) => {
+                if(!panelPressed) return;
+                bool inside=grid.Clip!=null && grid.Clip.FillContains(e.GetPosition(grid));
+                panelPressed=false; grid.ReleaseMouseCapture(); e.Handled=true;
+                if(!inside) return;
+                if (index==selected) LaunchSelected(); else { selected=index; Render(true); }
+            };
             return grid;
         }
         BitmapSource LoadImage(string path, int size) {
             if (String.IsNullOrEmpty(path)) return null;
             string key=path+":"+size; BitmapSource cached;
-            if (images.TryGetValue(key,out cached)) return cached;
             try {
-                var bitmap=new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption=BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth=size; bitmap.UriSource=new Uri(path,UriKind.Absolute); bitmap.EndInit(); bitmap.Freeze();
-                if (images.Count>70) images.Clear(); images[key]=bitmap; return bitmap;
+                var file=new FileInfo(path);
+                key+=":"+file.LastWriteTimeUtc.Ticks+":"+(file.Exists ? file.Length : 0);
+                if (images.TryGetValue(key,out cached)) return cached;
+                var bitmap=new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption=BitmapCacheOption.OnLoad; bitmap.CreateOptions=BitmapCreateOptions.IgnoreImageCache; bitmap.DecodePixelWidth=size; bitmap.UriSource=new Uri(path,UriKind.Absolute); bitmap.EndInit(); bitmap.Freeze();
+                if (images.Count>=70) images.Remove(images.Keys.First()); images[key]=bitmap; return bitmap;
             } catch { images[key]=null; return null; }
         }
         void LaunchSelected() {
+#if ARTWORK_TEST
+            ShowNotice("Artwork test only - game launching is disabled.");
+#else
             if (launching || visible.Count==0) return;
             if (demo) { ShowNotice("Preview mode · connect your Steam library to launch games."); return; }
             var game=visible[selected]; ulong id;
@@ -687,10 +914,19 @@ namespace PadLauncher {
                 Process.Start(new ProcessStartInfo("steam://rungameid/"+game.LaunchId) { UseShellExecute=true });
                 Close();
             } catch (Exception e) { launching=false; ShowNotice("Steam could not be opened: "+e.Message); }
+#endif
         }
         void Save() { if (demo) return; try { Storage.Write("settings.json",settings); } catch { } }
+        void QueueSave() {
+            if(demo || saveQueued) return;
+            saveQueued=true;
+            Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => { saveQueued=false; Save(); }));
+        }
         void OnKey(object sender, System.Windows.Input.KeyEventArgs e) {
             var key=e.Key;
+            int keyDirection=ControllerNavigation.KeyDirection(key,settings.CarouselLayout=="grid",GridColumns);
+            PadState pad;
+            if(keyDirection!=0 && !preview && Gamepad.Read(out pad) && TryControllerNavigationKey(key,pad)) { e.Handled=true; return; }
             switch (key) {
                 case System.Windows.Input.Key.Left: Move(-1); break;
                 case System.Windows.Input.Key.Right: Move(1); break;
@@ -708,31 +944,20 @@ namespace PadLauncher {
             e.Handled=true;
         }
         void PollController(object sender,EventArgs e) {
-            if (!IsActive || preview) { exitButton.Reset(); previousButtons=0; previousDirection=0; nextMove=DateTime.UtcNow.AddMilliseconds(180); return; }
+            if (!IsActive || preview) { exitButton.Reset(); previousButtons=0; navigation.Reset(); return; }
             PadState pad; bool found=Gamepad.Read(out pad);
-            if (!found) { exitButton.Reset(); previousButtons=0; previousDirection=0; return; }
-            if(previousInputSource!=Gamepad.Source) {
-                previousInputSource=Gamepad.Source; previousButtons=0;
-                previousDirection=0; exitButton.Reset();
+            if (!found) { exitButton.Reset(); previousButtons=0; navigation.Reset(); return; }
+            ApplyControllerState(pad,Gamepad.Source,(long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency));
+        }
+        internal void ApplyControllerState(PadState pad,string source,long milliseconds) {
+            if(previousInputSource!=source) {
+                previousInputSource=source; previousButtons=0;
+                exitButton.Reset();
             }
+            NavigateController(pad);
             ushort buttons=pad.Buttons;
-            int rightDirection=pad.RX < -16000 ? -1 : pad.RX > 16000 ? 1 : 0;
-            int rightVertical=pad.RY > 16000 ? -1 : pad.RY < -16000 ? 1 : 0;
-            bool gridLayout=settings.CarouselLayout=="grid";
-            bool fast=rightDirection!=0 || (gridLayout && rightVertical!=0);
-            int direction=fast ? rightDirection : (buttons&0x0004)!=0 || pad.LX < -16000 ? -1 : (buttons&0x0008)!=0 || pad.LX > 16000 ? 1 : 0;
-            if(gridLayout && direction==0) direction=GridColumns*(fast ? rightVertical : (buttons&0x0001)!=0 || pad.LY>16000 ? -1 : (buttons&0x0002)!=0 || pad.LY < -16000 ? 1 : 0);
-            var now=DateTime.UtcNow;
-            bool changed=direction!=previousDirection || fast!=previousFast;
-            if (direction!=0 && (changed || now>=nextMove)) {
-                if(gridLayout && Math.Abs(direction)==GridColumns) MoveGridRow(Math.Sign(direction)); else Move(direction);
-                double repeat=125.0/(fast ? 3 : 1);
-                nextMove=changed ? now.AddMilliseconds(330.0/(fast ? 3 : 1)) : nextMove.AddMilliseconds(repeat);
-                if(nextMove<now.AddMilliseconds(-repeat*3)) nextMove=now.AddMilliseconds(repeat);
-            }
             ushort pressed=(ushort)(buttons & ~previousButtons);
-            previousDirection=direction; previousFast=fast; previousButtons=buttons;
-            long milliseconds=(long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency);
+            previousButtons=buttons;
             ButtonGesture exitGesture=exitButton.Update((buttons&0x2000)!=0,milliseconds);
             if(exitGesture==ButtonGesture.Hold) { ExitApp(); return; }
             if(exitGesture==ButtonGesture.Tap) {
@@ -745,6 +970,26 @@ namespace PadLauncher {
             if ((pressed&0x0200)!=0) ChangeCollection(1);
             if ((pressed&0x8000)!=0) RefreshLibrary(true);
             if ((pressed&0x0010)!=0 && (buttons&0x0020)==0) ShowControls();
+        }
+        internal bool TryControllerNavigationKey(System.Windows.Input.Key key,PadState pad) {
+            bool fast,grid=settings.CarouselLayout=="grid";
+            int keyDirection=ControllerNavigation.KeyDirection(key,grid,GridColumns);
+            if(keyDirection==0 || ControllerNavigation.Direction(pad,grid,GridColumns,out fast)!=keyDirection) return false;
+            // Desktop controller mappings may send an arrow key before their
+            // per-app profile switches. Use the same repeat gate as polling.
+            NavigateController(pad); return true;
+        }
+        internal void NavigateController(PadState pad) {
+            bool gridLayout=settings.CarouselLayout=="grid";
+            bool fast;
+            int direction=ControllerNavigation.Direction(pad,gridLayout,GridColumns,out fast);
+            double now=Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency;
+            if (navigation.Update(direction,fast,now)) {
+                if(gridLayout && Math.Abs(direction)==GridColumns) MoveGridRow(Math.Sign(direction)); else Move(direction);
+                // Artwork decoding/layout can take longer on the first move.
+                // Begin the repeat delay after that work, never catch up missed ticks.
+                navigation.CompleteMove(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency);
+            }
         }
         static Library Demo() {
             var library=new Library();
@@ -759,6 +1004,93 @@ namespace PadLauncher {
         public ushort Buttons;
         public byte LT,RT;
         public short LX,LY,RX,RY;
+    }
+    public static class ArtworkColours {
+        static readonly System.Runtime.CompilerServices.ConditionalWeakTable<BitmapSource,LinearGradientBrush> cache=new System.Runtime.CompilerServices.ConditionalWeakTable<BitmapSource,LinearGradientBrush>();
+        public static LinearGradientBrush Background(BitmapSource image) { return cache.GetValue(image,CreateBackground); }
+        public static LinearGradientBrush Fill(BitmapSource image,double height,double fittedHeight) {
+            var colours=Background(image); Color top=colours.GradientStops[0].Color,bottom=colours.GradientStops[3].Color;
+            double edge=Math.Max(0,Math.Min(.5,(height-fittedHeight)/(2*height)));
+            var brush=new LinearGradientBrush(new GradientStopCollection {new GradientStop(Darker(top),0),new GradientStop(top,edge),new GradientStop(bottom,1-edge),new GradientStop(Darker(bottom),1)},new Point(.5,0),new Point(.5,1));
+            brush.Freeze(); return brush;
+        }
+        static Color Darker(Color colour) { return Color.FromRgb((byte)(colour.R*.45),(byte)(colour.G*.45),(byte)(colour.B*.45)); }
+        static LinearGradientBrush CreateBackground(BitmapSource image) {
+            var small=new TransformedBitmap(image,new ScaleTransform(Math.Min(1,64.0/image.PixelWidth),Math.Min(1,96.0/image.PixelHeight)));
+            var sample=new FormatConvertedBitmap(small,PixelFormats.Bgra32,null,0);
+            int stride=sample.PixelWidth*4;
+            var pixels=new byte[stride*sample.PixelHeight]; sample.CopyPixels(pixels,stride,0);
+            int rows=Math.Max(1,(sample.PixelHeight+3)/4);
+            Color top=EdgeBlend(pixels,stride,0,rows,false),bottom=EdgeBlend(pixels,stride,sample.PixelHeight-rows,rows,true);
+            var brush=new LinearGradientBrush(new GradientStopCollection {new GradientStop(top,0),new GradientStop(top,.25),new GradientStop(bottom,.75),new GradientStop(bottom,1)},new Point(.5,0),new Point(.5,1));
+            brush.Freeze(); return brush;
+        }
+        static Color EdgeBlend(byte[] pixels,int stride,int startRow,int rows,bool bottom) {
+            var weights=new int[256]; var red=new int[256]; var green=new int[256]; var blue=new int[256];
+            int totalWeight=0,lightNeutralWeight=0,neutralRed=0,neutralGreen=0,neutralBlue=0;
+            int width=stride/4,sides=Math.Max(1,width*15/100),rim=Math.Max(1,rows/6);
+            for(int y=startRow;y<startRow+rows;y++) for(int x=0;x<stride;x+=4) {
+                bool edge=bottom ? y>=startRow+rows-rim : y<startRow+rim;
+                // Titles tend to occupy the centre of the upper/lower quarter.
+                // Use its outer rim and corners instead of counting those letters.
+                if(!edge && x/4>=sides && x/4<width-sides) continue;
+                int i=y*stride+x,a=pixels[i+3]; if(a<32) continue;
+                int r=pixels[i+2],g=pixels[i+1],b=pixels[i],bin=(54*r+183*g+19*b)>>8;
+                weights[bin]+=a; red[bin]+=r*a; green[bin]+=g*a; blue[bin]+=b*a;
+                totalWeight+=a;
+                if(bin>=145 && Math.Max(r,Math.Max(g,b))-Math.Min(r,Math.Min(g,b))<=20) {
+                    lightNeutralWeight+=a; neutralRed+=r*a; neutralGreen+=g*a; neutralBlue+=b*a;
+                }
+            }
+            if(totalWeight==0) return Color.FromRgb(13,25,34);
+            // A light paper/wall background should not inherit the hue of a
+            // corner badge. Preserve it when it makes up most of the edge sample.
+            if(lightNeutralWeight>=totalWeight*.5) return Color.FromRgb((byte)(neutralRed/lightNeutralWeight),(byte)(neutralGreen/lightNeutralWeight),(byte)(neutralBlue/lightNeutralWeight));
+            // Blend the actual edge colours, trimming only the brightest and
+            // darkest 10%. Do not promote a small saturated accent over its background.
+            double low=totalWeight*.1,high=totalWeight*.9,cumulative=0,weight=0,rSum=0,gSum=0,bSum=0;
+            for(int i=0;i<weights.Length;i++) {
+                double take=Math.Max(0,Math.Min(cumulative+weights[i],high)-Math.Max(cumulative,low));
+                cumulative+=weights[i];
+                if(take<=0 || weights[i]==0) continue;
+                double fraction=take/weights[i];
+                weight+=take; rSum+=red[i]*fraction; gSum+=green[i]*fraction; bSum+=blue[i]*fraction;
+            }
+            return Color.FromRgb((byte)Math.Round(rSum/weight),(byte)Math.Round(gSum/weight),(byte)Math.Round(bSum/weight));
+        }
+    }
+    public static class ControllerNavigation {
+        public static int KeyDirection(System.Windows.Input.Key key,bool grid,int columns) {
+            if(key==System.Windows.Input.Key.Left) return -1;
+            if(key==System.Windows.Input.Key.Right) return 1;
+            if(grid && key==System.Windows.Input.Key.Up) return -columns;
+            if(grid && key==System.Windows.Input.Key.Down) return columns;
+            return 0;
+        }
+        public static int Direction(PadState pad,bool grid,int columns,out bool fast) {
+            int right=pad.RX < -16000 ? -1 : pad.RX > 16000 ? 1 : 0;
+            int vertical=pad.RY > 16000 ? -1 : pad.RY < -16000 ? 1 : 0;
+            fast=right!=0 || (grid && vertical!=0);
+            int direction=fast ? right : (pad.Buttons&0x0004)!=0 || pad.LX < -16000 ? -1 : (pad.Buttons&0x0008)!=0 || pad.LX > 16000 ? 1 : 0;
+            if(grid && direction==0) direction=columns*(fast ? vertical : (pad.Buttons&0x0001)!=0 || pad.LY>16000 ? -1 : (pad.Buttons&0x0002)!=0 || pad.LY < -16000 ? 1 : 0);
+            return direction;
+        }
+    }
+    public sealed class NavigationRepeat {
+        int direction;
+        bool fast;
+        double next,delay;
+        public void Reset() { direction=0; fast=false; next=0; delay=0; }
+        public bool Update(int value,bool accelerated,double milliseconds) {
+            if(value==0) { Reset(); return false; }
+            bool changed=value!=direction || accelerated!=fast;
+            direction=value; fast=accelerated;
+            if(!changed && milliseconds<next) return false;
+            delay=(changed ? 330.0 : 125.0)/(accelerated ? 3 : 1);
+            next=milliseconds+delay;
+            return true;
+        }
+        public void CompleteMove(double milliseconds) { next=milliseconds+delay; }
     }
     public sealed class ControllerRouter {
         string owner;

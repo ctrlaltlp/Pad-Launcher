@@ -52,7 +52,12 @@ namespace PadLauncher {
         }
         static bool Matches(Game game,int group,string option) {
             if (group==1) {
-                if (option=="1") return !game.Shortcut || game.ShortcutInstalled;
+                if (option=="1") {
+#if ARTWORK_TEST
+                    if(game.ArtworkTestUninstalled) return false;
+#endif
+                    return !game.Shortcut || game.ShortcutInstalled;
+                }
                 if (option=="3") return game.LastPlayed>0;
                 if (option=="4") return game.LastPlayed==0;
             }
@@ -112,6 +117,9 @@ namespace PadLauncher {
                         if (reader.BaseStream.Position>end) throw new InvalidDataException("Appinfo data exceeds its record.");
                         object common=Vdf.Get(Vdf.Get(data,"appinfo"),"common");
                         if (common!=null) {
+#if ARTWORK_TEST
+                            if(game.ArtworkTestUninstalled && !String.IsNullOrWhiteSpace(Vdf.Str(common,"name"))) game.Name=Vdf.Str(common,"name");
+#endif
                             game.StoreTags=Vdf.Map(Vdf.Get(common,"store_tags")).Values.Select(Convert.ToString).Distinct().ToList();
                             game.Categories=Vdf.Map(Vdf.Get(common,"category")).Where(p => Convert.ToString(p.Value)=="1").Select(p => p.Key.Replace("category_","")).ToList();
                             string controller=Vdf.Str(common,"controller_support");

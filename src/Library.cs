@@ -14,6 +14,9 @@ namespace PadLauncher {
         public string LaunchId { get; set; }
         public bool Shortcut { get; set; }
         public bool ShortcutInstalled { get; set; }
+#if ARTWORK_TEST
+        public bool ArtworkTestUninstalled { get; set; }
+#endif
         public string ShortcutTarget { get; set; }
         public string Art { get; set; }
         public string Hero { get; set; }
@@ -53,10 +56,13 @@ namespace PadLauncher {
         public string CollectionId { get; set; }
         public string SelectedId { get; set; }
         public string DefaultCollectionId { get; set; }
+        public List<string> EnabledCollectionIds { get; set; }
         public double CarouselScale { get; set; }
         public string CarouselLayout { get; set; }
+        public string AngledPanelSizing { get; set; }
         public int GridColumns { get; set; }
-        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; GridColumns=5; }
+        public int GridRows { get; set; }
+        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -272,6 +278,9 @@ namespace PadLauncher {
                     } catch (Exception e) { result.Warnings.Add(Path.GetFileName(manifest) + ": " + e.Message); }
                 }
             }
+#if ARTWORK_TEST
+            AddCachedArtworkGames(path,result);
+#endif
             if (user != null) {
                 string config = Path.Combine(path, "userdata", user, "config");
                 string shortcuts = Path.Combine(config, "shortcuts.vdf");
@@ -302,6 +311,23 @@ namespace PadLauncher {
             result.Games = result.Games.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
             return result;
         }
+#if ARTWORK_TEST
+        static void AddCachedArtworkGames(string steam,Library result) {
+            string cache=Path.Combine(steam,"appcache","librarycache");
+            if(!Directory.Exists(cache)) return;
+            var ids=new HashSet<string>();
+            foreach(string entry in Directory.GetFileSystemEntries(cache)) {
+                string name=Path.GetFileNameWithoutExtension(entry),prefix=name.Split('_')[0]; uint id;
+                if(UInt32.TryParse(prefix,out id) && id>0) ids.Add(id.ToString());
+            }
+            var existing=new HashSet<string>(result.Games.Select(g => g.Id));
+            foreach(string id in ids) {
+                if(existing.Contains(id)) continue;
+                var game=new Game {Id=id,LaunchId=id,Name="Steam app "+id,ArtworkTestUninstalled=true};
+                if(Artwork(steam,null,game,false)!=null) { result.Games.Add(game); existing.Add(id); }
+            }
+        }
+#endif
         public static void ReadCollections(string config, Library result) {
             string cloud = Path.Combine(config, "cloudstorage");
             var collections = new Dictionary<string,Collection>();

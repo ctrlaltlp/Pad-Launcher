@@ -15,6 +15,22 @@ public static class ControllerTests {
         Launcher window=null;
         var reader=new PlayStationInput();
         try {
+            var repeat=new NavigationRepeat();
+            Check(repeat.Update(1,false,0),"First navigation press responds immediately");
+            repeat.CompleteMove(450);
+            Check(!repeat.Update(1,false,466) && !repeat.Update(1,false,779),"Slow initial artwork rendering cannot cause an immediate second step");
+            Check(repeat.Update(1,false,780),"A held direction repeats after the full initial delay");
+            repeat.CompleteMove(1100);
+            Check(!repeat.Update(1,false,1116) && repeat.Update(1,false,1225),"A delayed repeat frame does not produce catch-up steps");
+            Check(!repeat.Update(0,false,1230) && repeat.Update(1,false,1240),"Release and a fresh press still respond immediately");
+            repeat.CompleteMove(1240);
+            Check(repeat.Update(-1,false,1250),"Changing direction responds immediately");
+            repeat.Reset();
+            Check(repeat.Update(1,true,0),"Fast stick responds immediately after reopening");
+            repeat.CompleteMove(200);
+            Check(!repeat.Update(1,true,309) && repeat.Update(1,true,310),"Fast stick preserves its three-times-faster initial repeat delay");
+            repeat.CompleteMove(310);
+            Check(!repeat.Update(1,true,351) && repeat.Update(1,true,352),"Fast stick preserves its three-times-faster held repeat rate");
             var router=new ControllerRouter(); PadState routed; string routedSource;
             var pads=new List<KeyValuePair<string,PadState>> {new KeyValuePair<string,PadState>("pad0",new PadState()),new KeyValuePair<string,PadState>("pad1",new PadState {Buttons=0x1000})};
             Check(router.Select(pads,out routed,out routedSource) && routedSource=="pad1" && routed.Buttons==0x1000,"An idle first controller does not block a second controller");
