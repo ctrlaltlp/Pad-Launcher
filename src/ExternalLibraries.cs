@@ -29,6 +29,10 @@ namespace PadLauncher {
                     if(gog.Count>0) result.Collections.Add(new Collection {Id="source:gog",Name="GOG Galaxy",Games=gog.Select(g => g.Id).ToList()});
                 } catch(Exception error) {result.Warnings.Add("GOG library: "+error.Message);}
             }
+            if(settings.EaEnabled) {
+                try {var ea=EaLibrary.Scan(); result.Games.AddRange(ea); if(ea.Count>0) result.Collections.Add(new Collection {Id="source:ea",Name="EA App",Games=ea.Select(g => g.Id).ToList()});}
+                catch(Exception error) {result.Warnings.Add("EA library: "+error.Message);}
+            }
             CustomGameLibrary.Apply(result,settings);
             if(settings.ReplacedGameIds!=null) result.Games.RemoveAll(g => settings.ReplacedGameIds.Contains(g.Id));
             foreach(var game in result.Games) ArtworkService.ApplyCached(game,settings);
@@ -86,6 +90,25 @@ namespace PadLauncher {
         }
     }
     public static class EpicLibrary {
+        public static string DetectLauncher() {
+            try {
+                using(var key=Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(@"com.epicgames.launcher\shell\open\command")) {
+                    string command=key==null ? "" : Convert.ToString(key.GetValue(""));
+                    var match=Regex.Match(command,@"^\s*""([^""]+\.exe)""",RegexOptions.IgnoreCase);
+                    if(match.Success && File.Exists(match.Groups[1].Value)) return match.Groups[1].Value;
+                }
+            } catch {}
+            foreach(string root in new[]{Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)}) foreach(string architecture in new[]{"Win64","Win32"}) {
+                string path=Path.Combine(root,"Epic Games","Launcher","Portal","Binaries",architecture,"EpicGamesLauncher.exe"); if(File.Exists(path)) return path;
+            }
+            return null;
+        }
+        public static string ValidateLauncher(string value) {
+            if(String.IsNullOrWhiteSpace(value)) return null;
+            string path=Path.GetFullPath(Environment.ExpandEnvironmentVariables(value.Trim().Trim('"')));
+            if(!File.Exists(path) || !Path.GetFileName(path).Equals("EpicGamesLauncher.exe",StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Choose EpicGamesLauncher.exe, or leave the field empty for automatic detection.");
+            return path;
+        }
         public static bool SuitablePortrait(int width,int height) { return width>=250 && height>=350 && (double)width/height>=.5 && (double)width/height<=.85; }
         public static List<Game> Scan(string folder,string catalogFile,List<string> warnings) {
             var games=new List<Game>();
@@ -131,7 +154,13 @@ namespace PadLauncher {
         internal static IEnumerable<object> Entries(object value) { var items=value as IEnumerable; if(items==null || value is string) yield break; foreach(var item in items) yield return item; }
     }
     public static class GameLaunch {
-        public static System.Diagnostics.ProcessStartInfo StartInfo(Game game) {
+        public static System.Diagnostics.ProcessStartInfo StartInfo(Game game,Settings settings=null) {
+            if(game.Source=="ea") return EaLibrary.StartInfo(game,settings==null ? null : settings.EaLauncherPath);
+            if(game.Source=="epic") {
+                string uri=UriFor(game),path=settings==null || String.IsNullOrWhiteSpace(settings.EpicLauncherPath) ? EpicLibrary.DetectLauncher() : EpicLibrary.ValidateLauncher(settings.EpicLauncherPath);
+                if(!String.IsNullOrEmpty(path)) return new System.Diagnostics.ProcessStartInfo(path,"\""+uri+"\"") {UseShellExecute=true,WorkingDirectory=Path.GetDirectoryName(path)};
+                return new System.Diagnostics.ProcessStartInfo(uri) {UseShellExecute=true};
+            }
             if(game.Source=="gog") return GogLibrary.StartInfo(game);
             if(game.Source!="custom") return new System.Diagnostics.ProcessStartInfo(UriFor(game)) {UseShellExecute=true};
             if(!File.Exists(game.LaunchId)) throw new FileNotFoundException("The custom game's file could not be found. Edit its path in Custom games.",game.LaunchId);
@@ -140,6 +169,7 @@ namespace PadLauncher {
             return new System.Diagnostics.ProcessStartInfo(game.LaunchId,game.Arguments ?? "") {WorkingDirectory=folder,UseShellExecute=true};
         }
         public static string UriFor(Game game) {
+            if(game.Source=="ea") return EaLibrary.UriFor(game);
             if(game.Source=="epic") {
                 string[] ids=(game.LaunchId ?? "").Split(':');
                 if(ids.Length!=3 || ids.Any(String.IsNullOrWhiteSpace)) throw new InvalidOperationException("This game's Epic launch IDs are invalid. Refresh the library.");

@@ -117,9 +117,12 @@ namespace PadLauncher {
         public int GridColumns { get; set; }
         public int GridRows { get; set; }
         public bool EpicEnabled { get; set; }
+        public string EpicLauncherPath {get;set;}
         public bool GogEnabled {get;set;}
+        public bool EaEnabled {get;set;}
+        public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { RightStickSpeed=3; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { RightStickSpeed=3; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {

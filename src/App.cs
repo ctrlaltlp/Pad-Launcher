@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.3.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.3.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.3.0")]
+[assembly: System.Reflection.AssemblyVersion("0.3.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.3.1.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.1")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -780,8 +780,37 @@ namespace PadLauncher {
             systemLayout.Children.Add(userPicker);
             var epicToggle=new CheckBox {Content="Include Epic Games Store games",IsChecked=settings.EpicEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
             epicToggle.Click+=(s,e) => {settings.EpicEnabled=epicToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(epicToggle);
+            var epicPathCaption=Label("Epic Games Launcher path",14,mint); epicPathCaption.Margin=new Thickness(0,10,0,8); systemLayout.Children.Add(epicPathCaption);
+            var epicPathRow=new DockPanel();
+            var browseEpic=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseEpic,Dock.Right); epicPathRow.Children.Add(browseEpic);
+            var epicPathField=new TextBox {Text=settings.EpicLauncherPath ?? "",Padding=new Thickness(8)};
+            var epicPathBox=new Grid(); epicPathBox.Children.Add(epicPathField);
+            var epicPlaceholder=Label("Automatic detection",12,muted); epicPlaceholder.Margin=new Thickness(9,0,9,0); epicPlaceholder.IsHitTestVisible=false; epicPathBox.Children.Add(epicPlaceholder);
+            epicPathField.TextChanged+=(s,e) => epicPlaceholder.Visibility=String.IsNullOrEmpty(epicPathField.Text) ? Visibility.Visible : Visibility.Collapsed;
+            epicPlaceholder.Visibility=String.IsNullOrEmpty(epicPathField.Text) ? Visibility.Visible : Visibility.Collapsed; epicPathRow.Children.Add(epicPathBox); systemLayout.Children.Add(epicPathRow);
+            var epicPathStatus=Label("",12,muted); epicPathStatus.TextWrapping=TextWrapping.Wrap;
+            string detectedEpic=EpicLibrary.DetectLauncher(); epicPathStatus.Text=String.IsNullOrEmpty(settings.EpicLauncherPath) ? String.IsNullOrEmpty(detectedEpic) ? "Automatic: uses Epic's registered launch link." : "Detected: "+detectedEpic : "Custom launcher path saved.";
+            var saveEpic=new Button {Content="Save path",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,8)};
+            saveEpic.Click+=(s,e) => {
+                try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.EpicLauncherPath=EpicLibrary.ValidateLauncher(epicPathField.Text); Storage.Write("settings.json",next); settings=next; epicPathField.Text=settings.EpicLauncherPath ?? ""; epicPathStatus.Text=String.IsNullOrEmpty(settings.EpicLauncherPath) ? "Automatic detection enabled." : "Custom launcher path saved.";}
+                catch(Exception error) {epicPathStatus.Text=error.Message;}
+            };
+            browseEpic.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Epic Games Launcher|EpicGamesLauncher.exe",CheckFileExists=true,FileName="EpicGamesLauncher.exe"}; if(file.ShowDialog(dialog)==true) {epicPathField.Text=file.FileName; saveEpic.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}};
+            systemLayout.Children.Add(saveEpic); systemLayout.Children.Add(epicPathStatus);
             var gogToggle=new CheckBox {Content="Include GOG Galaxy games",IsChecked=settings.GogEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
             gogToggle.Click+=(s,e) => {settings.GogEnabled=gogToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(gogToggle);
+            var eaToggle=new CheckBox {Content="Include EA App games",IsChecked=settings.EaEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
+            eaToggle.Click+=(s,e) => {settings.EaEnabled=eaToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(eaToggle);
+            var eaCaption=Label("EA App path",14,mint); eaCaption.Margin=new Thickness(0,10,0,8); systemLayout.Children.Add(eaCaption);
+            var eaRow=new DockPanel(); var browseEa=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseEa,Dock.Right); eaRow.Children.Add(browseEa);
+            var eaPath=new TextBox {Text=settings.EaLauncherPath ?? "",Padding=new Thickness(8),ToolTip="Leave empty for automatic detection; choose EALauncher.exe to override."};
+            var eaField=new Grid(); eaField.Children.Add(eaPath); var eaHint=Label("Automatic detection",12,muted); eaHint.Margin=new Thickness(9,0,9,0); eaHint.IsHitTestVisible=false; eaField.Children.Add(eaHint);
+            eaPath.TextChanged+=(s,e) => eaHint.Visibility=String.IsNullOrEmpty(eaPath.Text) ? Visibility.Visible : Visibility.Collapsed; eaHint.Visibility=String.IsNullOrEmpty(eaPath.Text) ? Visibility.Visible : Visibility.Collapsed;
+            eaRow.Children.Add(eaField); systemLayout.Children.Add(eaRow);
+            var eaStatus=Label("",12,muted); eaStatus.TextWrapping=TextWrapping.Wrap;
+            var saveEa=new Button {Content="Save path",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,8)};
+            saveEa.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.EaLauncherPath=EaLibrary.ValidateClient(eaPath.Text); Storage.Write("settings.json",next); settings=next; eaPath.Text=settings.EaLauncherPath ?? ""; eaStatus.Text=String.IsNullOrEmpty(settings.EaLauncherPath) ? "Automatic detection enabled." : "Custom EA launcher path saved.";} catch(Exception error) {eaStatus.Text=error.Message;}};
+            browseEa.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="EA App launcher|EALauncher.exe",CheckFileExists=true,FileName="EALauncher.exe"}; if(file.ShowDialog(dialog)==true) {eaPath.Text=file.FileName; saveEa.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}}; systemLayout.Children.Add(saveEa); systemLayout.Children.Add(eaStatus);
             var sgdbToggle=new CheckBox {Content="SteamGridDB artwork fallback",IsChecked=settings.SteamGridDbEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
             sgdbToggle.Click+=(s,e) => {settings.SteamGridDbEnabled=sgdbToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(sgdbToggle);
             systemLayout.Children.Add(Label("SteamGridDB API key (stored encrypted for your Windows account)",12,muted));
@@ -1400,7 +1429,7 @@ namespace PadLauncher {
             launching=true;
             try {
                 Save();
-                Process.Start(GameLaunch.StartInfo(game));
+                Process.Start(GameLaunch.StartInfo(game,settings));
                 if(settings.LaunchHistory==null) settings.LaunchHistory=new Dictionary<string,long>();
                 settings.LaunchHistory[game.Id]=DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Save();
                 Close();

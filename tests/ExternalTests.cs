@@ -20,6 +20,12 @@ class ExternalTests {
             Check(games.Count==1 && games[0].Name=="Amnesia: The Dark Descent","Installed Epic game and normalized name");
             Check(games[0].ArtworkUrl.EndsWith("cover.jpg"),"Base64 catalog portrait");
             Check(GameLaunch.UriFor(games[0]).Contains("ns%3Aitem%3Aapp"),"Epic launch identifiers escaped");
+            string epicLauncher=Path.Combine(root,"EpicGamesLauncher.exe"); File.WriteAllText(epicLauncher,"");
+            var epicSettings=new Settings {EpicLauncherPath=epicLauncher}; var epicStart=GameLaunch.StartInfo(games[0],epicSettings);
+            Check(epicStart.FileName==epicLauncher && epicStart.Arguments.Contains("com.epicgames.launcher://apps/ns%3Aitem%3Aapp") && epicStart.UseShellExecute,"Saved Epic executable receives the native game URI");
+            Check(EpicLibrary.ValidateLauncher(" ")==null,"Empty Epic launcher path restores automatic detection");
+            bool invalidEpic=false; try {EpicLibrary.ValidateLauncher(Path.Combine(install,"game.exe"));} catch(ArgumentException) {invalidEpic=true;} Check(invalidEpic,"Epic path override rejects unrelated executables");
+            Check(Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(epicSettings)).EpicLauncherPath==epicLauncher,"Epic path override persists in settings");
             Check(GameLaunch.UriFor(new Game {LaunchId="18446744073709551615"}).EndsWith("18446744073709551615"),"64 bit Steam shortcut preserved");
             manifest["bIsIncompleteInstall"]=true; File.WriteAllText(file,Storage.Json().Serialize(manifest)); Check(EpicLibrary.Scan(root,catalog,warnings).Count==0,"Incomplete excluded");
             manifest["bIsIncompleteInstall"]=false; manifest["LaunchExecutable"]="../outside.exe"; File.WriteAllText(Path.Combine(root,"outside.exe"),""); File.WriteAllText(file,Storage.Json().Serialize(manifest)); Check(EpicLibrary.Scan(root,catalog,warnings).Count==0,"Traversal rejected");
@@ -129,6 +135,7 @@ class ExternalTests {
             var renamed=Storage.Read<Settings>("settings.json"); Check(!Path.IsPathRooted(renamed.CustomGames[0].Artwork) && File.Exists(CustomGameLibrary.ArtworkPath(renamed.CustomGames[0].Artwork)),"Rename migration rebases imported artwork to portable paths");
             Check(renamed.ArtworkOverrides["pick"]==Path.Combine("artwork","chosen","selected.img"),"Rename migration preserves selected artwork overrides");
             Console.WriteLine("3 rename migration checks passed");
+            Console.WriteLine("4 Epic path checks included above");
         } finally {Directory.Delete(root,true);}
     }
 }
