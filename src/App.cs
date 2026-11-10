@@ -94,7 +94,7 @@ namespace PadLauncher {
             var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,InstanceName+".Exit");
             instance = new Mutex(true, InstanceName, out first);
             if (!first) {
-                foreach (var process in Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName)) if (process.Id!=Process.GetCurrentProcess().Id) AllowSetForegroundWindow(process.Id);
+                foreach (var process in new[]{Process.GetCurrentProcess().ProcessName,"PadLauncher","SteamPadLauncher"}.Distinct().SelectMany(name => Process.GetProcessesByName(name)).GroupBy(p => p.Id).Select(group => group.First())) if (process.Id!=Process.GetCurrentProcess().Id) AllowSetForegroundWindow(process.Id);
                 if (args.Contains("--quit")) exitSignal.Set(); else showSignal.Set();
                 return;
             }
