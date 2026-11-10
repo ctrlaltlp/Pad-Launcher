@@ -16,10 +16,6 @@ The first launch puts the app in your notification area, so it's best if you hav
 
 Steam is detected automatically. If detection fails, set Steam installation folder(the folder containing `steam.exe` and `steamapps`) in settings. Set `UserId` to choose a specific local Steam profile, or leave it null for automatic selection.
 
-## Recommendation for non-steam games artwork
-
-Create an account on: https://www.steamgriddb.com/. Download either BoilR https://github.com/PhilipK/BoilR or SGDBoop https://www.steamgriddb.com/boop to add artwork to your games. For BoilR you need to set your steamgriddb API key in BoilR from https://www.steamgriddb.com/profile/preferences/api. For SGDBoop, the easiest way of installing artwork after the program's installation is find your game in sgdb, click 'View original steam assets' and click 'Boop 'em all', that is best for a single game. For all games use BoilR - much faster.
-
 ## Tray and overlay
 
 The first launch starts quietly in the tray and prepares the library without displaying the overlay. **Double-click the tray icon to toggle the overlay on/off.** The app keeps the overlay, library and decoded artwork in memory when dismissed with Circle/B or after launching a game. Running the executable again signals the existing process to show the overlay.
