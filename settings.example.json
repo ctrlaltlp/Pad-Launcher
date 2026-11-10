@@ -13,6 +13,7 @@
   "SteamPath": null,
   "UserId": null,
   "EpicEnabled": true,
+  "GogEnabled": true,
   "SteamGridDbEnabled": true,
   "CollectionId": "all",
   "SelectedId": null

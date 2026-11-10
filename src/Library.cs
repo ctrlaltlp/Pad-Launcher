@@ -17,6 +17,7 @@ namespace PadLauncher {
         public string ArtworkProvider { get; set; }
         public string Arguments {get;set;}
         public string WorkingDirectory {get;set;}
+        public string ImportedActionInfo {get;set;}
         public bool Shortcut { get; set; }
         public bool ShortcutInstalled { get; set; }
 #if ARTWORK_TEST
@@ -92,6 +93,9 @@ namespace PadLauncher {
         }
     }
     public class Settings {
+        public List<string> ReplacedGameIds {get;set;}
+        public string PlaynitePath {get;set;}
+        public string PlayniteLibraryPath {get;set;}
         public double RightStickSpeed {get;set;}
         public Dictionary<string,long> LaunchHistory {get;set;}
         public Dictionary<string,string> ArtworkOverrides {get;set;}
@@ -113,8 +117,9 @@ namespace PadLauncher {
         public int GridColumns { get; set; }
         public int GridRows { get; set; }
         public bool EpicEnabled { get; set; }
+        public bool GogEnabled {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { RightStickSpeed=3; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { RightStickSpeed=3; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {

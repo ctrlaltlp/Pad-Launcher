@@ -23,7 +23,14 @@ namespace PadLauncher {
                 result.Games.AddRange(epic);
                 if(epic.Count>0) result.Collections.Add(new Collection {Id="source:epic",Name="Epic Games Store",Games=epic.Select(g => g.Id).ToList()});
             }
+            if(settings.GogEnabled) {
+                try {
+                    var gog=GogLibrary.Scan(); result.Games.AddRange(gog);
+                    if(gog.Count>0) result.Collections.Add(new Collection {Id="source:gog",Name="GOG Galaxy",Games=gog.Select(g => g.Id).ToList()});
+                } catch(Exception error) {result.Warnings.Add("GOG library: "+error.Message);}
+            }
             CustomGameLibrary.Apply(result,settings);
+            if(settings.ReplacedGameIds!=null) result.Games.RemoveAll(g => settings.ReplacedGameIds.Contains(g.Id));
             foreach(var game in result.Games) ArtworkService.ApplyCached(game,settings);
             result.Games=result.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
             if(result.Games.Count==0 && String.IsNullOrWhiteSpace(steam)) result.Warnings.Add("No games found. Choose your Steam folder or install a game through Epic Games Store.");
@@ -31,6 +38,8 @@ namespace PadLauncher {
         }
     }
     public class CustomGame {
+        public string PlayniteId {get;set;}
+        public string PlayniteActionInfo {get;set;}
         public string Id {get;set;}
         public string Name {get;set;}
         public string Target {get;set;}
@@ -39,6 +48,7 @@ namespace PadLauncher {
         public string Artwork {get;set;}
     }
     public static class CustomGameLibrary {
+        public static string ArtworkPath(string path) {return String.IsNullOrWhiteSpace(path) ? null : Path.IsPathRooted(path) ? path : Path.Combine(Storage.Root,path);}
         public static string Save(Settings settings,CustomGame game) {
             game.Name=(game.Name ?? "").Trim();
             if(game.Name.Length==0 || game.Name.Length>120) throw new ArgumentException("Enter a game name of 1–120 characters.");
@@ -52,10 +62,15 @@ namespace PadLauncher {
             }
             game.Artwork=(game.Artwork ?? "").Trim().Trim('"');
             if(game.Artwork.Length>0) {
-                game.Artwork=Path.GetFullPath(game.Artwork);
+                game.Artwork=Path.GetFullPath(ArtworkPath(game.Artwork));
                 try {using(var image=System.Drawing.Image.FromFile(game.Artwork)) {if(image.Width<1) throw new IOException();}} catch {throw new ArgumentException("Choose a valid artwork image, or leave artwork empty for SteamGridDB fallback.");}
+                string root=Path.GetFullPath(Storage.Root)+Path.DirectorySeparatorChar;
+                if(game.Artwork.StartsWith(root,StringComparison.OrdinalIgnoreCase)) game.Artwork=game.Artwork.Substring(root.Length);
             }
             if(settings.CustomGames==null) settings.CustomGames=new List<CustomGame>();
+            var previous=settings.CustomGames.FirstOrDefault(g => g.Id==game.Id);
+            if(previous!=null && String.IsNullOrEmpty(game.PlayniteId)) game.PlayniteId=previous.PlayniteId;
+            if(previous!=null && String.IsNullOrEmpty(game.PlayniteActionInfo)) game.PlayniteActionInfo=previous.PlayniteActionInfo;
             if(!String.IsNullOrEmpty(game.Id) && !settings.CustomGames.Any(g => g.Id==game.Id)) throw new ArgumentException("This custom game no longer exists.");
             if(String.IsNullOrEmpty(game.Id)) game.Id="custom:"+Guid.NewGuid().ToString("N");
             settings.CustomGames.RemoveAll(g => g.Id==game.Id); settings.CustomGames.Add(game);
@@ -64,7 +79,7 @@ namespace PadLauncher {
         public static void Apply(Library library,Settings settings) {
             library.Games.RemoveAll(g => g.Source=="custom"); library.Collections.RemoveAll(c => c.Id=="source:custom");
             foreach(var entry in settings.CustomGames ?? new List<CustomGame>()) {
-                library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="custom",LaunchId=entry.Target,Arguments=entry.Arguments,WorkingDirectory=entry.WorkingDirectory,Art=entry.Artwork});
+                library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="custom",LaunchId=entry.Target,Arguments=entry.Arguments,WorkingDirectory=entry.WorkingDirectory,ImportedActionInfo=entry.PlayniteActionInfo,Art=ArtworkPath(entry.Artwork)});
             }
             var games=library.Games.Where(g => g.Source=="custom").Select(g => g.Id).ToList();
             if(games.Count>0) library.Collections.Add(new Collection {Id="source:custom",Name="Custom games",Games=games});
@@ -117,6 +132,7 @@ namespace PadLauncher {
     }
     public static class GameLaunch {
         public static System.Diagnostics.ProcessStartInfo StartInfo(Game game) {
+            if(game.Source=="gog") return GogLibrary.StartInfo(game);
             if(game.Source!="custom") return new System.Diagnostics.ProcessStartInfo(UriFor(game)) {UseShellExecute=true};
             if(!File.Exists(game.LaunchId)) throw new FileNotFoundException("The custom game's file could not be found. Edit its path in Custom games.",game.LaunchId);
             string folder=String.IsNullOrWhiteSpace(game.WorkingDirectory) ? Path.GetDirectoryName(game.LaunchId) : game.WorkingDirectory;

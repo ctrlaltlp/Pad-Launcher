@@ -779,6 +779,8 @@ namespace PadLauncher {
             systemLayout.Children.Add(userPicker);
             var epicToggle=new CheckBox {Content="Include Epic Games Store games",IsChecked=settings.EpicEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
             epicToggle.Click+=(s,e) => {settings.EpicEnabled=epicToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(epicToggle);
+            var gogToggle=new CheckBox {Content="Include GOG Galaxy games",IsChecked=settings.GogEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
+            gogToggle.Click+=(s,e) => {settings.GogEnabled=gogToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(gogToggle);
             var sgdbToggle=new CheckBox {Content="SteamGridDB artwork fallback",IsChecked=settings.SteamGridDbEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
             sgdbToggle.Click+=(s,e) => {settings.SteamGridDbEnabled=sgdbToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(sgdbToggle);
             systemLayout.Children.Add(Label("SteamGridDB API key (stored encrypted for your Windows account)",12,muted));
@@ -896,9 +898,120 @@ namespace PadLauncher {
             searchText.KeyDown+=(s,e) => {if(e.Key==System.Windows.Input.Key.Enter && searchButton.IsEnabled) {searchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); e.Handled=true;}};
             await loadCovers(0);
         }
+        void ShowPlayniteImport(Window owner,Action rebuild) {
+            var dialog=new Window {Title="Import from Playnite",Owner=owner,Width=680,Height=720,MinWidth=500,MinHeight=500,WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=owner.Background,Foreground=white,FontFamily=FontFamily,Topmost=true};
+            dialog.Resources.MergedDictionaries.Add(owner.Resources);
+            var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
+            var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
+            var title=Label("Import from Playnite",24,white); title.FontWeight=FontWeights.SemiBold; title.Margin=new Thickness(0,0,0,16); header.Children.Add(title);
+            string start=settings.PlaynitePath;
+            if(String.IsNullOrEmpty(start)) {start=System.IO.Path.GetFullPath(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"..","Playnite")); if(!Directory.Exists(start)) start=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Playnite");}
+            Func<string,string,TextBox> pathField=(caption,initial) => {
+                var label=Label(caption,14,mint); label.Margin=new Thickness(0,8,0,8); header.Children.Add(label);
+                var row=new DockPanel(); var browse=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browse,Dock.Right); row.Children.Add(browse);
+                var field=new TextBox {Text=initial ?? "",Padding=new Thickness(8)}; row.Children.Add(field); header.Children.Add(row);
+                browse.Click+=(s,e) => {using(var picker=new System.Windows.Forms.FolderBrowserDialog {Description=caption,SelectedPath=Directory.Exists(field.Text) ? field.Text : ""}) {if(picker.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) field.Text=picker.SelectedPath;}};
+                return field;
+            };
+            var install=pathField("Playnite application folder",start);
+            var database=pathField("Playnite library folder (leave empty for automatic)",settings.PlayniteLibraryPath);
+            var controls=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,14,0,12)};
+            var load=new Button {Content="Read library",Padding=new Thickness(12,7,12,7)}; controls.Children.Add(load);
+            var installed=new CheckBox {Content="Installed only",IsChecked=true,Margin=new Thickness(16,0,0,0),VerticalAlignment=VerticalAlignment.Center}; controls.Children.Add(installed);
+            var hidden=new CheckBox {Content="Include hidden",IsChecked=false,Margin=new Thickness(16,0,0,0),VerticalAlignment=VerticalAlignment.Center}; controls.Children.Add(hidden); header.Children.Add(controls);
+            var footer=new StackPanel(); DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
+            var status=Label("Read your library, then choose games to import. Reimport updates existing entries without duplicates.",12,muted); status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,12,0,12); footer.Children.Add(status);
+            var actions=new StackPanel {Orientation=Orientation.Horizontal};
+            var import=new Button {Content="Import selected",IsEnabled=false,Padding=new Thickness(14,8,14,8)}; actions.Children.Add(import);
+            var close=new Button {Content="Close",Padding=new Thickness(14,8,14,8),Margin=new Thickness(8,0,0,0)}; close.Click+=(s,e) => dialog.Close(); actions.Children.Add(close); footer.Children.Add(actions);
+            var listPanel=new StackPanel(); var listScroll=new ScrollViewer {Content=listPanel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}; root.Children.Add(listScroll);
+            var records=new List<PlayniteGame>(); var boxes=new List<CheckBox>(); string loadedInstall=null,loadedLibrary=null; bool closed=false,busy=false;
+            var selectAll=new Button {Content="Select all",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,8),HorizontalAlignment=HorizontalAlignment.Left};
+            selectAll.Click+=(s,e) => {foreach(var box in boxes.Where(b => b.IsEnabled)) box.IsChecked=true;};
+            var selectionActions=new StackPanel {Orientation=Orientation.Horizontal}; selectionActions.Children.Add(selectAll);
+            var unselectAll=new Button {Content="Unselect all",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,8)};
+            unselectAll.Click+=(s,e) => {foreach(var box in boxes.Where(b => b.IsEnabled)) box.IsChecked=false;}; selectionActions.Children.Add(unselectAll); header.Children.Add(selectionActions);
+            dialog.Closed+=(s,e) => closed=true;
+            Action renderList=() => {
+                listPanel.Children.Clear(); boxes.Clear();
+                foreach(var game in records.Where(g => (installed.IsChecked!=true || g.Installed) && (hidden.IsChecked==true || !g.Hidden))) {
+                    bool duplicate=PlayniteImport.NativeDuplicate(game,library),existing=(settings.CustomGames ?? new List<CustomGame>()).Any(g => g.PlayniteId==game.Id);
+                    var box=new CheckBox {Content=game.Name+(duplicate ? " · Already detected" : existing ? " · Update imported entry" : !game.Installed ? " · Not installed" : ""),Tag=game,IsChecked=!duplicate,Margin=new Thickness(0,0,0,10)};
+                    boxes.Add(box); listPanel.Children.Add(box);
+                }
+                import.IsEnabled=boxes.Any(); status.Text=boxes.Count+" listed. Already detected games start unchecked. Conflicting launch actions are reviewed together before import.";
+            };
+            installed.Click+=(s,e) => renderList(); hidden.Click+=(s,e) => renderList();
+            load.Click+=async (s,e) => {
+                load.IsEnabled=false; import.IsEnabled=false; status.Text="Reading Playnite library…";
+                try {
+                    string folder=System.IO.Path.GetFullPath(install.Text.Trim().Trim('"'));
+                    string lib=String.IsNullOrWhiteSpace(database.Text) ? PlayniteImport.LibraryFolder(folder) : System.IO.Path.GetFullPath(database.Text.Trim().Trim('"'));
+                    var result=await Task.Run(() => PlayniteImport.Read(folder,lib)); if(closed) return;
+                    records=result; loadedInstall=folder; loadedLibrary=lib; renderList();
+                } catch(Exception error) {if(!closed) status.Text="Could not read Playnite. If it is updating or locking the library, close it and retry. "+error.GetBaseException().Message;}
+                finally {if(!closed) load.IsEnabled=true;}
+            };
+            import.Click+=async (s,e) => {
+                if(scanning) {status.Text="Please wait for the current launcher refresh to finish."; return;}
+                var selected=boxes.Where(b => b.IsEnabled && b.IsChecked==true).Select(b => (PlayniteGame)b.Tag).ToList();
+                if(selected.Count==0) {status.Text="Select at least one game."; return;}
+                busy=true; header.IsEnabled=false; listPanel.IsEnabled=false; import.IsEnabled=false; close.IsEnabled=false; status.Text="Copying artwork and preparing entries…";
+                try {
+                    var prepared=await Task.Run(() => selected.Select(g => PlayniteImport.Prepare(g,loadedInstall)).ToList()); if(closed) return;
+                    var conflicts=PlayniteImport.Conflicts(settings,library,prepared);
+                    if(conflicts.Count>0 && !ReviewPlayniteConflicts(dialog,conflicts)) {status.Text="Import cancelled. No game entries were changed."; return;}
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    int imported=PlayniteImport.ApplyChoices(next,prepared,conflicts);
+                    next.PlaynitePath=loadedInstall; next.PlayniteLibraryPath=loadedLibrary;
+                    if(next.EnabledCollectionIds!=null && !next.EnabledCollectionIds.Contains("source:custom")) next.EnabledCollectionIds.Add("source:custom");
+                    Storage.Write("settings.json",next); settings=next;
+                    if(artworkCancellation!=null) artworkCancellation.Cancel();
+                    CustomGameLibrary.Apply(library,settings); if(settings.ReplacedGameIds!=null) library.Games.RemoveAll(g => settings.ReplacedGameIds.Contains(g.Id)); foreach(var game in library.Games) ArtworkService.ApplyCached(game,settings);
+                    library.Games=library.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList(); ApplyLibrary(); rebuild(); DownloadArtwork(library);
+                    renderList(); status.Text="Imported or updated "+imported+" games. Find them in Custom games.";
+                } catch(Exception error) {if(!closed) status.Text="Import could not complete. "+error.Message;}
+                finally {busy=false; if(!closed) {header.IsEnabled=true; listPanel.IsEnabled=true; close.IsEnabled=true; import.IsEnabled=boxes.Any(b => b.IsEnabled);}}
+            };
+            dialog.Closing+=(s,e) => {if(busy) e.Cancel=true;}; dialog.Show();
+        }
+        bool ReviewPlayniteConflicts(Window owner,List<PlayniteImport.Conflict> conflicts) {
+            var dialog=new Window {Title="Review matching game names",Owner=owner,Width=820,Height=680,MinWidth=540,MinHeight=400,Background=owner.Background,Foreground=white,FontFamily=FontFamily,Topmost=true,WindowStartupLocation=WindowStartupLocation.CenterOwner}; dialog.Resources.MergedDictionaries.Add(owner.Resources);
+            var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
+            var note=Label("These names have different launch targets or actions. Check the entries to keep; select both if you want both. Game files are never removed.",14,white); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,16); DockPanel.SetDock(note,Dock.Top); root.Children.Add(note);
+            var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,16,0,0)};
+            var cancel=new Button {Content="Cancel import",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0)}; cancel.Click+=(s,e) => dialog.DialogResult=false; actions.Children.Add(cancel);
+            var apply=new Button {Content="Apply choices & import",Padding=new Thickness(14,8,14,8)};
+            apply.Click+=(s,e) => {if(conflicts.Any(c => !c.Alternatives.Any(a => a.Keep))) {MessageBox.Show(dialog,"Keep at least one entry for each game name.","Review import"); return;} dialog.DialogResult=true;}; actions.Children.Add(apply); DockPanel.SetDock(actions,Dock.Bottom); root.Children.Add(actions);
+            var groups=new StackPanel(); root.Children.Add(new ScrollViewer {Content=groups,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+            foreach(var conflict in conflicts) {
+                var group=new StackPanel {Margin=new Thickness(14)};
+                var heading=Label(conflict.Name,17,mint); heading.TextWrapping=TextWrapping.Wrap; heading.Margin=new Thickness(0,0,0,12); group.Children.Add(heading);
+                foreach(var alternative in conflict.Alternatives) {
+                    var choice=alternative;
+                    string source=choice.Existing!=null ? "Existing entry" : "Import from Playnite";
+                    var box=new CheckBox {Content=source,IsChecked=choice.Keep,Margin=new Thickness(0,0,0,6)}; box.Click+=(s,e) => choice.Keep=box.IsChecked==true; group.Children.Add(box);
+                    string target=choice.Existing!=null ? choice.Existing.LaunchId : choice.Incoming.Target;
+                    if(choice.Existing!=null && choice.Existing.Source!="custom") {try {target=GameLaunch.UriFor(choice.Existing);} catch {}}
+                    string arguments=choice.Existing!=null ? choice.Existing.Arguments : choice.Incoming.Arguments;
+                    string folder=choice.Existing!=null ? choice.Existing.WorkingDirectory : choice.Incoming.WorkingDirectory;
+                    string action=choice.Existing!=null ? choice.Existing.ImportedActionInfo : choice.Incoming.PlayniteActionInfo;
+                    var detail=Label(target+(String.IsNullOrWhiteSpace(arguments) ? "" : "\n"+arguments)+(String.IsNullOrWhiteSpace(folder) ? "" : "\nFolder: "+folder)+(String.IsNullOrWhiteSpace(action) ? "" : "\nPlaynite action:\n"+action),12,muted); detail.FontFamily=new FontFamily("Consolas"); detail.TextWrapping=TextWrapping.Wrap; detail.Margin=new Thickness(28,0,0,16); group.Children.Add(detail);
+                }
+                groups.Children.Add(new Border {Child=group,Background=new SolidColorBrush(Color.FromRgb(23,43,55)),CornerRadius=new CornerRadius(8),Margin=new Thickness(0,0,0,12)});
+            }
+            return dialog.ShowDialog()==true;
+        }
         StackPanel CreateCustomGamesPanel(Window dialog,Action rebuild) {
             var panel=new StackPanel();
             var heading=Label("Custom games",26,white); heading.FontWeight=FontWeights.SemiBold; heading.Margin=new Thickness(0,0,0,20); panel.Children.Add(heading);
+            var importPanel=new StackPanel {Margin=new Thickness(0,16,0,0)};
+            var importPlaynite=new Button {Content="Import from Playnite…",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,16)};
+            importPlaynite.Click+=(s,e) => ShowPlayniteImport(dialog,rebuild); importPanel.Children.Add(importPlaynite);
+            if(settings.ReplacedGameIds!=null && settings.ReplacedGameIds.Count>0) {
+                var restore=new Button {Content="Restore replaced library entries",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,16)};
+                restore.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.ReplacedGameIds=null; Storage.Write("settings.json",next); settings=next; RefreshLibrary(true); rebuild();} catch(Exception error) {MessageBox.Show(dialog,error.Message,"Restore entries");}}; importPanel.Children.Add(restore);
+            }
             var tabs=new TabControl {Name="CustomGamesTabs",Background=dialog.Background,BorderThickness=new Thickness(0),Foreground=white};
             tabs.Template=(ControlTemplate)System.Windows.Markup.XamlReader.Parse(@"<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabControl}'>
                 <Grid><Grid.RowDefinitions><RowDefinition Height='Auto'/><RowDefinition Height='*'/></Grid.RowDefinitions>
@@ -911,7 +1024,7 @@ namespace PadLauncher {
             tabs.ItemContainerStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabItem}'>
                 <Setter Property='Foreground' Value='#B9C9CC'/><Setter Property='FontSize' Value='14'/><Setter Property='FontWeight' Value='SemiBold'/><Setter Property='Background' Value='Transparent'/><Setter Property='Cursor' Value='Hand'/>
                 <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type TabItem}'>
-                    <Border x:Name='Segment' Background='{TemplateBinding Background}' CornerRadius='8' Padding='23,10' MinWidth='145' BorderThickness='1' BorderBrush='Transparent'>
+                    <Border x:Name='Segment' Background='{TemplateBinding Background}' CornerRadius='8' Padding='15,10' MinWidth='105' BorderThickness='1' BorderBrush='Transparent'>
                         <ContentPresenter ContentSource='Header' HorizontalAlignment='Center' VerticalAlignment='Center'/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -923,6 +1036,7 @@ namespace PadLauncher {
             </Style>");
             tabs.Items.Add(new TabItem {Header="Added Games",Content=CreateCustomGameEditor(dialog,rebuild,true)});
             tabs.Items.Add(new TabItem {Header="Add New",Content=CreateCustomGameEditor(dialog,rebuild,false)});
+            tabs.Items.Add(new TabItem {Header="Import",Content=importPanel});
             tabs.SelectedIndex=0; panel.Children.Add(tabs); return panel;
         }
         StackPanel CreateCustomGameEditor(Window dialog,Action rebuild,bool editing) {
@@ -957,7 +1071,7 @@ namespace PadLauncher {
             Action checkFiles=() => {
                 var messages=new List<string>();
                 if(!String.IsNullOrWhiteSpace(target.Text) && !File.Exists(target.Text.Trim().Trim('"'))) messages.Add("Game file missing — update the path.");
-                if(!String.IsNullOrWhiteSpace(art.Text) && !File.Exists(art.Text.Trim().Trim('"'))) messages.Add("Artwork file missing — choose another image or clear it.");
+                if(!String.IsNullOrWhiteSpace(art.Text) && !File.Exists(CustomGameLibrary.ArtworkPath(art.Text.Trim().Trim('"')))) messages.Add("Artwork file missing — choose another image or clear it.");
                 missingFiles.Text=String.Join("\n",messages);
             };
             target.TextChanged+=(s,e) => checkFiles(); art.TextChanged+=(s,e) => checkFiles();
@@ -979,7 +1093,7 @@ namespace PadLauncher {
             var removalHint=Label("Removing an entry keeps your game files.",12,muted); removalHint.TextWrapping=TextWrapping.Wrap; removalHint.Margin=new Thickness(0,8,0,0); removalHint.Visibility=editing ? Visibility.Visible : Visibility.Collapsed; panel.Children.Add(removalHint);
             Action loadEntry=() => {
                 var entry=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==(picker.SelectedValue as string));
-                gameName.Text=entry==null ? "" : entry.Name; target.Text=entry==null ? "" : entry.Target; arguments.Text=entry==null ? "" : entry.Arguments; folder.Text=entry==null ? "" : entry.WorkingDirectory; art.Text=entry==null ? "" : entry.Artwork;
+                gameName.Text=entry==null ? "" : entry.Name; target.Text=entry==null ? "" : entry.Target; arguments.Text=entry==null ? "" : entry.Arguments; folder.Text=entry==null ? "" : entry.WorkingDirectory; art.Text=entry==null ? "" : CustomGameLibrary.ArtworkPath(entry.Artwork);
                 save.Content=entry==null ? "Add game" : "Save changes"; remove.Visibility=entry==null ? Visibility.Collapsed : Visibility.Visible;
             };
             picker.SelectionChanged+=(s,e) => loadEntry(); loadEntry();

@@ -5,7 +5,7 @@ if (!(Test-Path $compiler)) { throw 'The Windows .NET Framework 4 compiler is re
 $out = Join-Path $PSScriptRoot 'bin'
 New-Item -ItemType Directory -Force $out | Out-Null
 $refs = @('System.dll','System.Core.dll','System.Security.dll','System.Web.Extensions.dll','System.Windows.Forms.dll','System.Drawing.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
-$librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'),(Join-Path $PSScriptRoot 'src\ExternalLibraries.cs'),(Join-Path $PSScriptRoot 'src\ArtworkService.cs'),(Join-Path $PSScriptRoot 'src\StartupSetting.cs'))
+$librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'),(Join-Path $PSScriptRoot 'src\ExternalLibraries.cs'),(Join-Path $PSScriptRoot 'src\ArtworkService.cs'),(Join-Path $PSScriptRoot 'src\StartupSetting.cs'),(Join-Path $PSScriptRoot 'src\PlayniteImport.cs'),(Join-Path $PSScriptRoot 'src\GogLibrary.cs'))
 $appSources = @((Join-Path $PSScriptRoot 'src\App.cs'),(Join-Path $PSScriptRoot 'src\PlayStationInput.cs'))
 $refs += '/resource:' + (Join-Path $PSScriptRoot 'src\SettingsTheme.xaml') + ',SettingsTheme.xaml'
 $artworkTest = $args -contains '-ArtworkTest'
@@ -19,6 +19,14 @@ $builtExecutable = Get-Item $stagedExecutable
 $newestSource = @($librarySources + $appSources + (Join-Path $PSScriptRoot 'src\App.manifest')) | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if ($builtExecutable.LastWriteTimeUtc -lt $newestSource.LastWriteTimeUtc) { throw 'The executable is older than the source. Close any running launcher and rebuild.' }
 if ($args -contains '-Test') {
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'GogTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\GogTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'GOG test build failed.' }
+    & (Join-Path $out 'GogTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'GOG adapter tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'PlayniteTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\PlayniteTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Playnite test build failed.' }
+    & (Join-Path $out 'PlayniteTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Playnite import tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'ExternalTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\ExternalTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'External test build failed.' }
     & (Join-Path $out 'ExternalTests.exe')
