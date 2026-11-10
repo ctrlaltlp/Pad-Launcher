@@ -39,7 +39,7 @@ The normal overlay displays no control prompts. Press **Options** (Xbox: Start) 
 
 ## Manual Configuration
 
-The app creates `%LOCALAPPDATA%\PadLauncher\settings.json`. Exit the app completely before editing it. `settings.example.json` in this project shows the available fields.
+The app creates `settings.json` next to the executable. Exit the app completely before editing it. `settings.example.json` in this project shows the available fields.
 
 ## Inspiration
 
