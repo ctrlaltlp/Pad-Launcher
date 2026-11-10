@@ -12,6 +12,11 @@ namespace PadLauncher {
         public string Id { get; set; }
         public string Name { get; set; }
         public string LaunchId { get; set; }
+        public string Source { get; set; }
+        public string ArtworkUrl { get; set; }
+        public string ArtworkProvider { get; set; }
+        public string Arguments {get;set;}
+        public string WorkingDirectory {get;set;}
         public bool Shortcut { get; set; }
         public bool ShortcutInstalled { get; set; }
 #if ARTWORK_TEST
@@ -46,7 +51,43 @@ namespace PadLauncher {
         public List<string> Warnings { get; set; }
         public Library() { Games = new List<Game>(); Collections = new List<Collection>(); Warnings = new List<string>(); }
     }
+    public class CombinedCollection {
+        public string Id {get;set;}
+        public string Name {get;set;}
+        public List<string> Sources {get;set;}
+    }
+    public static class CombinedCollections {
+        public static List<Collection> Options(Library library,Settings settings) {
+            var options=new List<Collection> {new Collection {Id="all",Name="All games",Games=library.Games.Select(g => g.Id).ToList()}};
+            options.AddRange(library.Collections ?? new List<Collection>());
+            var originals=options.ToDictionary(c => c.Id);
+            foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) {
+                if(combined==null || String.IsNullOrEmpty(combined.Id) || options.Any(c => c.Id==combined.Id)) continue;
+                var games=(combined.Sources ?? new List<string>()).Where(originals.ContainsKey).SelectMany(id => originals[id].Games).Distinct().ToList();
+                options.Add(new Collection {Id=combined.Id,Name=combined.Name,Games=games});
+            }
+            return options;
+        }
+        public static string Save(Settings settings,Library library,string id,string name,IEnumerable<string> sources) {
+            name=(name ?? "").Trim();
+            if(name.Length==0 || name.Length>80) throw new ArgumentException("Enter a collection name of 1–80 characters.");
+            var options=Options(library,settings);
+            if(options.Any(c => c.Id!=id && String.Equals(c.Name,name,StringComparison.CurrentCultureIgnoreCase))) throw new ArgumentException("A collection with that name already exists.");
+            var chosen=(sources ?? Enumerable.Empty<string>()).Distinct().ToList();
+            var originals=options.Where(c => !(settings.CombinedCollections ?? new List<CombinedCollection>()).Any(x => x.Id==c.Id)).ToList();
+            if(chosen.Count<2 || chosen.Any(source => !originals.Any(c => c.Id==source))) throw new ArgumentException("Select at least two source collections.");
+            if(settings.CombinedCollections==null) settings.CombinedCollections=new List<CombinedCollection>();
+            var existing=settings.CombinedCollections.FirstOrDefault(c => c.Id==id);
+            if(id!=null && existing==null) throw new ArgumentException("This combined collection no longer exists.");
+            if(existing==null) {existing=new CombinedCollection {Id="combined:"+Guid.NewGuid().ToString("N")}; settings.CombinedCollections.Add(existing);}
+            existing.Name=name; existing.Sources=chosen;
+            if(settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(existing.Id)) settings.EnabledCollectionIds.Add(existing.Id);
+            return existing.Id;
+        }
+    }
     public class Settings {
+        public List<CustomGame> CustomGames {get;set;}
+        public List<CombinedCollection> CombinedCollections {get;set;}
         public string ButtonPrompts { get; set; }
         public bool ShowGameTitle { get; set; }
         public bool ShowCollectionName { get; set; }
@@ -62,7 +103,9 @@ namespace PadLauncher {
         public string AngledPanelSizing { get; set; }
         public int GridColumns { get; set; }
         public int GridRows { get; set; }
-        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; }
+        public bool EpicEnabled { get; set; }
+        public bool SteamGridDbEnabled { get; set; }
+        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {

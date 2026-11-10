@@ -12,6 +12,8 @@
   "GridRows": 2,
   "SteamPath": null,
   "UserId": null,
+  "EpicEnabled": true,
+  "SteamGridDbEnabled": true,
   "CollectionId": "all",
   "SelectedId": null
 }

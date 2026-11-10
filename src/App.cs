@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.2.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.2.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.2.0")]
+[assembly: System.Reflection.AssemblyVersion("0.2.4.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.2.4.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.2.4")]
 [assembly: System.Reflection.AssemblyTitle("Steam Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Steam Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -62,7 +62,7 @@ namespace PadLauncher {
             if (args.Contains("--scan")) {
                 try {
                     string path = Argument(args, "--steam") ?? SteamLibrary.DetectSteam();
-                    var library = SteamLibrary.Scan(path, Argument(args, "--profile"));
+                    var library = LauncherLibrary.Scan(new Settings {SteamPath=path,UserId=Argument(args,"--profile")});
                     Storage.Write("library.json", library);
                     File.WriteAllText(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "scan-result.txt"), String.Format("Games: {0}\r\nCollections: {1}\r\nWarnings:\r\n{2}", library.Games.Count, library.Collections.Count, String.Join("\r\n", library.Warnings)));
                 } catch (Exception e) { File.WriteAllText(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "scan-result.txt"), e.ToString()); Environment.ExitCode = 1; }
@@ -92,7 +92,7 @@ namespace PadLauncher {
                 tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text=AppName,Visible=true };
                 var menu=new System.Windows.Forms.ContextMenuStrip();
                 menu.Items.Add("Show launcher",null,(s,e) => window.ShowOverlay());
-                menu.Items.Add("Show help && settings",null,(s,e) => window.ShowHelpWindow());
+                menu.Items.Add("Settings",null,(s,e) => window.ShowHelpWindow());
                 menu.Items.Add("Exit app",null,(s,e) => window.ExitApp());
                 tray.ContextMenuStrip=menu; tray.DoubleClick+=(s,e) => window.ToggleOverlay();
             }
@@ -228,8 +228,7 @@ namespace PadLauncher {
             catch { settings.DefaultCollectionId=previous; throw; }
         }
         List<Collection> CollectionOptions() {
-            var options=new List<Collection> {new Collection {Id="all",Name="All games"}};
-            options.AddRange(library.Collections ?? new List<Collection>()); return options;
+            return CombinedCollections.Options(library,settings);
         }
         bool CollectionEnabled(string id) { return settings.EnabledCollectionIds==null || settings.EnabledCollectionIds.Contains(id); }
         public void SetAvailableCollections(IEnumerable<string> ids) {
@@ -401,11 +400,33 @@ namespace PadLauncher {
         }
         public Window CreateHelpWindow() {
             var dialog=new Window {
-                Title="Steam Pad Launcher · Help & Settings",Width=540,Height=720,MinWidth=480,MinHeight=500,
+                Title="Steam Pad Launcher · Settings",Width=540,Height=720,MinWidth=480,MinHeight=500,
                 WindowStartupLocation=WindowStartupLocation.CenterScreen,ResizeMode=ResizeMode.CanResize,
                 Background=new SolidColorBrush(Color.FromRgb(13,25,34)),Foreground=white,FontFamily=FontFamily,
                 ShowInTaskbar=false,Topmost=true,Icon=Icon
             };
+            using(var theme=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("SettingsTheme.xaml")) {
+                var resources=(ResourceDictionary)System.Windows.Markup.XamlReader.Load(theme);
+                dialog.Resources.MergedDictionaries.Add(resources);
+                dialog.Resources.Add(typeof(SettingsComboBox),resources[typeof(ComboBox)]);
+            }
+            string inputStyle=@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type INPUT}'>
+                <Setter Property='Background' Value='#1C303D'/><Setter Property='Foreground' Value='#ECF3F2'/>
+                <Setter Property='BorderBrush' Value='#3A5260'/><Setter Property='BorderThickness' Value='1'/>
+                <Setter Property='CaretBrush' Value='#A3F0CD'/><Setter Property='SelectionBrush' Value='#497D75'/>
+                <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type INPUT}'>
+                    <Border x:Name='InputBorder' Background='{TemplateBinding Background}' BorderBrush='{TemplateBinding BorderBrush}' BorderThickness='{TemplateBinding BorderThickness}' CornerRadius='6' Padding='{TemplateBinding Padding}'>
+                        <ScrollViewer x:Name='PART_ContentHost' Focusable='False' HorizontalScrollBarVisibility='Hidden' VerticalScrollBarVisibility='Hidden'/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property='IsMouseOver' Value='True'><Setter TargetName='InputBorder' Property='BorderBrush' Value='#64848E'/></Trigger>
+                        <Trigger Property='IsKeyboardFocusWithin' Value='True'><Setter TargetName='InputBorder' Property='BorderBrush' Value='#A3F0CD'/></Trigger>
+                        <Trigger Property='IsEnabled' Value='False'><Setter TargetName='InputBorder' Property='Opacity' Value='0.5'/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value></Setter>
+            </Style>";
+            dialog.Resources.Add(typeof(TextBox),System.Windows.Markup.XamlReader.Parse(inputStyle.Replace("INPUT","TextBox")));
+            dialog.Resources.Add(typeof(PasswordBox),System.Windows.Markup.XamlReader.Parse(inputStyle.Replace("INPUT","PasswordBox")));
             dialog.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar),System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type ScrollBar}'>
                 <Setter Property='Width' Value='6'/><Setter Property='MinWidth' Value='6'/><Setter Property='Background' Value='Transparent'/>
                 <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type ScrollBar}'>
@@ -418,25 +439,33 @@ namespace PadLauncher {
             </Style>"));
             var layout=new StackPanel { Margin=new Thickness(28) };
             var helpLayout=new StackPanel {Margin=new Thickness(28)};
+            var systemLayout=new StackPanel {Margin=new Thickness(28)};
+            var customLayout=new StackPanel {Margin=new Thickness(28)};
+            var customScroll=new ScrollViewer {Content=customLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            var systemScroll=new ScrollViewer {Content=systemLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var helpScroll=new ScrollViewer {Content=helpLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var settingsScroll=new ScrollViewer {Content=layout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var tabs=new TabControl {Name="HelpSettingsTabs",Background=dialog.Background,BorderThickness=new Thickness(0),Foreground=white,Margin=new Thickness(12,12,12,0)};
             tabs.ItemContainerStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabItem}'>
                 <Setter Property='Background' Value='#22333F'/><Setter Property='Foreground' Value='#ECF3F2'/><Setter Property='FontSize' Value='15'/>
                 <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type TabItem}'>
-                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='22,11' Margin='0,0,8,0'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
+                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='12,11' Margin='0,0,6,0'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
                     <ControlTemplate.Triggers><Trigger Property='IsSelected' Value='True'><Setter TargetName='TabBorder' Property='Background' Value='#A3F0CD'/><Setter Property='Foreground' Value='#0D1922'/></Trigger></ControlTemplate.Triggers>
                 </ControlTemplate></Setter.Value></Setter>
             </Style>");
-            tabs.Items.Add(new TabItem {Header="Help & layout",Content=helpScroll});
-            tabs.Items.Add(new TabItem {Header="Settings",Content=settingsScroll});
+            tabs.Items.Add(new TabItem {Header="Layout",Content=helpScroll});
+            tabs.Items.Add(new TabItem {Header="Appearance",Content=settingsScroll});
+            tabs.Items.Add(new TabItem {Header="System",Content=systemScroll});
+            tabs.Items.Add(new TabItem {Header="Custom games",Content=customScroll});
             tabs.SelectedIndex=0;
             Action rebuild=null;
             rebuild=() => {
-            layout.Children.Clear(); helpLayout.Children.Clear();
+            layout.Children.Clear(); helpLayout.Children.Clear(); systemLayout.Children.Clear();
+            customLayout.Children.Clear(); customLayout.Children.Add(CreateCustomGamesPanel(dialog,rebuild));
+            var systemHeading=Label("System",26,white); systemHeading.FontWeight=FontWeights.SemiBold; systemLayout.Children.Add(systemHeading);
             var names=Prompts.Buttons(settings);
-            var heading=Label("Settings",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
-            var helpHeading=Label("Help & layout",26,white); helpHeading.FontWeight=FontWeights.SemiBold; helpHeading.Margin=new Thickness(0,0,0,22); helpLayout.Children.Add(helpHeading);
+            var heading=Label("Appearance",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
+            var helpHeading=Label("Layout",26,white); helpHeading.FontWeight=FontWeights.SemiBold; helpHeading.Margin=new Thickness(0,0,0,22); helpLayout.Children.Add(helpHeading);
             var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,0,0,10); helpLayout.Children.Add(caption);
             var styles=new StackPanel {Name="ButtonStyleChoices",Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
             foreach(string style in new[]{"PlayStation","Xbox","Nintendo"}) {
@@ -450,7 +479,6 @@ namespace PadLauncher {
                 styles.Children.Add(choice);
             }
             helpLayout.Children.Add(styles);
-            var explanation=Label("Labels change; button positions stay the same.",12,muted); explanation.TextWrapping=TextWrapping.Wrap; explanation.Margin=new Thickness(0,0,0,22); helpLayout.Children.Add(explanation);
             string[][] rows={
                 new[]{"Left stick / D-pad","Browse games"},
                 new[]{"Right stick","Browse games at 3× speed"},
@@ -484,7 +512,7 @@ namespace PadLauncher {
             foreach(var collection in CollectionOptions().Where(c => CollectionEnabled(c.Id))) collectionOptions.Add(new KeyValuePair<string,string>(collection.Id,collection.Name));
             string defaultId=String.IsNullOrEmpty(settings.DefaultCollectionId) ? "remember" : settings.DefaultCollectionId;
             if(!collectionOptions.Any(p => p.Key==defaultId)) collectionOptions.Add(new KeyValuePair<string,string>(defaultId,"Saved collection (unavailable)"));
-            var defaultPicker=new SettingsComboBox {ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var defaultPicker=new SettingsComboBox {ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringDefault=false;
             defaultPicker.SelectionChanged+=(s,e) => {
                 if(restoringDefault) return;
@@ -506,20 +534,79 @@ namespace PadLauncher {
             availablePanel.Children.Add(allCollections);
             var collectionChecks=new StackPanel {IsEnabled=settings.EnabledCollectionIds!=null};
             var collectionBoxes=new Dictionary<string,CheckBox>();
+            Action saveAvailability=() => {
+                try {
+                    SetAvailableCollections(allCollections.IsChecked==true ? null : collectionBoxes.Where(p => p.Value.IsChecked==true).Select(p => p.Key));
+                    var defaults=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last collection")};
+                    defaults.AddRange(CollectionOptions().Where(c => CollectionEnabled(c.Id)).Select(c => new KeyValuePair<string,string>(c.Id,c.Name)));
+                    restoringDefault=true; defaultPicker.ItemsSource=defaults; defaultPicker.SelectedValue=settings.DefaultCollectionId ?? "remember"; restoringDefault=false;
+                } catch(Exception error) {
+                    allCollections.IsChecked=settings.EnabledCollectionIds==null;
+                    foreach(var item in collectionBoxes) item.Value.IsChecked=CollectionEnabled(item.Key);
+                    collectionChecks.IsEnabled=settings.EnabledCollectionIds!=null;
+                    MessageBox.Show(dialog,error.Message,"Settings");
+                }
+            };
             foreach(var collection in CollectionOptions()) {
                 var box=new CheckBox {Content=collection.Name,Foreground=white,IsChecked=CollectionEnabled(collection.Id),Margin=new Thickness(0,0,0,8)};
+                box.Click+=(s,e) => saveAvailability();
                 collectionBoxes[collection.Id]=box; collectionChecks.Children.Add(box);
             }
-            allCollections.Click+=(s,e) => collectionChecks.IsEnabled=allCollections.IsChecked!=true;
-            availablePanel.Children.Add(new ScrollViewer {Content=collectionChecks,MaxHeight=220,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
-            var saveCollections=new Button {Content="Save collections",FontSize=13,Padding=new Thickness(14,7,14,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0)};
-            saveCollections.Click+=(s,e) => {
-                try { SetAvailableCollections(allCollections.IsChecked==true ? null : collectionBoxes.Where(p => p.Value.IsChecked==true).Select(p => p.Key)); rebuild(); }
-                catch(Exception error) { MessageBox.Show(dialog,error.Message,"Settings"); }
+            allCollections.Click+=(s,e) => {
+                if(allCollections.IsChecked!=true) foreach(var box in collectionBoxes.Values) box.IsChecked=true;
+                collectionChecks.IsEnabled=allCollections.IsChecked!=true; saveAvailability();
             };
-            availablePanel.Children.Add(saveCollections);
-            var availableTip=Label("Only selected collections appear when switching collections. Select at least one. Hidden collections are also removed from Default collection.",12,muted); availableTip.TextWrapping=TextWrapping.Wrap; availableTip.Margin=new Thickness(0,8,0,0); availablePanel.Children.Add(availableTip);
+            availablePanel.Children.Add(new ScrollViewer {Content=collectionChecks,MaxHeight=220,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+            var availableTip=Label("Changes save immediately. Only selected collections appear when switching collections. Select at least one. Hidden collections are also removed from Default collection.",12,muted); availableTip.TextWrapping=TextWrapping.Wrap; availableTip.Margin=new Thickness(0,8,0,0); availablePanel.Children.Add(availableTip);
             availableSection.Content=availablePanel; layout.Children.Add(availableSection);
+            var combineSection=new Expander {Header="Combine collections",Foreground=white,FontSize=14,Margin=new Thickness(0,12,0,10)};
+            var combinePanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
+            var combinedOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new collection")};
+            foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) combinedOptions.Add(new KeyValuePair<string,string>(combined.Id,combined.Name));
+            var combinedPicker=new SettingsComboBox {ItemsSource=combinedOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
+            combinePanel.Children.Add(combinedPicker);
+            var combinedName=new TextBox {Margin=new Thickness(0,10,0,10),Padding=new Thickness(8),MaxLength=80};
+            var combinedNameCaption=Label("Collection name",12,muted); combinedNameCaption.Margin=new Thickness(0,14,0,0);
+            combinePanel.Children.Add(combinedNameCaption); combinePanel.Children.Add(combinedName);
+            var sourcePanel=new StackPanel {Margin=new Thickness(0,10,0,0)};
+            combinePanel.Children.Add(new ScrollViewer {Content=sourcePanel,MaxHeight=220,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+            var sourceBoxes=new Dictionary<string,CheckBox>();
+            var combinedActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,10,0,0)};
+            var saveCombined=new Button {Content="Create collection",Padding=new Thickness(12,7,12,7)};
+            var deleteCombined=new Button {Content="Delete collection",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed};
+            Action loadCombined=() => {
+                string id=combinedPicker.SelectedValue as string;
+                var edit=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(c => c.Id==id);
+                combinedName.Text=edit==null ? "" : edit.Name;
+                sourceBoxes.Clear(); sourcePanel.Children.Clear();
+                foreach(var source in CollectionOptions().Where(c => !(settings.CombinedCollections ?? new List<CombinedCollection>()).Any(x => x.Id==c.Id))) {
+                    var box=new CheckBox {Content=source.Name,Foreground=white,IsChecked=edit!=null && edit.Sources.Contains(source.Id),Margin=new Thickness(0,0,0,8)};
+                    sourceBoxes[source.Id]=box; sourcePanel.Children.Add(box);
+                }
+                saveCombined.Content=edit==null ? "Create collection" : "Save changes";
+                deleteCombined.Visibility=edit==null ? Visibility.Collapsed : Visibility.Visible;
+            };
+            combinedPicker.SelectionChanged+=(s,e) => loadCombined(); loadCombined();
+            saveCombined.Click+=(s,e) => {
+                try {
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    CombinedCollections.Save(next,library,String.IsNullOrEmpty(combinedPicker.SelectedValue as string) ? null : (string)combinedPicker.SelectedValue,combinedName.Text,sourceBoxes.Where(p => p.Value.IsChecked==true).Select(p => p.Key));
+                    Storage.Write("settings.json",next); settings=next; ApplyLibrary(); rebuild();
+                } catch(Exception error) {MessageBox.Show(dialog,error.Message,"Combine collections");}
+            };
+            deleteCombined.Click+=(s,e) => {
+                try {
+                    string id=combinedPicker.SelectedValue as string;
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    next.CombinedCollections.RemoveAll(c => c.Id==id);
+                    if(next.EnabledCollectionIds!=null) {next.EnabledCollectionIds.Remove(id); if(next.EnabledCollectionIds.Count==0) next.EnabledCollectionIds.Add("all");}
+                    if(next.CollectionId==id) next.CollectionId="all";
+                    if(next.DefaultCollectionId==id) next.DefaultCollectionId="remember";
+                    Storage.Write("settings.json",next); settings=next; ApplyLibrary(); rebuild();
+                } catch(Exception error) {MessageBox.Show(dialog,error.Message,"Combine collections");}
+            };
+            combinedActions.Children.Add(saveCombined); combinedActions.Children.Add(deleteCombined); combinePanel.Children.Add(combinedActions);
+            combineSection.Content=combinePanel; layout.Children.Add(combineSection);
             var monitorCaption=Label("Open on monitor",14,mint); monitorCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(monitorCaption);
             var monitorOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
             var displays=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
@@ -529,7 +616,7 @@ namespace PadLauncher {
             }
             string monitorPreference=String.IsNullOrEmpty(settings.OpenMonitor) ? "cursor" : settings.OpenMonitor;
             if(!monitorOptions.Any(p => p.Key==monitorPreference)) monitorOptions.Add(new KeyValuePair<string,string>(monitorPreference,"Saved monitor (disconnected)"));
-            var monitorPicker=new SettingsComboBox {ItemsSource=monitorOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=monitorPreference,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
+            var monitorPicker=new SettingsComboBox {ItemsSource=monitorOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=monitorPreference,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white,Background=new SolidColorBrush(Color.FromRgb(28,48,61))};
             bool restoringMonitor=false;
             monitorPicker.SelectionChanged+=(s,e) => {
                 if(restoringMonitor) return;
@@ -547,7 +634,7 @@ namespace PadLauncher {
             var columnsControls=new StackPanel {Name="GridColumnsSettings",Visibility=settings.CarouselLayout=="grid" ? Visibility.Visible : Visibility.Collapsed};
             bool angledSizingAvailable=settings.CarouselLayout!="grid" && settings.CarouselLayout!="rectangular";
             var sizingControls=new StackPanel {Name="AngledPanelSizingSettings",Visibility=angledSizingAvailable ? Visibility.Visible : Visibility.Collapsed};
-            var layoutPicker=new SettingsComboBox {Name="CarouselLayoutSetting",ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular"),new KeyValuePair<string,string>("grid","Grid")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var layoutPicker=new SettingsComboBox {Name="CarouselLayoutSetting",ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular"),new KeyValuePair<string,string>("grid","Grid")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringLayout=false;
             layoutPicker.SelectionChanged+=(s,e) => {
                 if(restoringLayout) return;
@@ -558,7 +645,7 @@ namespace PadLauncher {
             };
             layout.Children.Add(layoutPicker);
             var sizingCaption=Label("Angled panel sizing",14,mint); sizingCaption.Margin=new Thickness(0,14,0,10); sizingControls.Children.Add(sizingCaption);
-            var sizingPicker=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("fixed","Fixed (blurred edges)"),new KeyValuePair<string,string>("fit","Fit artwork")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.AngledPanelSizing=="fixed" ? "fixed" : "fit",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var sizingPicker=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("fixed","Fixed (blurred edges)"),new KeyValuePair<string,string>("fit","Fit artwork")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.AngledPanelSizing=="fixed" ? "fixed" : "fit",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringSizing=false;
             sizingPicker.SelectionChanged+=(s,e) => {
                 if(restoringSizing) return;
@@ -569,7 +656,7 @@ namespace PadLauncher {
             };
             sizingControls.Children.Add(sizingPicker); layout.Children.Add(sizingControls);
             var columnsCaption=Label("Grid columns",14,mint); columnsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(columnsCaption);
-            var columnsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToArray(),SelectedItem=GridColumns,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var columnsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToArray(),SelectedItem=GridColumns,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringColumns=false;
             columnsPicker.SelectionChanged+=(s,e) => {
                 if(restoringColumns || columnsPicker.SelectedItem==null) return;
@@ -580,7 +667,7 @@ namespace PadLauncher {
             };
             columnsControls.Children.Add(columnsPicker);
             var rowsCaption=Label("Grid rows",14,mint); rowsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(rowsCaption);
-            var rowsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(1,5).ToArray(),SelectedItem=GridRows,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34))};
+            var rowsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(1,5).ToArray(),SelectedItem=GridRows,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringRows=false;
             rowsPicker.SelectionChanged+=(s,e) => {
                 if(restoringRows || rowsPicker.SelectedItem==null) return;
@@ -604,8 +691,8 @@ namespace PadLauncher {
                 catch(Exception error) { restoringSize=true; sizePicker.Value=previous; restoringSize=false; MessageBox.Show(dialog,error.Message,"Settings"); }
             };
             layout.Children.Add(sizeLabel); layout.Children.Add(sizePicker);
-            var steamCaption=Label("Steam path",14,mint); steamCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(steamCaption);
-            var steamPath=new TextBox {Text=settings.SteamPath ?? SteamLibrary.DetectSteam() ?? "",FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"}; layout.Children.Add(steamPath);
+            var steamCaption=Label("Steam path",14,mint); steamCaption.Margin=new Thickness(0,14,0,10); systemLayout.Children.Add(steamCaption);
+            var steamPath=new TextBox {Text=settings.SteamPath ?? SteamLibrary.DetectSteam() ?? "",FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"}; systemLayout.Children.Add(steamPath);
             Action reloadUsers=null;
             var steamActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
             var browseSteam=new Button {Content="Browse…",FontSize=13,Padding=new Thickness(14,7,14,7),Margin=new Thickness(0,0,8,0)};
@@ -620,9 +707,9 @@ namespace PadLauncher {
                 try { steamPath.Text=SetSteamFolder(steamPath.Text); reloadUsers(); steamStatus.Text="Steam folder saved."; steamStatus.Foreground=mint; RefreshLibrary(true); }
                 catch(Exception error) { steamStatus.Text=error.Message; steamStatus.Foreground=new SolidColorBrush(Color.FromRgb(255,172,153)); }
             };
-            steamActions.Children.Add(browseSteam); steamActions.Children.Add(saveSteam); layout.Children.Add(steamActions); layout.Children.Add(steamStatus);
-            var userCaption=Label("Steam user ID",14,mint); userCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(userCaption);
-            var userPicker=new SettingsComboBox {DisplayMemberPath="Value",SelectedValuePath="Key",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),Background=new SolidColorBrush(Color.FromRgb(225,236,240))};
+            steamActions.Children.Add(browseSteam); steamActions.Children.Add(saveSteam); systemLayout.Children.Add(steamActions); systemLayout.Children.Add(steamStatus);
+            var userCaption=Label("Steam user ID",14,mint); userCaption.Margin=new Thickness(0,14,0,10); systemLayout.Children.Add(userCaption);
+            var userPicker=new SettingsComboBox {DisplayMemberPath="Value",SelectedValuePath="Key",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white,Background=new SolidColorBrush(Color.FromRgb(28,48,61))};
             bool restoringUser=false;
             reloadUsers=() => {
                 restoringUser=true;
@@ -647,7 +734,29 @@ namespace PadLauncher {
                 }
             };
             userPicker.Margin=new Thickness(0,0,0,24);
-            layout.Children.Add(userPicker);
+            systemLayout.Children.Add(userPicker);
+            var epicToggle=new CheckBox {Content="Include Epic Games Store games",IsChecked=settings.EpicEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
+            epicToggle.Click+=(s,e) => {settings.EpicEnabled=epicToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(epicToggle);
+            var sgdbToggle=new CheckBox {Content="SteamGridDB artwork fallback",IsChecked=settings.SteamGridDbEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
+            sgdbToggle.Click+=(s,e) => {settings.SteamGridDbEnabled=sgdbToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(sgdbToggle);
+            systemLayout.Children.Add(Label("SteamGridDB API key (stored encrypted for your Windows account)",12,muted));
+            var apiKey=new PasswordBox {Margin=new Thickness(0,8,0,8),Padding=new Thickness(8),PasswordChar='*',Password=ArtworkKey.Load() ?? ""}; systemLayout.Children.Add(apiKey);
+            apiKey.GotKeyboardFocus+=(s,e) => apiKey.SelectAll();
+            var apiStatus=Label(String.IsNullOrEmpty(apiKey.Password) ? "No key saved. Epic artwork works without a key." : "An encrypted API key is saved.",12,muted); apiStatus.TextWrapping=TextWrapping.Wrap;
+            var apiButtons=new StackPanel {Orientation=Orientation.Horizontal};
+            var saveKey=new Button {Content="Save & test key",Padding=new Thickness(10,5,10,5)};
+            saveKey.Click+=async (s,e) => {
+                string key=apiKey.Password.Trim(); if(String.IsNullOrEmpty(key)) {apiStatus.Text="Enter your API key first."; return;}
+                saveKey.IsEnabled=false; apiStatus.Text="Checking key…";
+                try {await Task.Run(() => ArtworkService.ValidateKey(key)); ArtworkKey.Save(key); apiKey.Password=key; apiStatus.Text="Key saved. Refreshing artwork…"; RefreshLibrary(true);}
+                catch {apiStatus.Text="Could not verify key. Check the key and your connection; previous key was kept.";}
+                finally {saveKey.IsEnabled=true;}
+            };
+            var clearKey=new Button {Content="Remove key",Padding=new Thickness(10,5,10,5),Margin=new Thickness(8,0,0,0)};
+            clearKey.Click+=(s,e) => {ArtworkKey.Clear(); apiKey.Clear(); apiStatus.Text="Key removed. Downloaded artwork stays cached.";};
+            var getKey=new Button {Content="Get API key",Padding=new Thickness(10,5,10,5),Margin=new Thickness(8,0,0,0)};
+            getKey.Click+=(s,e) => Process.Start(new ProcessStartInfo("https://www.steamgriddb.com/profile/preferences/api") {UseShellExecute=true});
+            apiButtons.Children.Add(saveKey); apiButtons.Children.Add(clearKey); apiButtons.Children.Add(getKey); systemLayout.Children.Add(apiButtons); systemLayout.Children.Add(apiStatus);
             var note=Label("The overlay opens on your chosen monitor (the cursor's monitor by default).\nThe library refreshes automatically whenever you open the overlay.\nThe app stays ready after you dismiss it. Hold "+names[1]+" for 1 second while the overlay is open, or use the tray menu, to exit completely.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,18,0,20); helpLayout.Children.Add(note);
             };
@@ -660,6 +769,116 @@ namespace PadLauncher {
             return dialog;
         }
         TextBlock Label(string text, double size, Brush color) { return new TextBlock { Text = text, FontSize = size, Foreground = color, VerticalAlignment = VerticalAlignment.Center }; }
+        StackPanel CreateCustomGamesPanel(Window dialog,Action rebuild) {
+            var panel=new StackPanel();
+            var heading=Label("Custom games",26,white); heading.FontWeight=FontWeights.SemiBold; heading.Margin=new Thickness(0,0,0,20); panel.Children.Add(heading);
+            var tabs=new TabControl {Name="CustomGamesTabs",Background=dialog.Background,BorderThickness=new Thickness(0),Foreground=white};
+            tabs.Template=(ControlTemplate)System.Windows.Markup.XamlReader.Parse(@"<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabControl}'>
+                <Grid><Grid.RowDefinitions><RowDefinition Height='Auto'/><RowDefinition Height='*'/></Grid.RowDefinitions>
+                    <Border Background='#15242E' BorderBrush='#30434D' BorderThickness='1' CornerRadius='12' Padding='5' HorizontalAlignment='Left'>
+                        <TabPanel IsItemsHost='True' KeyboardNavigation.TabIndex='1'/>
+                    </Border>
+                    <ContentPresenter Grid.Row='1' ContentSource='SelectedContent' Margin='0,6,0,0'/>
+                </Grid>
+            </ControlTemplate>");
+            tabs.ItemContainerStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabItem}'>
+                <Setter Property='Foreground' Value='#B9C9CC'/><Setter Property='FontSize' Value='14'/><Setter Property='FontWeight' Value='SemiBold'/><Setter Property='Background' Value='Transparent'/><Setter Property='Cursor' Value='Hand'/>
+                <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type TabItem}'>
+                    <Border x:Name='Segment' Background='{TemplateBinding Background}' CornerRadius='8' Padding='23,10' MinWidth='145' BorderThickness='1' BorderBrush='Transparent'>
+                        <ContentPresenter ContentSource='Header' HorizontalAlignment='Center' VerticalAlignment='Center'/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property='IsMouseOver' Value='True'><Setter TargetName='Segment' Property='Background' Value='#2B414B'/><Setter Property='Foreground' Value='#ECF3F2'/></Trigger>
+                        <Trigger Property='IsSelected' Value='True'><Setter TargetName='Segment' Property='Background' Value='#A3F0CD'/><Setter Property='Foreground' Value='#0D1922'/></Trigger>
+                        <Trigger Property='IsKeyboardFocused' Value='True'><Setter TargetName='Segment' Property='BorderBrush' Value='#ECF3F2'/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value></Setter>
+            </Style>");
+            tabs.Items.Add(new TabItem {Header="Added Games",Content=CreateCustomGameEditor(dialog,rebuild,true)});
+            tabs.Items.Add(new TabItem {Header="Add New",Content=CreateCustomGameEditor(dialog,rebuild,false)});
+            tabs.SelectedIndex=0; panel.Children.Add(tabs); return panel;
+        }
+        StackPanel CreateCustomGameEditor(Window dialog,Action rebuild,bool editing) {
+            var panel=new StackPanel();
+            panel.Margin=new Thickness(0,16,0,0);
+            var options=new List<KeyValuePair<string,string>>();
+            if(editing) foreach(var game in (settings.CustomGames ?? new List<CustomGame>()).OrderBy(g => g.Name)) options.Add(new KeyValuePair<string,string>(game.Id,game.Name));
+            if(editing && options.Count==0) {panel.Children.Add(Label("No custom games yet. Add one in Add New.",14,muted)); return panel;}
+            var picker=new SettingsComboBox {Name="CustomGamePicker",ItemsSource=options,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
+            if(editing) panel.Children.Add(picker);
+            Func<string,string,TextBox> field=(title,name) => {
+                var caption=Label(title,14,mint); caption.Margin=new Thickness(0,16,0,8); panel.Children.Add(caption);
+                var box=new TextBox {Name=name,Padding=new Thickness(8),FontSize=14}; panel.Children.Add(box); return box;
+            };
+            var gameName=field("Game name","CustomGameName"); gameName.MaxLength=120;
+            var target=field("Executable or shortcut","CustomGameTarget");
+            var browse=new Button {Content="Browse…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(browse);
+            browse.Click+=(s,e) => {
+                var file=new Microsoft.Win32.OpenFileDialog {Filter="Games and shortcuts|*.exe;*.lnk;*.bat;*.cmd",CheckFileExists=true,DereferenceLinks=false};
+                if(file.ShowDialog(dialog)==true) {target.Text=file.FileName; if(String.IsNullOrWhiteSpace(gameName.Text)) gameName.Text=System.IO.Path.GetFileNameWithoutExtension(file.FileName);}
+            };
+            var arguments=field("Launch arguments (optional)","CustomGameArguments");
+            var folder=field("Working folder (optional)","CustomGameFolder");
+            var browseFolder=new Button {Content="Browse folder…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(browseFolder);
+            browseFolder.Click+=(s,e) => {
+                using(var file=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the game's working folder"}) {
+                    if(file.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) folder.Text=file.SelectedPath;
+                }
+            };
+            var art=field("Artwork (optional)","CustomGameArtwork");
+            art.ToolTip="Leave artwork empty to use SteamGridDB fallback when enabled.";
+            panel.Children.Remove(art);
+            var artworkField=new Grid(); artworkField.Children.Add(art);
+            var artworkHint=Label("Leave empty to use SteamGridDB",12,muted); artworkHint.Margin=new Thickness(9,0,9,0); artworkHint.IsHitTestVisible=false;
+            artworkField.Children.Add(artworkHint); panel.Children.Add(artworkField);
+            Action updateArtworkHint=() => artworkHint.Visibility=String.IsNullOrEmpty(art.Text) ? Visibility.Visible : Visibility.Collapsed;
+            art.TextChanged+=(s,e) => updateArtworkHint(); updateArtworkHint();
+            var artActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
+            var browseArt=new Button {Content="Choose image…",Padding=new Thickness(12,6,12,6)};
+            browseArt.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Artwork|*.png;*.jpg;*.jpeg;*.bmp",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) art.Text=file.FileName;};
+            var clearArt=new Button {Content="Clear image",Padding=new Thickness(12,6,12,6),Margin=new Thickness(8,0,0,0)}; clearArt.Click+=(s,e) => art.Clear();
+            artActions.Children.Add(browseArt); artActions.Children.Add(clearArt); panel.Children.Add(artActions);
+            var actions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,32,0,0)};
+            var save=new Button {Content="Add game",Padding=new Thickness(14,7,14,7)};
+            var remove=new Button {Content="Remove game",Padding=new Thickness(14,7,14,7),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed}; actions.Children.Add(save); actions.Children.Add(remove); panel.Children.Add(actions);
+            var removalHint=Label("Removing an entry keeps your game files.",12,muted); removalHint.TextWrapping=TextWrapping.Wrap; removalHint.Margin=new Thickness(0,8,0,0); removalHint.Visibility=editing ? Visibility.Visible : Visibility.Collapsed; panel.Children.Add(removalHint);
+            Action loadEntry=() => {
+                var entry=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==(picker.SelectedValue as string));
+                gameName.Text=entry==null ? "" : entry.Name; target.Text=entry==null ? "" : entry.Target; arguments.Text=entry==null ? "" : entry.Arguments; folder.Text=entry==null ? "" : entry.WorkingDirectory; art.Text=entry==null ? "" : entry.Artwork;
+                save.Content=entry==null ? "Add game" : "Save changes"; remove.Visibility=entry==null ? Visibility.Collapsed : Visibility.Visible;
+            };
+            picker.SelectionChanged+=(s,e) => loadEntry(); loadEntry();
+            Action<Settings> commit=next => {
+                Storage.Write("settings.json",next); settings=next;
+                if(artworkCancellation!=null) artworkCancellation.Cancel();
+                CustomGameLibrary.Apply(library,settings);
+                foreach(var game in library.Games) ArtworkService.ApplyCached(game,settings);
+                library.Games=library.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+                ApplyLibrary(); rebuild(); DownloadArtwork(library);
+            };
+            save.Click+=(s,e) => {
+                try {
+                    if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    string id=picker.SelectedValue as string;
+                    CustomGameLibrary.Save(next,new CustomGame {Id=String.IsNullOrEmpty(id) ? null : id,Name=gameName.Text,Target=target.Text,Arguments=arguments.Text,WorkingDirectory=folder.Text,Artwork=art.Text});
+                    if(next.EnabledCollectionIds!=null && !next.EnabledCollectionIds.Contains("source:custom")) next.EnabledCollectionIds.Add("source:custom");
+                    commit(next);
+                } catch(Exception error) {MessageBox.Show(dialog,error.Message,"Custom games");}
+            };
+            remove.Click+=(s,e) => {
+                try {
+                    if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.CustomGames.RemoveAll(g => g.Id==(picker.SelectedValue as string));
+                    if(next.CustomGames.Count==0) {
+                        if(next.EnabledCollectionIds!=null) {next.EnabledCollectionIds.Remove("source:custom"); if(next.EnabledCollectionIds.Count==0) next.EnabledCollectionIds.Add("all");}
+                        if(next.CollectionId=="source:custom") next.CollectionId="all"; if(next.DefaultCollectionId=="source:custom") next.DefaultCollectionId="remember";
+                    }
+                    commit(next);
+                } catch(Exception error) {MessageBox.Show(dialog,error.Message,"Custom games");}
+            };
+            return panel;
+        }
         void BuildScene() {
             // Local shadow fades to fully transparent before reaching the screen edges.
             scene.Children.Add(new System.Windows.Shapes.Ellipse {
@@ -698,14 +917,14 @@ namespace PadLauncher {
             if (scanning) { if (feedback) ShowNotice("Refreshing games and collections…"); return; }
             string path = settings.SteamPath;
             if (String.IsNullOrWhiteSpace(path)) path = SteamLibrary.DetectSteam();
-            if (String.IsNullOrWhiteSpace(path)) { ShowNotice("Steam not found. Choose its folder in Help & Settings."); Render(false); return; }
             scanning = true;
             if (feedback) ShowNotice("Refreshing games and collections…");
             try {
                 string user = settings.UserId;
+                var scanSettings=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                 var previous=library;
                 var refreshed = await Task.Run(() => {
-                    var result=SteamLibrary.Scan(path,user);
+                    var result=LauncherLibrary.Scan(scanSettings);
                     bool changed=Storage.Json().Serialize(previous)!=Storage.Json().Serialize(result);
                     if(changed) Storage.Write("library.json",result);
                     return Tuple.Create(result,changed);
@@ -717,8 +936,23 @@ namespace PadLauncher {
                 QueueSave();
                 if (feedback) ShowNotice("Refreshed · " + filters[collectionIndex].Name + " · " + visible.Count + " games");
                 if (library.Warnings.Count > 0) ShowNotice(library.Warnings[0]);
+                DownloadArtwork(next);
             } catch (Exception e) { ShowNotice(e.Message); }
             finally { scanning = false; }
+        }
+        System.Threading.CancellationTokenSource artworkCancellation;
+        async void DownloadArtwork(Library batch) {
+            if(artworkCancellation!=null) artworkCancellation.Cancel();
+            var cancellation=new System.Threading.CancellationTokenSource(); artworkCancellation=cancellation;
+            var snapshot=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            try {
+                await Task.Run(() => ArtworkService.Fill(batch.Games,snapshot,cancellation.Token,(game,path) => {
+                    Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => {
+                        if(cancellation.IsCancellationRequested || library!=batch) return;
+                        game.Art=path; game.ArtworkProvider="downloaded"; cards.Clear(); carousel.Children.Clear(); Render(false);
+                    }));
+                },message => Dispatcher.BeginInvoke(new Action(() => {if(!cancellation.IsCancellationRequested) ShowNotice(message);} ))));
+            } catch(OperationCanceledException) {} catch(Exception) {}
         }
         void ApplyLibrary(bool opening=false) {
             string previousFilter=filters.Count>0 ? filters[collectionIndex].Id : null;
@@ -766,7 +1000,7 @@ namespace PadLauncher {
             collectionText.Text = filters[collectionIndex].Name;
             if (visible.Count == 0) {
                 carousel.Children.Clear(); cards.Clear();
-                title.Text = filters[collectionIndex].Id=="unavailable-collections" ? "Choose available collections in Help & Settings" : filters[collectionIndex].UnsupportedDynamic ? "This collection needs an unsupported filter" : library.Games.Count > 0 ? "No installed games in this collection" : "Your next game starts here";
+                title.Text = filters[collectionIndex].Id=="unavailable-collections" ? "Choose available collections in Settings" : filters[collectionIndex].UnsupportedDynamic ? "This collection needs an unsupported filter" : library.Games.Count > 0 ? "No installed games in this collection" : "Your next game starts here";
                 return;
             }
             Game current = visible[selected]; settings.SelectedId = current.Id;
@@ -906,14 +1140,13 @@ namespace PadLauncher {
 #else
             if (launching || visible.Count==0) return;
             if (demo) { ShowNotice("Preview mode · connect your Steam library to launch games."); return; }
-            var game=visible[selected]; ulong id;
-            if (!UInt64.TryParse(game.LaunchId,out id) || id==0) { ShowNotice("This game's Steam launch ID is invalid. Refresh the library."); return; }
+            var game=visible[selected];
             launching=true;
             try {
                 Save();
-                Process.Start(new ProcessStartInfo("steam://rungameid/"+game.LaunchId) { UseShellExecute=true });
+                Process.Start(GameLaunch.StartInfo(game));
                 Close();
-            } catch (Exception e) { launching=false; ShowNotice("Steam could not be opened: "+e.Message); }
+            } catch (Exception e) { launching=false; ShowNotice("Game could not be opened: "+e.Message); }
 #endif
         }
         void Save() { if (demo) return; try { Storage.Write("settings.json",settings); } catch { } }

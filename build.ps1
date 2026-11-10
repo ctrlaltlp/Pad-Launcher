@@ -4,9 +4,10 @@ $compiler = Join-Path $framework 'csc.exe'
 if (!(Test-Path $compiler)) { throw 'The Windows .NET Framework 4 compiler is required.' }
 $out = Join-Path $PSScriptRoot 'bin'
 New-Item -ItemType Directory -Force $out | Out-Null
-$refs = @('System.dll','System.Core.dll','System.Web.Extensions.dll','System.Windows.Forms.dll','System.Drawing.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
-$librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'))
+$refs = @('System.dll','System.Core.dll','System.Security.dll','System.Web.Extensions.dll','System.Windows.Forms.dll','System.Drawing.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
+$librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'),(Join-Path $PSScriptRoot 'src\ExternalLibraries.cs'),(Join-Path $PSScriptRoot 'src\ArtworkService.cs'))
 $appSources = @((Join-Path $PSScriptRoot 'src\App.cs'),(Join-Path $PSScriptRoot 'src\PlayStationInput.cs'))
+$refs += '/resource:' + (Join-Path $PSScriptRoot 'src\SettingsTheme.xaml') + ',SettingsTheme.xaml'
 $artworkTest = $args -contains '-ArtworkTest'
 $executableName = if($artworkTest) { 'SteamPadLauncher.ArtworkTest' } else { 'SteamPadLauncher' }
 $defines = if($artworkTest) { @('/define:ARTWORK_TEST') } else { @() }
@@ -18,6 +19,10 @@ $builtExecutable = Get-Item $stagedExecutable
 $newestSource = @($librarySources + $appSources + (Join-Path $PSScriptRoot 'src\App.manifest')) | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if ($builtExecutable.LastWriteTimeUtc -lt $newestSource.LastWriteTimeUtc) { throw 'The executable is older than the source. Close any running launcher and rebuild.' }
 if ($args -contains '-Test') {
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'ExternalTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\ExternalTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'External test build failed.' }
+    & (Join-Path $out 'ExternalTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'External integration tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'LibraryTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\LibraryTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Test build failed.' }
     & (Join-Path $out 'LibraryTests.exe')
