@@ -57,9 +57,15 @@ namespace PadLauncher {
         public List<string> Sources {get;set;}
     }
     public static class CombinedCollections {
+        public static long RecentPlayed(Settings settings,Game game) {
+            long launched=0;
+            if(settings.LaunchHistory!=null) settings.LaunchHistory.TryGetValue(game.Id,out launched);
+            return Math.Max(game.LastPlayed,launched);
+        }
         public static List<Collection> Options(Library library,Settings settings) {
             var options=new List<Collection> {new Collection {Id="all",Name="All games",Games=library.Games.Select(g => g.Id).ToList()}};
             options.AddRange(library.Collections ?? new List<Collection>());
+            options.Add(new Collection {Id="recent",Name="Recently played",Games=library.Games.Where(g => RecentPlayed(settings,g)>0).OrderByDescending(g => RecentPlayed(settings,g)).Select(g => g.Id).ToList()});
             var originals=options.ToDictionary(c => c.Id);
             foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) {
                 if(combined==null || String.IsNullOrEmpty(combined.Id) || options.Any(c => c.Id==combined.Id)) continue;
@@ -86,6 +92,9 @@ namespace PadLauncher {
         }
     }
     public class Settings {
+        public double RightStickSpeed {get;set;}
+        public Dictionary<string,long> LaunchHistory {get;set;}
+        public Dictionary<string,string> ArtworkOverrides {get;set;}
         public List<CustomGame> CustomGames {get;set;}
         public List<CombinedCollection> CombinedCollections {get;set;}
         public string ButtonPrompts { get; set; }
@@ -105,7 +114,7 @@ namespace PadLauncher {
         public int GridRows { get; set; }
         public bool EpicEnabled { get; set; }
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { RightStickSpeed=3; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -122,7 +131,7 @@ namespace PadLauncher {
         }
         public static string Help(Settings settings) {
             var names=Buttons(settings);
-            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Collections     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  3× speed";
+            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Collections     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  "+settings.RightStickSpeed.ToString("0.#")+"× speed";
         }
     }
     public enum ButtonGesture { None, Tap, Hold }
@@ -142,7 +151,36 @@ namespace PadLauncher {
         }
     }
     public static class Storage {
-        public static string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PadLauncher");
+        public static string Root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"SteamPadLauncher.Data");
+        public static void InitializePortable(params string[] legacyRoots) {
+            Directory.CreateDirectory(Root);
+            if(File.Exists(Path.Combine(Root,"settings.json"))) return;
+            string legacy=legacyRoots.FirstOrDefault(folder => !String.Equals(Path.GetFullPath(folder),Path.GetFullPath(Root),StringComparison.OrdinalIgnoreCase) && File.Exists(Path.Combine(folder,"settings.json")));
+            if(legacy==null) return;
+            // Copy, rather than move, so the previous installation remains recoverable.
+            string oldArt=Path.Combine(legacy,"artwork"),newArt=Path.Combine(Root,"artwork");
+            if(Directory.Exists(oldArt)) {
+                Directory.CreateDirectory(newArt);
+                foreach(string file in Directory.GetFiles(oldArt)) {
+                    string target=Path.Combine(newArt,Path.GetFileName(file));
+                    if(!File.Exists(target)) File.Copy(file,target);
+                }
+            }
+            string key=Path.Combine(legacy,"steamgriddb.key"),newKey=Path.Combine(Root,"steamgriddb.key");
+            if(File.Exists(key) && !File.Exists(newKey)) File.Copy(key,newKey);
+            string cache=Path.Combine(legacy,"library.json");
+            if(File.Exists(cache)) {
+                try {
+                    var library=Json().Deserialize<Library>(File.ReadAllText(cache));
+                    foreach(var game in library.Games) {
+                        if(!String.IsNullOrEmpty(game.Art) && game.Art.StartsWith(oldArt+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) game.Art=Path.Combine(newArt,Path.GetFileName(game.Art));
+                    }
+                    Write("library.json",library);
+                } catch { /* The normal scan reconstructs a missing or invalid library cache. */ }
+            }
+            // Settings are copied last and mark the migration as complete.
+            File.Copy(Path.Combine(legacy,"settings.json"),Path.Combine(Root,"settings.json"));
+        }
         public static void MigrateFrom(string legacyRoot) {
             if(!Directory.Exists(legacyRoot)) return;
             Directory.CreateDirectory(Root);

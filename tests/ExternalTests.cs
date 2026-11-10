@@ -71,6 +71,57 @@ class ExternalTests {
             customSettings.CustomGames.Clear(); CustomGameLibrary.Apply(customLibrary,customSettings);
             Check(customLibrary.Games.Count==0 && customLibrary.Collections.Count==0 && File.Exists(custom.Target),"Removing entry keeps game files");
             Console.WriteLine("8 custom game checks passed");
+            var featureSettings=new Settings {LaunchHistory=new Dictionary<string,long>{{"epic:one",300},{"steam:one",50}}};
+            var featureLibrary=new Library {Games=new List<Game>{new Game {Id="steam:one",Name="Steam",LastPlayed=200},new Game {Id="epic:one",Name="Epic"},new Game {Id="custom:none",Name="Unplayed"}}};
+            var recent=CombinedCollections.Options(featureLibrary,featureSettings).Single(c => c.Id=="recent");
+            Check(recent.Games.SequenceEqual(new[]{"epic:one","steam:one"}),"Recent collection merges local launch history and Steam history in newest-first order");
+            Check(featureSettings.RightStickSpeed==3,"Existing settings default to 3x right stick speed");
+            Check(StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).StartsWith("\"") && StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).EndsWith("\""),"Windows startup executable path is quoted");
+            byte[] coverBytes;
+            using(var cover=new System.Drawing.Bitmap(600,900)) using(var stream=new MemoryStream()) {cover.Save(stream,System.Drawing.Imaging.ImageFormat.Png); coverBytes=stream.ToArray();}
+            ArtworkService.Fetch=(url,bearer,token) => {Check(bearer==null,"Artwork download never sends API key to image host"); return coverBytes;};
+            var selectedGame=new Game {Id="pick",Art=steamArt}; string relativeCover=ArtworkService.SaveChoice(selectedGame,"https://cdn2.steamgriddb.com/grid/chosen.png",CancellationToken.None);
+            featureSettings.ArtworkOverrides=new Dictionary<string,string>{{selectedGame.Id,relativeCover}};
+            ArtworkService.ApplyCached(selectedGame,featureSettings);
+            Check(selectedGame.Art==Path.Combine(Storage.Root,relativeCover) && selectedGame.ArtworkProvider=="chosen" && !Path.IsPathRooted(relativeCover),"Explicit artwork selection overrides existing art and stores a portable relative path");
+            Check(File.Exists(steamArt),"Selecting artwork preserves original image");
+            featureSettings.ArtworkOverrides.Clear(); selectedGame.Art=steamArt; ArtworkService.ApplyCached(selectedGame,featureSettings); Check(selectedGame.Art==steamArt,"Reset returns priority to original artwork");
+            Console.WriteLine("7 launcher feature checks passed");
+            Check(ArtworkService.OriginalGrid(new Game {Id="10"},null,CancellationToken.None)==ArtworkService.OriginalSteamUrl(10),"Native Steam original artwork works without an API key");
+            Check(ArtworkService.OriginalGrid(new Game {Id="epic:test",Source="epic",ArtworkUrl="https://cdn1.epicgames.com/original.jpg"},null,CancellationToken.None).Contains("epicgames.com"),"Epic original cover uses catalog source");
+            ArtworkService.Fetch=(url,bearer,token) => Encoding.UTF8.GetBytes(url.Contains("autocomplete") ? "{\"success\":true,\"data\":[{\"id\":42,\"name\":\"Standalone\"}]}" : "{\"success\":true,\"data\":{\"external_platform_data\":{\"steam\":[{\"id\":10}]}}}");
+            Check(ArtworkService.OriginalGrid(new Game {Id="custom:test",Source="custom",Name="Standalone"},"test",CancellationToken.None)==ArtworkService.OriginalSteamUrl(10),"Standalone original artwork requires verified external Steam link");
+            Console.WriteLine("3 original artwork checks passed");
+            Check(ArtworkService.Normalize("Crash™ Team Racing Nitro-Fueled")==ArtworkService.Normalize("CTR: Crash Team Racing - Nitro-Fueled"),"Crash trademark and repeated acronym normalize to the same title");
+            Check(ArtworkService.Normalize("Pokémon®: Café")==ArtworkService.Normalize("Pokemon Cafe"),"Accents and trademark symbols do not prevent matching");
+            Check(ArtworkService.Normalize("DOOM Eternal")!=ArtworkService.Normalize("DOOM") && ArtworkService.Normalize("Game II")!=ArtworkService.Normalize("Game III"),"Sequels and subtitle distinctions preserved");
+            Check(ArtworkService.ExactMatch("Crash Team Racing Nitro Fueled",new[]{new ArtworkGameMatch {Id=5246172,Name="CTR: Crash Team Racing - Nitro-Fueled"},new ArtworkGameMatch {Id=36474,Name="CTR (Crash Team Racing)"}})==5246172,"Original Crash Team Racing cannot be confused with Nitro-Fueled");
+            Check(ArtworkService.ExactMatch("Game",new[]{new ArtworkGameMatch {Id=1,Name="Game"},new ArtworkGameMatch {Id=2,Name="Game"}})==0,"Ambiguous matches require manual choice");
+            string observedQuery=null;
+            ArtworkService.Fetch=(url,bearer,token) => {observedQuery=url; return Encoding.UTF8.GetBytes("{\"success\":true,\"data\":[{\"id\":5246172,\"name\":\"CTR: Crash Team Racing - Nitro-Fueled\"}]}");};
+            Check(ArtworkService.SearchGames("Crash™ Team Racing Nitro-Fueled","test",CancellationToken.None).Count==1 && !observedQuery.Contains("%E2%84%A2"),"Search request strips trademark symbols before reaching SGDB");
+            Console.WriteLine("6 artwork matching checks passed");
+            ArtworkService.Fetch=(url,bearer,token) => Encoding.UTF8.GetBytes(Uri.UnescapeDataString(url).EndsWith("/warhammer",StringComparison.OrdinalIgnoreCase) ? "{\"success\":true,\"data\":[{\"id\":1,\"name\":\"Warhammer: Vermintide\"}]}" : "{\"success\":true,\"data\":[{\"id\":5331738,\"name\":\"Warhammer 40,000: Boltgun\"}]}");
+            var broad=ArtworkService.SearchForPicker(new Game {Id="shortcut",Shortcut=true,Name="Warhammer 40,000 Boltgun"},"warhammer","test",CancellationToken.None);
+            Check(broad.Count==2 && broad[0].Id==5331738,"Broad artwork search retains current exact match even if autocomplete omitted it");
+            Check(broad.Select(g => g.Id).Distinct().Count()==broad.Count,"Merged artwork suggestions contain no duplicates");
+            ArtworkService.Fetch=(url,bearer,token) => Encoding.UTF8.GetBytes(Uri.UnescapeDataString(url).Contains("40,000") ? "{\"success\":true,\"data\":[{\"id\":5331738,\"name\":\"Warhammer 40,000: Boltgun\"}]}" : "{\"success\":true,\"data\":[]}");
+            Check(ArtworkService.ExactMatch("Warhammer 40,000 Boltgun",ArtworkService.SearchGames("Warhammer 40,000 Boltgun","test",CancellationToken.None))==5331738,"Punctuation-preserving search fallback handles numeric title separators");
+            Console.WriteLine("3 broad artwork search checks passed");
+            string legacy=Path.Combine(root,"old-data"),portable=Path.Combine(root,"portable-data");
+            Directory.CreateDirectory(Path.Combine(legacy,"artwork"));
+            string oldCover=Path.Combine(legacy,"artwork","cover.img"); File.Copy(steamArt,oldCover);
+            File.WriteAllText(Path.Combine(legacy,"settings.json"),Storage.Json().Serialize(new Settings {ButtonPrompts="Xbox",CustomGames=customRestored.CustomGames}));
+            File.WriteAllText(Path.Combine(legacy,"library.json"),Storage.Json().Serialize(new Library {Games=new List<Game>{new Game {Id="cached",Art=oldCover}}}));
+            File.WriteAllBytes(Path.Combine(legacy,"steamgriddb.key"),new byte[]{1,2,3});
+            Storage.Root=portable; Storage.InitializePortable(legacy);
+            Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="Xbox" && Storage.Read<Settings>("settings.json").CustomGames.Count==1,"Portable migration preserves settings and custom games");
+            Check(File.Exists(Storage.Read<Library>("library.json").Games[0].Art) && Storage.Read<Library>("library.json").Games[0].Art.StartsWith(portable),"Portable migration copies and rebases artwork cache");
+            Check(File.ReadAllBytes(Path.Combine(portable,"steamgriddb.key")).SequenceEqual(new byte[]{1,2,3}),"Encrypted key copied unchanged");
+            Check(File.Exists(Path.Combine(legacy,"settings.json")) && File.Exists(oldCover),"Migration preserves original files as backup");
+            Storage.Write("settings.json",new Settings {ButtonPrompts="Nintendo"}); File.SetLastWriteTimeUtc(Path.Combine(legacy,"settings.json"),DateTime.UtcNow.AddDays(1)); Storage.InitializePortable(legacy);
+            Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="Nintendo","Existing portable settings never overwritten by legacy settings");
+            Console.WriteLine("5 portable storage checks passed");
         } finally {Directory.Delete(root,true);}
     }
 }

@@ -31,6 +31,12 @@ public static class ControllerTests {
             Check(!repeat.Update(1,true,309) && repeat.Update(1,true,310),"Fast stick preserves its three-times-faster initial repeat delay");
             repeat.CompleteMove(310);
             Check(!repeat.Update(1,true,351) && repeat.Update(1,true,352),"Fast stick preserves its three-times-faster held repeat rate");
+            repeat.Reset(); repeat.Update(1,true,0,1); repeat.CompleteMove(0);
+            Check(!repeat.Update(1,true,329,1) && repeat.Update(1,true,330,1),"User-selected 1x right stick speed matches normal repeat delay");
+            repeat.Reset(); repeat.Update(1,true,0,5); repeat.CompleteMove(0);
+            Check(!repeat.Update(1,true,65,5) && repeat.Update(1,true,66,5),"User-selected 5x right stick speed changes repeat timing");
+            repeat.Reset(); repeat.Update(1,false,0,10); repeat.CompleteMove(0);
+            Check(!repeat.Update(1,false,329,10) && repeat.Update(1,false,330,10),"Right-stick setting does not change d-pad speed");
             var router=new ControllerRouter(); PadState routed; string routedSource;
             var pads=new List<KeyValuePair<string,PadState>> {new KeyValuePair<string,PadState>("pad0",new PadState()),new KeyValuePair<string,PadState>("pad1",new PadState {Buttons=0x1000})};
             Check(router.Select(pads,out routed,out routedSource) && routedSource=="pad1" && routed.Buttons==0x1000,"An idle first controller does not block a second controller");

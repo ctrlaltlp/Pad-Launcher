@@ -9,13 +9,23 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 namespace PadLauncher {
+    public class ArtworkChoice {
+        public string Url {get;set;}
+        public string Thumbnail {get;set;}
+    }
+    public class ArtworkGameMatch {
+        public int Id {get;set;}
+        public string Name {get;set;}
+        public override string ToString() {return Name;}
+    }
     public static class ArtworkNetwork {
         public static bool AllowedImageUrl(string value) {
             Uri uri;
             if(!Uri.TryCreate(value,UriKind.Absolute,out uri) || uri.Scheme!="https") return false;
-            return uri.Host.EndsWith(".epicgames.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamgriddb.com",StringComparison.OrdinalIgnoreCase);
+            return uri.Host.EndsWith(".epicgames.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamgriddb.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamstatic.com",StringComparison.OrdinalIgnoreCase);
         }
         public static byte[] Get(string url,string key,CancellationToken token) {
+            ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
             var request=(HttpWebRequest)WebRequest.Create(url);
             request.Timeout=12000; request.ReadWriteTimeout=12000; request.AllowAutoRedirect=false;
             request.UserAgent="SteamPadLauncher/0.2";
@@ -67,28 +77,119 @@ namespace PadLauncher {
             return Portrait(game.Art);
         }
         public static void ApplyCached(Game game,Settings settings) {
+            string custom;
+            if(settings.ArtworkOverrides!=null && settings.ArtworkOverrides.TryGetValue(game.Id,out custom)) {
+                string root=Path.GetFullPath(Storage.Root)+Path.DirectorySeparatorChar;
+                string chosen=Path.GetFullPath(Path.Combine(Storage.Root,custom));
+                if(chosen.StartsWith(root,StringComparison.OrdinalIgnoreCase) && File.Exists(chosen)) {game.Art=chosen; game.ArtworkProvider="chosen"; return;}
+            }
             if(KeepArtwork(game)) return;
             string path=Cache(game);
             if(Portrait(path)) {game.Art=path; game.ArtworkProvider="cached";}
         }
-        static object[] Api(string route,string key,CancellationToken token) {
+        static object ApiData(string route,string key,CancellationToken token) {
             object value=Storage.Json().DeserializeObject(Encoding.UTF8.GetString(Fetch("https://www.steamgriddb.com/api/v2/"+route,key,token)));
             if(!String.Equals(Convert.ToString(Vdf.Get(value,"success")),"true",StringComparison.OrdinalIgnoreCase)) throw new IOException("SteamGridDB rejected the request.");
-            return EpicLibrary.Entries(Vdf.Get(value,"data")).ToArray();
+            return Vdf.Get(value,"data");
+        }
+        static object[] Api(string route,string key,CancellationToken token) {
+            return EpicLibrary.Entries(ApiData(route,key,token)).ToArray();
+        }
+        public static string OriginalGrid(Game game,string key,CancellationToken token,int matchedId=0) {
+            if(game.Source=="epic" && ArtworkNetwork.AllowedImageUrl(game.ArtworkUrl)) return game.ArtworkUrl;
+            ulong steam;
+            if((String.IsNullOrEmpty(game.Source) || game.Source=="steam") && !game.Shortcut && UInt64.TryParse(game.Id,out steam) && steam>0) return OriginalSteamUrl(steam);
+            if(String.IsNullOrEmpty(key)) throw new InvalidOperationException("Save a SteamGridDB key in System to match this game to its original Steam artwork.");
+            if(matchedId==0) matchedId=ExactMatch(game.Name,SearchGames(game.Name,key,token));
+            if(matchedId==0) throw new InvalidOperationException("No unambiguous SteamGridDB match found for this game. Search and select a matching title in the artwork picker.");
+            object data=ApiData("games/id/"+matchedId+"?platformdata=steam",key,token);
+            var links=EpicLibrary.Entries(Vdf.Get(Vdf.Get(data,"external_platform_data"),"steam")).ToArray();
+            if(links.Length!=1 || !UInt64.TryParse(Vdf.Str(links[0],"id"),out steam) || steam==0) throw new InvalidOperationException("No unique original Steam artwork link is available for this game.");
+            return OriginalSteamUrl(steam);
+        }
+        public static string OriginalSteamUrl(ulong id) {
+            return "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/"+id+"/library_600x900.jpg";
         }
         public static void ValidateKey(string key) {Api("search/autocomplete/Amnesia",key,CancellationToken.None);}
-        public static string Normalize(string name) {return Regex.Replace((name ?? "").ToLowerInvariant(),@"[^\p{L}\p{N}]","");}
+        public static string SearchQuery(string name) {
+            string decomposed=(name ?? "").Normalize(NormalizationForm.FormD);
+            decomposed=Regex.Replace(decomposed,@"\p{Mn}","");
+            decomposed=Regex.Replace(decomposed,"[™®©]","");
+            return Regex.Replace(Regex.Replace(decomposed,@"[^\p{L}\p{N}\s]"," "),@"\s+"," ").Trim();
+        }
+        public static string Normalize(string name) {
+            string clean=SearchQuery(name);
+            string[] words=clean.Split(' ');
+            var prefix=Regex.Match(name ?? "",@"^\s*([A-Z]{2,6})\s*[:(\-]");
+            if(prefix.Success && words.Length>prefix.Groups[1].Value.Length) {
+                string acronym=prefix.Groups[1].Value;
+                string initials=String.Concat(words.Skip(1).Take(acronym.Length).Select(word => Char.ToUpperInvariant(word[0])));
+                if(initials==acronym) clean=String.Join(" ",words.Skip(1));
+            }
+            return Regex.Replace(clean.ToLowerInvariant(),@"\s","");
+        }
+        public static int ExactMatch(string name,IEnumerable<ArtworkGameMatch> candidates) {
+            var matches=candidates.Where(v => Normalize(v.Name)==Normalize(name)).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
+            return matches.Length==1 ? matches[0].Id : 0;
+        }
+        public static List<ArtworkGameMatch> SearchGames(string name,string key,CancellationToken token) {
+            string query=SearchQuery(name); if(query.Length==0) return new List<ArtworkGameMatch>();
+            var queries=new List<string> {query};
+            string originalQuery=Regex.Replace(Regex.Replace(name ?? "","[™®©]",""),@"\s+"," ").Trim();
+            if(originalQuery!=query) queries.Add(originalQuery);
+            string[] words=query.Split(' ');
+            if(words.Length>3) queries.Add(String.Join(" ",words.Take(3)));
+            var candidates=new List<ArtworkGameMatch>();
+            foreach(string search in queries.Distinct()) {
+                var results=Api("search/autocomplete/"+Uri.EscapeDataString(search),key,token);
+                candidates.AddRange(results.Select(v => new ArtworkGameMatch {Id=EpicLibrary.Number(Vdf.Get(v,"id")),Name=Vdf.Str(v,"name")}).Where(v => v.Id>0 && !String.IsNullOrWhiteSpace(v.Name)));
+                if(ExactMatch(name,candidates)>0) break;
+            }
+            return candidates.GroupBy(v => v.Id).Select(g => g.First()).OrderByDescending(v => Normalize(v.Name)==Normalize(name)).ThenBy(v => v.Name).ToList();
+        }
+        public static List<ArtworkGameMatch> SearchForPicker(Game game,string query,string key,CancellationToken token) {
+            var candidates=SearchGames(query,key,token);
+            string normalized=Normalize(query);
+            if(normalized.Length==0) return candidates;
+            var known=new List<ArtworkGameMatch>();
+            try {
+                ulong id;
+                if((String.IsNullOrEmpty(game.Source) || game.Source=="steam") && !game.Shortcut && UInt64.TryParse(game.Id,out id)) {
+                    var data=ApiData("games/steam/"+id,key,token);
+                    known.Add(new ArtworkGameMatch {Id=EpicLibrary.Number(Vdf.Get(data,"id")),Name=Vdf.Str(data,"name")});
+                } else if(Normalize(game.Name).Contains(normalized)) {
+                    var results=SearchGames(game.Name,key,token);
+                    int match=ExactMatch(game.Name,results);
+                    known.AddRange(results.Where(g => g.Id==match));
+                }
+            } catch {token.ThrowIfCancellationRequested(); /* Keep the broader suggestions if the targeted lookup fails. */}
+            candidates.AddRange(known.Where(g => g.Id>0 && Normalize(g.Name).Contains(normalized)));
+            var preferred=new HashSet<int>(known.Select(g => g.Id));
+            return candidates.GroupBy(g => g.Id).Select(g => g.First()).OrderByDescending(g => preferred.Contains(g.Id)).ThenByDescending(g => Normalize(g.Name)==normalized).ThenBy(g => g.Name).ToList();
+        }
         public static string FindGrid(Game game,string key,CancellationToken token) {
+            return FindGrids(game,key,token).Select(choice => choice.Url).FirstOrDefault();
+        }
+        public static List<ArtworkChoice> FindGrids(Game game,string key,CancellationToken token,int matchedId=0) {
             string route;
             ulong id;
-            if(String.IsNullOrEmpty(game.Source) && !game.Shortcut && UInt64.TryParse(game.Id,out id)) route="grids/steam/"+id;
+            if(matchedId>0) route="grids/game/"+matchedId;
+            else if((String.IsNullOrEmpty(game.Source) || game.Source=="steam") && !game.Shortcut && UInt64.TryParse(game.Id,out id)) route="grids/steam/"+id;
             else {
-                var matches=Api("search/autocomplete/"+Uri.EscapeDataString(game.Name),key,token).Where(v => Normalize(Vdf.Str(v,"name"))==Normalize(game.Name)).ToArray();
-                if(matches.Length!=1) return null;
-                route="grids/game/"+EpicLibrary.Number(Vdf.Get(matches[0],"id"));
+                int match=ExactMatch(game.Name,SearchGames(game.Name,key,token));
+                if(match==0) return new List<ArtworkChoice>();
+                route="grids/game/"+match;
             }
             return Api(route+"?dimensions=600x900&types=static&nsfw=false&humor=false",key,token)
-                .Select(v => Vdf.Str(v,"url")).FirstOrDefault(ArtworkNetwork.AllowedImageUrl);
+                .Where(v => ArtworkNetwork.AllowedImageUrl(Vdf.Str(v,"url")))
+                .Take(18).Select(v => new ArtworkChoice {Url=Vdf.Str(v,"url"),Thumbnail=ArtworkNetwork.AllowedImageUrl(Vdf.Str(v,"thumb")) ? Vdf.Str(v,"thumb") : Vdf.Str(v,"url")}).ToList();
+        }
+        public static string SaveChoice(Game game,string url,CancellationToken token) {
+            string name;
+            using(var hash=SHA256.Create()) name=BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(game.Id+url))).Replace("-","")+".img";
+            string relative=Path.Combine("artwork","chosen",name),path=Path.Combine(Storage.Root,relative);
+            if(!Download(url,path,token)) throw new IOException("The selected cover is not a supported portrait image.");
+            return relative;
         }
         public static void Fill(IEnumerable<Game> games,Settings settings,CancellationToken token,Action<Game,string> ready,Action<string> status) {
             string key=settings.SteamGridDbEnabled ? ArtworkKey.Load() : null;

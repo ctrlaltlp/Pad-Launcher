@@ -14,17 +14,32 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.2.4.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.2.4.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.2.4")]
+[assembly: System.Reflection.AssemblyVersion("0.3.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.3.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.3.0")]
 [assembly: System.Reflection.AssemblyTitle("Steam Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Steam Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
     public sealed class SettingsComboBox : ComboBox {
+        static ScrollViewer FindScroll(DependencyObject node) {
+            if(node==null) return null;
+            var scroll=node as ScrollViewer; if(scroll!=null) return scroll;
+            for(int i=0;i<VisualTreeHelper.GetChildrenCount(node);i++) {var found=FindScroll(VisualTreeHelper.GetChild(node,i)); if(found!=null) return found;}
+            return null;
+        }
         protected override void OnPreviewMouseWheel(System.Windows.Input.MouseWheelEventArgs e) {
             e.Handled=true;
+            if(IsDropDownOpen) {
+                var popup=Template.FindName("PART_Popup",this) as System.Windows.Controls.Primitives.Popup;
+                var list=popup==null ? null : FindScroll(popup.Child);
+                if(list!=null) {
+                    double distance=list.CanContentScroll ? 3 : 48;
+                    list.ScrollToVerticalOffset(list.VerticalOffset-e.Delta*distance/120.0);
+                }
+                return;
+            }
             DependencyObject parent=VisualTreeHelper.GetParent(this);
             while(parent!=null) {
                 var scroll=parent as ScrollViewer;
@@ -48,7 +63,7 @@ namespace PadLauncher {
             else {
 #if ARTWORK_TEST
                 string normalRoot=Storage.Root;
-                Storage.Root=System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"SteamPadLauncher-ArtworkTest");
+                Storage.Root=System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"SteamPadLauncher.ArtworkTest.Data");
                 if(!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json"))) {
                     Settings testSettings=null;
                     try { testSettings=Storage.Json().Deserialize<Settings>(File.ReadAllText(System.IO.Path.Combine(normalRoot,"settings.json"))); } catch { }
@@ -56,7 +71,13 @@ namespace PadLauncher {
                     Storage.Write("settings.json",testSettings);
                 }
 #else
-                Storage.MigrateFrom(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"PadLauncherBackground"));
+                try {
+                    string local=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    Storage.InitializePortable(System.IO.Path.Combine(local,"PadLauncher"),System.IO.Path.Combine(local,"PadLauncherBackground"));
+                } catch(Exception error) {
+                    MessageBox.Show("Could not prepare the portable data folder beside SteamPadLauncher.exe. Place the app in a writable folder.\n\n"+error.Message,"Steam Pad Launcher");
+                    return;
+                }
 #endif
             }
             if (args.Contains("--scan")) {
@@ -481,7 +502,7 @@ namespace PadLauncher {
             helpLayout.Children.Add(styles);
             string[][] rows={
                 new[]{"Left stick / D-pad","Browse games"},
-                new[]{"Right stick","Browse games at 3× speed"},
+                new[]{"Right stick","Browse games at "+settings.RightStickSpeed.ToString("0.#")+"× speed"},
                 new[]{names[0],"Launch selected game"},
                 new[]{"Tap "+names[1],"Dismiss overlay"},
                 new[]{"Hold "+names[1]+" · 1 sec","Exit app completely"},
@@ -501,6 +522,10 @@ namespace PadLauncher {
             }
             var keyboard=Label("Keyboard: ← / → browse · ↑ / ↓ grid rows\nEnter play · Esc dismiss · Page Up / Down collections\nM next monitor · F5 refresh · F1 hints",12,muted);
             keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); helpLayout.Children.Add(keyboard);
+            var speedCaption=Label("Right stick speed",14,mint); speedCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(speedCaption);
+            var speedValue=Label(settings.RightStickSpeed.ToString("0.#")+"×",13,white); helpLayout.Children.Add(speedValue);
+            var speedPicker=new Slider {Name="RightStickSpeedSetting",Minimum=1,Maximum=10,Value=settings.RightStickSpeed,TickFrequency=.5,IsSnapToTickEnabled=true,SmallChange=.5,LargeChange=1,Margin=new Thickness(0,4,0,10)};
+            speedPicker.ValueChanged+=(s,e) => {settings.RightStickSpeed=speedPicker.Value; speedValue.Text=settings.RightStickSpeed.ToString("0.#")+"×"; navigation.Reset(); QueueSave();}; helpLayout.Children.Add(speedPicker);
             var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,6)};
             titleToggle.Click+=(s,e) => {
                 try { SetShowGameTitle(titleToggle.IsChecked==true); }
@@ -691,6 +716,23 @@ namespace PadLauncher {
                 catch(Exception error) { restoringSize=true; sizePicker.Value=previous; restoringSize=false; MessageBox.Show(dialog,error.Message,"Settings"); }
             };
             layout.Children.Add(sizeLabel); layout.Children.Add(sizePicker);
+            var artworkCaption=Label("Game artwork",14,mint); artworkCaption.Margin=new Thickness(0,16,0,8); layout.Children.Add(artworkCaption);
+            var artworkGames=new SettingsComboBox {ItemsSource=library.Games,DisplayMemberPath="Name",SelectedValuePath="Id",SelectedValue=settings.SelectedId,Padding=new Thickness(8)};
+            layout.Children.Add(artworkGames);
+            var artworkActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,12)};
+            var pickArtwork=new Button {Content="Choose artwork…",Padding=new Thickness(12,7,12,7)};
+            pickArtwork.Click+=(s,e) => {var game=artworkGames.SelectedItem as Game; if(game!=null) ShowArtworkPicker(dialog,game);};
+            var resetArtwork=new Button {Content="Reset artwork",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
+            resetArtwork.Click+=(s,e) => {
+                var game=artworkGames.SelectedItem as Game; if(game==null) return;
+                if(scanning) {MessageBox.Show(dialog,"Please wait for the current refresh to finish.","Artwork"); return;}
+                try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); if(next.ArtworkOverrides!=null) next.ArtworkOverrides.Remove(game.Id); Storage.Write("settings.json",next); settings=next; RefreshLibrary(true);}
+                catch(Exception error) {MessageBox.Show(dialog,error.Message,"Artwork");}
+            };
+            artworkActions.Children.Add(pickArtwork); artworkActions.Children.Add(resetArtwork); layout.Children.Add(artworkActions);
+            bool startupEnabled=false; try {startupEnabled=StartupSetting.Enabled;} catch {}
+            var startupToggle=new CheckBox {Content="Start with Windows",IsChecked=startupEnabled,Margin=new Thickness(0,18,0,12)};
+            startupToggle.Click+=(s,e) => {try {StartupSetting.Set(startupToggle.IsChecked==true);} catch(Exception error) {startupToggle.IsChecked=startupEnabled; MessageBox.Show(dialog,error.Message,"Windows startup");}}; systemLayout.Children.Add(startupToggle);
             var steamCaption=Label("Steam path",14,mint); steamCaption.Margin=new Thickness(0,14,0,10); systemLayout.Children.Add(steamCaption);
             var steamPath=new TextBox {Text=settings.SteamPath ?? SteamLibrary.DetectSteam() ?? "",FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"}; systemLayout.Children.Add(steamPath);
             Action reloadUsers=null;
@@ -763,12 +805,97 @@ namespace PadLauncher {
             rebuild();
             dialog.PreviewKeyDown+=(s,e) => { if(e.Key==System.Windows.Input.Key.Escape) { dialog.Close(); e.Handled=true; } };
             var root=new Grid(); root.RowDefinitions.Add(new RowDefinition()); root.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto}); root.Children.Add(tabs);
-            var close=new Button {Content="Got it",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(28,12,28,20),IsCancel=true};
+            var close=new Button {Content="Close",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(28,12,28,20),IsCancel=true};
             close.Click+=(s,e) => dialog.Close(); Grid.SetRow(close,1); root.Children.Add(close);
             dialog.Content=root;
             return dialog;
         }
         TextBlock Label(string text, double size, Brush color) { return new TextBlock { Text = text, FontSize = size, Foreground = color, VerticalAlignment = VerticalAlignment.Center }; }
+        async void ShowArtworkPicker(Window owner,Game game) {
+            string key=ArtworkKey.Load();
+            var chooser=new Window {Title="Artwork · "+game.Name,Owner=owner,Width=660,Height=600,MinWidth=400,MinHeight=350,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,Topmost=true};
+            chooser.Resources.MergedDictionaries.Add(owner.Resources);
+            var root=new DockPanel {Margin=new Thickness(20)};
+            var status=Label("Finding covers…",14,white); status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,0,0,14); DockPanel.SetDock(status,Dock.Top); root.Children.Add(status);
+            var original=new Button {Content="Use original grid artwork",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,14)};
+            DockPanel.SetDock(original,Dock.Top); root.Children.Add(original);
+            var searchRow=new DockPanel {Margin=new Thickness(0,0,0,8)};
+            var searchButton=new Button {Content="Find game",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(searchButton,Dock.Right); searchRow.Children.Add(searchButton);
+            var searchText=new TextBox {Text=ArtworkService.SearchQuery(game.Name),Padding=new Thickness(8),ToolTip="Search SteamGridDB by game title"}; searchRow.Children.Add(searchText); DockPanel.SetDock(searchRow,Dock.Top); root.Children.Add(searchRow);
+            var searchHint=Label("Broad searches return limited suggestions. Use a more specific title for more accurate results; the current game's match is included when relevant.",12,muted); searchHint.TextWrapping=TextWrapping.Wrap; searchHint.Margin=new Thickness(0,0,0,10); DockPanel.SetDock(searchHint,Dock.Top); root.Children.Add(searchHint);
+            var matchRow=new DockPanel {Margin=new Thickness(0,0,0,12),Visibility=Visibility.Collapsed};
+            var useMatch=new Button {Content="Show covers",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(useMatch,Dock.Right); matchRow.Children.Add(useMatch);
+            var matchPicker=new SettingsComboBox {DisplayMemberPath="Name",Padding=new Thickness(8)}; matchRow.Children.Add(matchPicker); DockPanel.SetDock(matchRow,Dock.Top); root.Children.Add(matchRow);
+            var covers=new WrapPanel(); root.Children.Add(new ScrollViewer {Content=covers,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}); chooser.Content=root;
+            var cancellation=new CancellationTokenSource(); chooser.Closed+=(s,e) => cancellation.Cancel(); chooser.Show();
+            int loadRevision=0,selectedMatch=0;
+            original.Click+=async (s,e) => {
+                if(scanning) {status.Text="Please wait for the library refresh to finish."; return;}
+                loadRevision++; original.IsEnabled=false; covers.IsEnabled=false; status.Text="Getting original cover…";
+                try {
+                    int match=selectedMatch;
+                    string path=await Task.Run(() => ArtworkService.SaveChoice(game,ArtworkService.OriginalGrid(game,key,cancellation.Token,match),cancellation.Token));
+                    if(cancellation.IsCancellationRequested) return;
+                    if(artworkCancellation!=null) artworkCancellation.Cancel();
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    if(next.ArtworkOverrides==null) next.ArtworkOverrides=new Dictionary<string,string>(); next.ArtworkOverrides[game.Id]=path;
+                    Storage.Write("settings.json",next); settings=next;
+                    foreach(var entry in library.Games.Where(g => g.Id==game.Id)) ArtworkService.ApplyCached(entry,settings);
+                    cards.Clear(); carousel.Children.Clear(); Render(false); chooser.Close();
+                } catch(Exception error) {if(!cancellation.IsCancellationRequested) {status.Text=error is InvalidOperationException ? error.Message : "Original cover could not be downloaded. Your artwork was kept."; original.IsEnabled=true; covers.IsEnabled=true;}}
+            };
+            if(String.IsNullOrEmpty(key)) {searchRow.IsEnabled=false; status.Text="Use the original cover, or save a SteamGridDB API key in System to browse community artwork."; return;}
+            Func<int,Task> loadCovers=async match => {
+            int revision=++loadRevision; selectedMatch=match; covers.Children.Clear(); covers.IsEnabled=true; status.Text="Loading covers…";
+            try {
+                var choices=await Task.Run(() => ArtworkService.FindGrids(game,key,cancellation.Token,match));
+                if(cancellation.IsCancellationRequested || revision!=loadRevision) return;
+                status.Text=choices.Count==0 ? "No automatic match found. Use Find game above, select the correct title, then Show covers." : "Choose a cover, or use Find game to select a different title.";
+                foreach(var choice in choices) {
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    BitmapImage bitmap;
+                    try {
+                        byte[] data=await Task.Run(() => ArtworkService.Fetch(choice.Thumbnail,null,cancellation.Token));
+                        cancellation.Token.ThrowIfCancellationRequested();
+                        if(revision!=loadRevision) return;
+                        using(var stream=new MemoryStream(data)) {bitmap=new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption=BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth=150; bitmap.StreamSource=stream; bitmap.EndInit(); bitmap.Freeze();}
+                    } catch {if(cancellation.IsCancellationRequested) return; continue;}
+                    var tile=new Button {Content=new Image {Source=bitmap,Width=140,Height=210,Stretch=Stretch.Uniform},Margin=new Thickness(0,0,12,12),Padding=new Thickness(4),ToolTip="Use this cover"};
+                    var picked=choice;
+                    tile.Click+=async (s,e) => {
+                        if(scanning) {status.Text="Please wait for the library refresh to finish, then choose a cover."; return;}
+                        loadRevision++; covers.IsEnabled=false; status.Text="Downloading selected cover…";
+                        try {
+                            string path=await Task.Run(() => ArtworkService.SaveChoice(game,picked.Url,cancellation.Token));
+                            if(cancellation.IsCancellationRequested) return;
+                            if(artworkCancellation!=null) artworkCancellation.Cancel();
+                            var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                            if(next.ArtworkOverrides==null) next.ArtworkOverrides=new Dictionary<string,string>(); next.ArtworkOverrides[game.Id]=path;
+                            Storage.Write("settings.json",next); settings=next;
+                            foreach(var entry in library.Games.Where(g => g.Id==game.Id)) ArtworkService.ApplyCached(entry,settings);
+                            cards.Clear(); carousel.Children.Clear(); Render(false); chooser.Close();
+                        } catch(Exception) {if(!cancellation.IsCancellationRequested) {status.Text="Could not save that cover. Your previous artwork was kept."; covers.IsEnabled=true;}}
+                    };
+                    covers.Children.Add(tile);
+                }
+                if(covers.Children.Count==0 && choices.Count>0) status.Text="Cover previews could not be loaded. Check your connection and try again.";
+            } catch {if(!cancellation.IsCancellationRequested && revision==loadRevision) status.Text="Could not load SteamGridDB covers. Check your key and connection.";}
+            };
+            searchButton.Click+=async (s,e) => {
+                int revision=++loadRevision; searchButton.IsEnabled=false; status.Text="Searching SteamGridDB…";
+                try {
+                    string query=searchText.Text;
+                    var matches=await Task.Run(() => ArtworkService.SearchForPicker(game,query,key,cancellation.Token));
+                    if(cancellation.IsCancellationRequested || revision!=loadRevision) return;
+                    matchPicker.ItemsSource=matches; matchPicker.SelectedIndex=matches.Count>0 ? 0 : -1; matchRow.Visibility=matches.Count>0 ? Visibility.Visible : Visibility.Collapsed;
+                    status.Text=matches.Count>0 ? "Select the correct game, then Show covers." : "No titles found. Try a shorter game name.";
+                } catch {if(!cancellation.IsCancellationRequested) status.Text="Search failed. Check your key and connection.";}
+                finally {searchButton.IsEnabled=true;}
+            };
+            useMatch.Click+=async (s,e) => {var match=matchPicker.SelectedItem as ArtworkGameMatch; if(match!=null) await loadCovers(match.Id);};
+            searchText.KeyDown+=(s,e) => {if(e.Key==System.Windows.Input.Key.Enter && searchButton.IsEnabled) {searchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); e.Handled=true;}};
+            await loadCovers(0);
+        }
         StackPanel CreateCustomGamesPanel(Window dialog,Action rebuild) {
             var panel=new StackPanel();
             var heading=Label("Custom games",26,white); heading.FontWeight=FontWeights.SemiBold; heading.Margin=new Thickness(0,0,0,20); panel.Children.Add(heading);
@@ -812,6 +939,7 @@ namespace PadLauncher {
             };
             var gameName=field("Game name","CustomGameName"); gameName.MaxLength=120;
             var target=field("Executable or shortcut","CustomGameTarget");
+            var missingFiles=Label("",12,new SolidColorBrush(Color.FromRgb(255,172,153))); missingFiles.TextWrapping=TextWrapping.Wrap; missingFiles.Margin=new Thickness(0,8,0,0); panel.Children.Add(missingFiles);
             var browse=new Button {Content="Browse…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(browse);
             browse.Click+=(s,e) => {
                 var file=new Microsoft.Win32.OpenFileDialog {Filter="Games and shortcuts|*.exe;*.lnk;*.bat;*.cmd",CheckFileExists=true,DereferenceLinks=false};
@@ -826,6 +954,13 @@ namespace PadLauncher {
                 }
             };
             var art=field("Artwork (optional)","CustomGameArtwork");
+            Action checkFiles=() => {
+                var messages=new List<string>();
+                if(!String.IsNullOrWhiteSpace(target.Text) && !File.Exists(target.Text.Trim().Trim('"'))) messages.Add("Game file missing — update the path.");
+                if(!String.IsNullOrWhiteSpace(art.Text) && !File.Exists(art.Text.Trim().Trim('"'))) messages.Add("Artwork file missing — choose another image or clear it.");
+                missingFiles.Text=String.Join("\n",messages);
+            };
+            target.TextChanged+=(s,e) => checkFiles(); art.TextChanged+=(s,e) => checkFiles();
             art.ToolTip="Leave artwork empty to use SteamGridDB fallback when enabled.";
             panel.Children.Remove(art);
             var artworkField=new Grid(); artworkField.Children.Add(art);
@@ -972,6 +1107,7 @@ namespace PadLauncher {
             Collection filter = filters[collectionIndex];
             string oldId = remember ? settings.SelectedId : visible.Count > selected ? visible[selected].Id : null;
             visible = library.Games.Where(g => filter.Id == "all" || (!filter.UnsupportedDynamic && filter.Games.Contains(g.Id))).ToList();
+            if(filter.Id=="recent") visible=visible.OrderByDescending(g => CombinedCollections.RecentPlayed(settings,g)).ToList();
             selected = Math.Max(0, visible.FindIndex(g => g.Id == oldId));
             cards.Clear(); carousel.Children.Clear(); Render(false);
         }
@@ -1004,7 +1140,7 @@ namespace PadLauncher {
                 return;
             }
             Game current = visible[selected]; settings.SelectedId = current.Id;
-            title.Text = current.Name;
+            title.Text = current.Name+(current.Source=="custom" && !File.Exists(current.LaunchId) ? " · Game file missing" : "");
             var keep = new HashSet<string>();
             bool gridLayout=settings.CarouselLayout=="grid";
             int pageSize=GridColumns*GridRows,pageStart=(selected/pageSize)*pageSize;
@@ -1054,8 +1190,12 @@ namespace PadLauncher {
                 SetAnimation(card, Canvas.LeftProperty,x,animate); SetAnimation(card, Canvas.TopProperty,y,animate);
                 SetAnimation(card, WidthProperty,w,animate); SetAnimation(card, HeightProperty,h,animate); SetAnimation(card, OpacityProperty,active ? 1 : gridLayout ? .72 : .48,animate);
                 var border = card as Grid;
+                bool missing=game.Source=="custom" && !File.Exists(game.LaunchId);
+                var missingBadge=border.Children.OfType<Border>().FirstOrDefault(b => b.Name=="MissingGameBadge");
+                if(missingBadge!=null) missingBadge.Visibility=missing ? Visibility.Visible : Visibility.Collapsed;
+                card.ToolTip=missing ? "Game file missing. Update its path in Custom games." : game.Name;
                 var outline = border.Children[border.Children.Count-1] as System.Windows.Shapes.Path;
-                if (outline != null) { outline.Stroke = active ? mint : new SolidColorBrush(Color.FromArgb(70,180,206,213)); outline.StrokeThickness = active ? 2 : 1; }
+                if (outline != null) { outline.Stroke = missing ? new SolidColorBrush(Color.FromRgb(255,172,153)) : active ? mint : new SolidColorBrush(Color.FromArgb(70,180,206,213)); outline.StrokeThickness = active ? 2 : 1; }
             }
             foreach (string id in cards.Keys.Where(k => !keep.Contains(k)).ToArray()) { carousel.Children.Remove(cards[id]); cards.Remove(id); }
         }
@@ -1090,6 +1230,7 @@ namespace PadLauncher {
                 var words = Label(game.Name,gridLayout ? 18 : 31,white); words.FontWeight=FontWeights.SemiBold; words.TextWrapping=TextWrapping.Wrap; words.Margin=gridLayout ? new Thickness(12) : new Thickness(58,60,40,75); words.VerticalAlignment=VerticalAlignment.Center; body.Children.Add(words);
             }
             body.Children.Add(new System.Windows.Shapes.Rectangle { Fill = new LinearGradientBrush(Color.FromArgb(0,0,0,0),Color.FromArgb(210,5,13,20),90) });
+            grid.Children.Add(new Border {Name="MissingGameBadge",Background=new SolidColorBrush(Color.FromRgb(54,30,28)),CornerRadius=new CornerRadius(5),Padding=new Thickness(8,5,8,5),Margin=new Thickness(0,14,0,0),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top,Visibility=Visibility.Collapsed,IsHitTestVisible=false,Child=Label("File missing",11,new SolidColorBrush(Color.FromRgb(255,172,153)))});
             var outline = new System.Windows.Shapes.Path { Fill=Brushes.Transparent,IsHitTestVisible=false,Stroke=mint,StrokeThickness=2 }; grid.Children.Add(outline);
             Action geometry = () => {
                 double w=grid.ActualWidth,h=grid.ActualHeight;
@@ -1145,6 +1286,8 @@ namespace PadLauncher {
             try {
                 Save();
                 Process.Start(GameLaunch.StartInfo(game));
+                if(settings.LaunchHistory==null) settings.LaunchHistory=new Dictionary<string,long>();
+                settings.LaunchHistory[game.Id]=DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Save();
                 Close();
             } catch (Exception e) { launching=false; ShowNotice("Game could not be opened: "+e.Message); }
 #endif
@@ -1217,7 +1360,7 @@ namespace PadLauncher {
             bool fast;
             int direction=ControllerNavigation.Direction(pad,gridLayout,GridColumns,out fast);
             double now=Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency;
-            if (navigation.Update(direction,fast,now)) {
+            if (navigation.Update(direction,fast,now,settings.RightStickSpeed)) {
                 if(gridLayout && Math.Abs(direction)==GridColumns) MoveGridRow(Math.Sign(direction)); else Move(direction);
                 // Artwork decoding/layout can take longer on the first move.
                 // Begin the repeat delay after that work, never catch up missed ticks.
@@ -1314,12 +1457,13 @@ namespace PadLauncher {
         bool fast;
         double next,delay;
         public void Reset() { direction=0; fast=false; next=0; delay=0; }
-        public bool Update(int value,bool accelerated,double milliseconds) {
+        public bool Update(int value,bool accelerated,double milliseconds,double speed=3) {
             if(value==0) { Reset(); return false; }
             bool changed=value!=direction || accelerated!=fast;
             direction=value; fast=accelerated;
             if(!changed && milliseconds<next) return false;
-            delay=(changed ? 330.0 : 125.0)/(accelerated ? 3 : 1);
+            if(Double.IsNaN(speed) || Double.IsInfinity(speed) || speed<1 || speed>10) speed=3;
+            delay=(changed ? 330.0 : 125.0)/(accelerated ? speed : 1);
             next=milliseconds+delay;
             return true;
         }
