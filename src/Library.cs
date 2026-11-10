@@ -156,7 +156,7 @@ namespace PadLauncher {
         }
     }
     public static class Storage {
-        public static string Root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"SteamPadLauncher.Data");
+        public static string Root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"PadLauncher.Data");
         public static void InitializePortable(params string[] legacyRoots) {
             Directory.CreateDirectory(Root);
             if(File.Exists(Path.Combine(Root,"settings.json"))) return;
@@ -164,13 +164,7 @@ namespace PadLauncher {
             if(legacy==null) return;
             // Copy, rather than move, so the previous installation remains recoverable.
             string oldArt=Path.Combine(legacy,"artwork"),newArt=Path.Combine(Root,"artwork");
-            if(Directory.Exists(oldArt)) {
-                Directory.CreateDirectory(newArt);
-                foreach(string file in Directory.GetFiles(oldArt)) {
-                    string target=Path.Combine(newArt,Path.GetFileName(file));
-                    if(!File.Exists(target)) File.Copy(file,target);
-                }
-            }
+            if(Directory.Exists(oldArt)) CopyArtworkTree(oldArt,newArt);
             string key=Path.Combine(legacy,"steamgriddb.key"),newKey=Path.Combine(Root,"steamgriddb.key");
             if(File.Exists(key) && !File.Exists(newKey)) File.Copy(key,newKey);
             string cache=Path.Combine(legacy,"library.json");
@@ -178,13 +172,29 @@ namespace PadLauncher {
                 try {
                     var library=Json().Deserialize<Library>(File.ReadAllText(cache));
                     foreach(var game in library.Games) {
-                        if(!String.IsNullOrEmpty(game.Art) && game.Art.StartsWith(oldArt+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) game.Art=Path.Combine(newArt,Path.GetFileName(game.Art));
+                        if(!String.IsNullOrEmpty(game.Art) && game.Art.StartsWith(oldArt+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) game.Art=Path.Combine(newArt,game.Art.Substring(oldArt.Length+1));
                     }
                     Write("library.json",library);
                 } catch { /* The normal scan reconstructs a missing or invalid library cache. */ }
             }
             // Settings are copied last and mark the migration as complete.
-            File.Copy(Path.Combine(legacy,"settings.json"),Path.Combine(Root,"settings.json"));
+            string settingsFile=File.ReadAllText(Path.Combine(legacy,"settings.json"));
+            var migrated=Json().Deserialize<Settings>(settingsFile); bool changed=false;
+            foreach(var game in migrated.CustomGames ?? new List<CustomGame>()) {
+                if(!String.IsNullOrEmpty(game.Artwork) && game.Artwork.StartsWith(oldArt+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) {game.Artwork=Path.Combine("artwork",game.Artwork.Substring(oldArt.Length+1)); changed=true;}
+            }
+            File.WriteAllText(Path.Combine(Root,"settings.json"),changed ? Json().Serialize(migrated) : settingsFile);
+        }
+        static void CopyArtworkTree(string source,string target) {
+            Directory.CreateDirectory(target);
+            foreach(string file in Directory.GetFiles(source)) {
+                if((File.GetAttributes(file)&FileAttributes.ReparsePoint)!=0) continue;
+                string destination=Path.Combine(target,Path.GetFileName(file)); if(!File.Exists(destination)) File.Copy(file,destination);
+            }
+            foreach(string folder in Directory.GetDirectories(source)) {
+                if((File.GetAttributes(folder)&FileAttributes.ReparsePoint)!=0) continue;
+                CopyArtworkTree(folder,Path.Combine(target,Path.GetFileName(folder)));
+            }
         }
         public static void MigrateFrom(string legacyRoot) {
             if(!Directory.Exists(legacyRoot)) return;

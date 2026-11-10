@@ -1,4 +1,4 @@
-# Steam Pad Launcher
+# Pad Launcher
 
 ![Pad Launcher showing the .Installed Steam collection over a Windows desktop with the taskbar visible](assets/preview.png)
 
@@ -8,7 +8,7 @@ Demo: https://www.youtube.com/watch?v=5UMPjjPBHiU
 
 ## Usage
 
-**[Download SteamPadLauncher.exe](https://github.com/lpv11/pad-launcher-for-steam/releases/latest/download/SteamPadLauncher.exe)** for Windows 10/11 (64-bit).
+**[Download PadLauncher.exe](https://github.com/lpv11/Pad-Launcher/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit).
 
 The first launch puts the app in your notification area, so it's best if you have it on auto-start on windows, then bind a controller button to launch the .exe; that opens the carousel.
 

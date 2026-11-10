@@ -122,6 +122,13 @@ class ExternalTests {
             Storage.Write("settings.json",new Settings {ButtonPrompts="Nintendo"}); File.SetLastWriteTimeUtc(Path.Combine(legacy,"settings.json"),DateTime.UtcNow.AddDays(1)); Storage.InitializePortable(legacy);
             Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="Nintendo","Existing portable settings never overwritten by legacy settings");
             Console.WriteLine("5 portable storage checks passed");
+            Directory.CreateDirectory(Path.Combine(legacy,"artwork","chosen")); string nestedCover=Path.Combine(legacy,"artwork","chosen","selected.img"); File.Copy(steamArt,nestedCover);
+            File.WriteAllText(Path.Combine(legacy,"settings.json"),Storage.Json().Serialize(new Settings {CustomGames=new List<CustomGame>{new CustomGame {Name="Imported",Artwork=nestedCover}},ArtworkOverrides=new Dictionary<string,string>{{"pick",Path.Combine("artwork","chosen","selected.img")}}}));
+            Storage.Root=Path.Combine(root,"renamed-portable"); Storage.InitializePortable(legacy);
+            Check(File.Exists(Path.Combine(Storage.Root,"artwork","chosen","selected.img")),"Rename migration copies nested chosen artwork");
+            var renamed=Storage.Read<Settings>("settings.json"); Check(!Path.IsPathRooted(renamed.CustomGames[0].Artwork) && File.Exists(CustomGameLibrary.ArtworkPath(renamed.CustomGames[0].Artwork)),"Rename migration rebases imported artwork to portable paths");
+            Check(renamed.ArtworkOverrides["pick"]==Path.Combine("artwork","chosen","selected.img"),"Rename migration preserves selected artwork overrides");
+            Console.WriteLine("3 rename migration checks passed");
         } finally {Directory.Delete(root,true);}
     }
 }

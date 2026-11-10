@@ -17,8 +17,8 @@ using System.Windows.Threading;
 [assembly: System.Reflection.AssemblyVersion("0.3.0.0")]
 [assembly: System.Reflection.AssemblyFileVersion("0.3.0.0")]
 [assembly: System.Reflection.AssemblyInformationalVersion("0.3.0")]
-[assembly: System.Reflection.AssemblyTitle("Steam Pad Launcher")]
-[assembly: System.Reflection.AssemblyProduct("Steam Pad Launcher")]
+[assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
+[assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
 
 namespace PadLauncher {
@@ -51,11 +51,11 @@ namespace PadLauncher {
     public static class Entry {
         static Mutex instance;
 #if ARTWORK_TEST
-        const string InstanceName=@"Local\SteamPadLauncher.ArtworkTest";
-        public const string AppName="Steam Pad Launcher - Artwork test";
+        const string InstanceName=@"Local\PadLauncher.ArtworkTest";
+        public const string AppName="Pad Launcher - Artwork test";
 #else
         const string InstanceName=@"Local\PadLauncher";
-        public const string AppName="Steam Pad Launcher";
+        public const string AppName="Pad Launcher";
 #endif
         [STAThread] public static void Main(string[] args) {
             string dataPath = Argument(args,"--data");
@@ -63,7 +63,7 @@ namespace PadLauncher {
             else {
 #if ARTWORK_TEST
                 string normalRoot=Storage.Root;
-                Storage.Root=System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"SteamPadLauncher.ArtworkTest.Data");
+                Storage.Root=System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"PadLauncher.ArtworkTest.Data");
                 if(!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json"))) {
                     Settings testSettings=null;
                     try { testSettings=Storage.Json().Deserialize<Settings>(File.ReadAllText(System.IO.Path.Combine(normalRoot,"settings.json"))); } catch { }
@@ -73,9 +73,9 @@ namespace PadLauncher {
 #else
                 try {
                     string local=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                    Storage.InitializePortable(System.IO.Path.Combine(local,"PadLauncher"),System.IO.Path.Combine(local,"PadLauncherBackground"));
+                    Storage.InitializePortable(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"SteamPadLauncher.Data"),System.IO.Path.Combine(local,"PadLauncher"),System.IO.Path.Combine(local,"PadLauncherBackground"));
                 } catch(Exception error) {
-                    MessageBox.Show("Could not prepare the portable data folder beside SteamPadLauncher.exe. Place the app in a writable folder.\n\n"+error.Message,"Steam Pad Launcher");
+                    MessageBox.Show("Could not prepare the portable data folder beside PadLauncher.exe. Place the app in a writable folder.\n\n"+error.Message,"Pad Launcher");
                     return;
                 }
 #endif
@@ -99,10 +99,11 @@ namespace PadLauncher {
                 return;
             }
             if (args.Contains("--quit")) { instance.ReleaseMutex(); return; }
+            try {StartupSetting.MigrateLegacy();} catch {}
             var app = new Application();
             app.DispatcherUnhandledException += (s,e) => {
                 try { Directory.CreateDirectory(Storage.Root); File.AppendAllText(System.IO.Path.Combine(Storage.Root, "error.log"), DateTime.Now + " " + e.Exception + Environment.NewLine); } catch { }
-                MessageBox.Show(e.Exception.Message, "Steam Pad Launcher"); e.Handled = true;
+                MessageBox.Show(e.Exception.Message, "Pad Launcher"); e.Handled = true;
             };
             var window = new Launcher(args.Contains("--demo") || (args.Contains("--render-preview") && !args.Contains("--live-preview")), args.Contains("--render-preview"));
             RegisteredWaitHandle showWait=null,exitWait=null;
@@ -421,7 +422,7 @@ namespace PadLauncher {
         }
         public Window CreateHelpWindow() {
             var dialog=new Window {
-                Title="Steam Pad Launcher · Settings",Width=540,Height=720,MinWidth=480,MinHeight=500,
+                Title="Pad Launcher · Settings",Width=540,Height=720,MinWidth=480,MinHeight=500,
                 WindowStartupLocation=WindowStartupLocation.CenterScreen,ResizeMode=ResizeMode.CanResize,
                 Background=new SolidColorBrush(Color.FromRgb(13,25,34)),Foreground=white,FontFamily=FontFamily,
                 ShowInTaskbar=false,Topmost=true,Icon=Icon
@@ -1159,7 +1160,7 @@ namespace PadLauncher {
             notice.MaxWidth = 1050; notice.Visibility = Visibility.Collapsed; noticeText.Foreground = white;
             noticeText.FontSize = 16; noticeText.TextWrapping = TextWrapping.Wrap; notice.Child = noticeText; scene.Children.Add(notice);
         }
-        public void ShowControls() { ShowNotice(Prompts.Help(settings) + "\nSteam Pad Launcher"); }
+        public void ShowControls() { ShowNotice(Prompts.Help(settings) + "\nPad Launcher"); }
         void ShowNotice(string text) { noticeText.Text = text; notice.Visibility = Visibility.Visible; noticeTimer.Stop(); noticeTimer.Start(); }
         async void RefreshLibrary(bool feedback = false) {
             if (demo) { if (feedback) ShowNotice("Preview library · refresh is available with your Steam library."); return; }
