@@ -59,7 +59,10 @@ namespace PadLauncher {
             var status=Label("Load sources to begin.",12,muted); status.Name="EmulatorImportStatus"; status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,0,0,8); header.Children.Add(status);
 
             var footer=new StackPanel {Margin=new Thickness(0,12,0,0)}; DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
-            var destinations=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new list")};
+            var destinations=new List<KeyValuePair<string,string>> {
+                new KeyValuePair<string,string>("source:emulator:"+preset.Id,preset.Name+" (automatic list)"),
+                new KeyValuePair<string,string>("","Create a new list")
+            };
             foreach(var list in settings.CustomLists ?? new List<CustomList>()) destinations.Add(new KeyValuePair<string,string>(list.Id,list.Name));
             var destination=new SettingsComboBox {Name="EmulatorImportDestination",ItemsSource=destinations,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
             footer.Children.Add(Label("Destination list",12,mint)); footer.Children.Add(destination);

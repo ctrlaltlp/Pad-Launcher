@@ -269,7 +269,7 @@ namespace PadLauncher {
                             if(source.Kind=="xenia-content" && !XeniaGame(path)) continue;
                             Candidate(batch,id,source,path,null,null,fallbackCore);
                         }
-                        if(scanned.UnreadableFolders>0) batch.Warnings.Add(scanned.UnreadableFolders+" folders could not be read in "+source.Name);
+                        if(scanned.UnreadableFolders>0) batch.Warnings.AddRange(scanned.ReadErrors);
                     }
                 } catch(OperationCanceledException) {throw;} catch(Exception error) {batch.Warnings.Add(source.Name+": "+error.Message);}
             }
@@ -327,9 +327,10 @@ namespace PadLauncher {
             var config=EmulatorLibrary.Config(settings,emulator);
             var working=new Library {Games=library.Games.ToList(),Collections=library.Collections.ToList()}; EmulatorLibrary.Apply(working,settings);
             var previous=(settings.CustomLists ?? new List<CustomList>()).FirstOrDefault(l => l.Id==listId);
-            if(listId!=null && previous==null) throw new ArgumentException("The destination list no longer exists.");
+            bool automatic=listId=="source:emulator:"+emulator;
+            if(listId!=null && previous==null && !automatic) throw new ArgumentException("The destination list no longer exists.");
             bool keepHidden=previous!=null && settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(previous.Id);
-            string target=CustomLists.Save(settings,working,listId,previous==null ? name : previous.Name,(previous==null ? Enumerable.Empty<string>() : previous.Games ?? new List<string>()).Concat(ids));
+            string target=automatic ? listId : CustomLists.Save(settings,working,listId,previous==null ? name : previous.Name,(previous==null ? Enumerable.Empty<string>() : previous.Games ?? new List<string>()).Concat(ids));
             if(keepHidden) settings.EnabledCollectionIds.Remove(target);
             if(settings.EmulatorImports==null) settings.EmulatorImports=new List<EmulatorImportDefinition>();
             var sourceIds=sources.Select(s => s.Id).Distinct().OrderBy(s => s,StringComparer.Ordinal).ToList();

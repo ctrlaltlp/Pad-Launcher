@@ -59,6 +59,8 @@ namespace PadLauncher {
         public string Id {get;set;}
         public string Name {get;set;}
         public List<string> Sources {get;set;}
+        public List<string> AddedGames {get;set;}
+        public List<string> ExcludedGames {get;set;}
     }
     public class CustomList {
         public string Id {get;set;}
@@ -72,6 +74,19 @@ namespace PadLauncher {
             if(CombinedCollections.Options(library,settings).Any(c => c.Id!=id && String.Equals(c.Name,name,StringComparison.CurrentCultureIgnoreCase))) throw new ArgumentException("A list with that name already exists.");
             var chosen=(games ?? Enumerable.Empty<string>()).Where(g => !String.IsNullOrWhiteSpace(g)).Distinct().ToList();
             if(chosen.Count==0) throw new ArgumentException("Select at least one game.");
+            var combined=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(list => list.Id==id);
+            if(combined!=null) {
+                var options=CombinedCollections.Options(library,settings);
+                var current=options.First(list => list.Id==id);
+                var allowedIds=new HashSet<string>(library.Games.Select(game => game.Id).Concat(current.Games));
+                if(chosen.Any(game => !allowedIds.Contains(game))) throw new ArgumentException("One of the selected games is no longer available.");
+                var sources=new HashSet<string>(combined.Sources ?? new List<string>());
+                var inherited=options.Where(list => sources.Contains(list.Id)).SelectMany(list => list.Games ?? new List<string>()).Distinct().ToList();
+                combined.AddedGames=chosen.Except(inherited).ToList();
+                combined.ExcludedGames=inherited.Except(chosen).Concat((combined.ExcludedGames ?? new List<string>()).Except(chosen)).Distinct().ToList();
+                combined.Name=name;
+                return combined.Id;
+            }
             if(settings.CustomLists==null) settings.CustomLists=new List<CustomList>();
             var existing=settings.CustomLists.FirstOrDefault(c => c.Id==id);
             if(id!=null && existing==null) throw new ArgumentException("This custom list no longer exists.");
@@ -84,6 +99,10 @@ namespace PadLauncher {
         }
         public static void Delete(Settings settings,string id) {
             if(settings.CustomLists!=null) settings.CustomLists.RemoveAll(c => c.Id==id);
+            if(settings.CombinedCollections!=null) {
+                settings.CombinedCollections.RemoveAll(list => list.Id==id);
+                foreach(var list in settings.CombinedCollections) if(list.Sources!=null) list.Sources.Remove(id);
+            }
             if(settings.EmulatorImports!=null) settings.EmulatorImports.RemoveAll(d => d.ListId==id);
             if(settings.EnabledCollectionIds!=null) {settings.EnabledCollectionIds.Remove(id); if(settings.EnabledCollectionIds.Count==0) settings.EnabledCollectionIds.Add("all");}
             if(settings.CollectionId==id) settings.CollectionId="all";
@@ -121,7 +140,7 @@ namespace PadLauncher {
             var originals=options.ToDictionary(c => c.Id);
             foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) {
                 if(combined==null || String.IsNullOrEmpty(combined.Id) || options.Any(c => c.Id==combined.Id)) continue;
-                var games=(combined.Sources ?? new List<string>()).Where(originals.ContainsKey).SelectMany(id => originals[id].Games).Distinct().ToList();
+                var games=(combined.Sources ?? new List<string>()).Where(originals.ContainsKey).SelectMany(id => originals[id].Games).Concat(combined.AddedGames ?? new List<string>()).Except(combined.ExcludedGames ?? new List<string>()).Distinct().ToList();
                 options.Add(new Collection {Id=combined.Id,Name=combined.Name,Games=games});
             }
             return options;
@@ -182,13 +201,18 @@ namespace PadLauncher {
         public bool GogEnabled {get;set;}
         public bool EaEnabled {get;set;}
         public bool RockstarEnabled {get;set;}
+        public bool SkipEmptyLists {get;set;}
+        public List<string> OverlayListOrder {get;set;}
+        public string JumpListButton {get;set;}
+        public string JumpListId {get;set;}
+        public bool RemoveMissingEmulatorGames {get;set;}
         public bool BattleNetEnabled {get;set;}
         public string RockstarLauncherPath {get;set;}
         public bool UbisoftEnabled {get;set;}
         public string UbisoftLauncherPath {get;set;}
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { LeftStickSpeed=1; RightStickSpeed=3; VerticalListSwitch="off"; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=1; RightStickSpeed=3; VerticalListSwitch="off"; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {

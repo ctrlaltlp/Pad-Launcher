@@ -19,6 +19,12 @@ class EmulatorTests {
         try {
             var settings=new Settings();
             Check(settings.Emulators==null && EmulatorLibrary.Presets.Length==13,"Existing settings need no migration and all thirteen emulators are available");
+            Check(settings.RemoveMissingEmulatorGames,"Missing-ROM cleanup is enabled by default");
+            string missingProbe=FileAt(root,"missing-check\\game.iso");
+            Check(!EmulatorLibrary.ConfirmMissingRom(missingProbe),"Existing ROM is preserved");
+            File.Delete(missingProbe);
+            Check(EmulatorLibrary.ConfirmMissingRom(missingProbe),"Missing ROM in a readable parent is confirmed");
+            Check(!EmulatorLibrary.ConfirmMissingRom(Path.Combine(root,"unavailable-folder","game.iso")),"Unavailable parent folder preserves the entry");
             string executable=FileAt(root,"Emulators and games\\test.exe");
             var paths=new Dictionary<string,string>();
             paths["duckstation"]=FileAt(root,"PS1\\Game A.chd");

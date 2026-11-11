@@ -69,6 +69,10 @@ namespace PadLauncher {
             root.Children.Add(tabs);
             var importAll=new Button {Content="Import all emulator libraries…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,12,0,0)};
             gamesPanel.Children.Add(importAll);
+            var importAllNote=Label("Configure your emulators and their game libraries first so Pad Launcher can import them.",12,muted);
+            importAllNote.TextWrapping=TextWrapping.Wrap;
+            importAllNote.Margin=new Thickness(0,8,0,0);
+            gamesPanel.Children.Add(importAllNote);
             importAll.Click+=async (s,e) => {
                 if(scanning || !ShowEmulatorMessage(dialog,"Import emulator libraries","Import all emulator libraries?",
                     "Import games from saved or detected emulator libraries. Use Scan subfolders to import from a ROM folder separately.","Import all")) return;
@@ -169,7 +173,11 @@ namespace PadLauncher {
                 var cancelScan=new Button {Content="Cancel",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed};
                 folderActions.Children.Add(browseFolder); folderActions.Children.Add(scan); folderActions.Children.Add(cancelScan);
                 browseFolder.Click+=(s,e) => {using(var folder=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the "+preset.Name+" games folder",SelectedPath=romFolder.Text}) {if(folder.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) romFolder.Text=folder.SelectedPath;}};
-                var scanStatus=Label("",12,muted); scanStatus.TextWrapping=TextWrapping.Wrap; panel.Children.Add(scanStatus);
+                var scanStatus=Label("",12,muted); scanStatus.TextWrapping=TextWrapping.Wrap; scanStatus.Margin=new Thickness(0,14,0,0); panel.Children.Add(scanStatus);
+                var scanDetails=new Expander {Header="Folders that could not be read",Foreground=muted,Margin=new Thickness(0,8,0,0),Visibility=Visibility.Collapsed};
+                var scanErrors=Label("",12,muted); scanErrors.TextWrapping=TextWrapping.Wrap;
+                scanDetails.Content=new ScrollViewer {Content=scanErrors,MaxHeight=180,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+                panel.Children.Add(scanDetails);
                 CancellationTokenSource scanCancellation=null; cancelScan.Click+=(s,e) => {if(scanCancellation!=null) scanCancellation.Cancel();};
                 EventHandler onClosed=(s,e) => {if(scanCancellation!=null) scanCancellation.Cancel();}; dialog.Closed+=onClosed;
                 // Rebuilt sections release their close handler along with their cancellation source.
@@ -183,14 +191,29 @@ namespace PadLauncher {
                         Storage.Write("settings.json",next); settings=next;
                         scanCancellation=new CancellationTokenSource(); var token=scanCancellation.Token;
                         scan.IsEnabled=false; cancelScan.Visibility=Visibility.Visible; scanStatus.Text="Scanning subfolders…";
+                        scanDetails.Visibility=Visibility.Collapsed; scanErrors.Text="";
                         string scanCore=id=="retroarch" ? defaultCore.Text : null;
                         var result=await Task.Run(() => EmulatorLibrary.Scan(id,folder,token,scanCore)); token.ThrowIfCancellationRequested();
                         var existing=new HashSet<string>((EmulatorLibrary.Config(settings,id).Games ?? new List<EmulatorGame>()).Select(g => g.Path),StringComparer.OrdinalIgnoreCase);
                         var found=result.Paths.Where(p => !existing.Contains(p)).ToList();
+                        scanErrors.Text=String.Join("\n",result.ReadErrors);
+                        scanDetails.Visibility=result.ReadErrors.Count>0 ? Visibility.Visible : Visibility.Collapsed;
                         if(found.Count==0) {scanStatus.Text="No new games found."+(result.UnreadableFolders>0 ? " Some folders could not be read." : ""); return;}
-                        var chosen=ChooseEmulatorGames(dialog,preset,found,result.UnreadableFolders);
+                        string destination,newListName;
+                        var chosen=ChooseEmulatorGames(dialog,preset,found,result.UnreadableFolders,out destination,out newListName,result.ReadErrors);
                         if(chosen!=null && chosen.Count>0) {
-                            next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.AddGames(next,id,chosen.Keys,chosen); EnableEmulatorList(next,id); CommitEmulators(next,rebuild);
+                            next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.AddGames(next,id,chosen.Keys,chosen);
+                            if(!String.IsNullOrEmpty(destination)) {
+                                var working=new Library {Games=library.Games.ToList(),Collections=library.Collections.ToList()};
+                                EmulatorLibrary.Apply(working,next);
+                                var selectedPaths=new HashSet<string>(chosen.Keys,StringComparer.OrdinalIgnoreCase);
+                                var gameIds=EmulatorLibrary.Config(next,id).Games.Where(game => selectedPaths.Contains(game.Path)).Select(game => game.Id);
+                                var destinationList=(next.CustomLists ?? new List<CustomList>()).FirstOrDefault(list => list.Id==destination);
+                                if(destination!="new" && destinationList==null) throw new InvalidOperationException("The selected list no longer exists.");
+                                CustomLists.Save(next,working,destinationList==null ? null : destinationList.Id,destinationList==null ? newListName : destinationList.Name,
+                                    (destinationList==null ? Enumerable.Empty<string>() : destinationList.Games ?? new List<string>()).Concat(gameIds));
+                            }
+                            EnableEmulatorList(next,id); CommitEmulators(next,rebuild);
                         } else scanStatus.Text="No games added.";
                     } catch(OperationCanceledException) {scanStatus.Text="Scan cancelled.";} catch(Exception error) {scanStatus.Text=error.Message;}
                     finally {scan.IsEnabled=true; cancelScan.Visibility=Visibility.Collapsed; if(scanCancellation!=null) {scanCancellation.Dispose(); scanCancellation=null;}}
@@ -232,6 +255,25 @@ namespace PadLauncher {
                 var remove=new Button {Name="EmulatorRemoveGame_"+id,Content="Remove game",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; editActions.Children.Add(saveGame); editActions.Children.Add(remove);
                 var removeAll=new Button {Content="Remove all games",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
                 editActions.Children.Add(removeAll);
+                var orphaned=new Button {Content="Add orphaned games to list…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,12,0,0)};
+                panel.Children.Add(orphaned);
+                orphaned.Click+=(s,e) => {try {
+                    var listed=new HashSet<string>((settings.CustomLists ?? new List<CustomList>()).SelectMany(list => list.Games ?? new List<string>()));
+                    var current=EmulatorLibrary.Config(settings,id);
+                    var unlisted=(current==null ? new List<EmulatorGame>() : current.Games ?? new List<EmulatorGame>()).Where(game => !listed.Contains(game.Id)).ToList();
+                    if(unlisted.Count==0) {ShowEmulatorMessage(dialog,"Orphaned games","No orphaned games", "All "+preset.Name+" games already belong to a custom list."); return;}
+                    string destination,newListName;
+                    var chosen=ChooseEmulatorGames(dialog,preset,unlisted.Select(game => game.Path).ToList(),0,out destination,out newListName,null,true);
+                    if(chosen==null || chosen.Count==0) return;
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    var selectedPaths=new HashSet<string>(chosen.Keys,StringComparer.OrdinalIgnoreCase);
+                    var gameIds=unlisted.Where(game => selectedPaths.Contains(game.Path)).Select(game => game.Id);
+                    var targetList=(next.CustomLists ?? new List<CustomList>()).FirstOrDefault(list => list.Id==destination);
+                    if(destination!="new" && targetList==null) throw new InvalidOperationException("The selected list no longer exists.");
+                    CustomLists.Save(next,library,targetList==null ? null : targetList.Id,targetList==null ? newListName : targetList.Name,
+                        (targetList==null ? Enumerable.Empty<string>() : targetList.Games ?? new List<string>()).Concat(gameIds));
+                    CommitEmulators(next,rebuild);
+                } catch(Exception error) {missing.Text=error.Message;}};
                 removeAll.Click+=(s,e) => {
                     if(!ConfirmEmulatorRemoval(dialog,"Remove "+preset.Name+" games","Remove all "+preset.Name+" games?",games.Count+" "+(games.Count==1 ? "game will" : "games will")+" be removed from Pad Launcher. Your game files stay on disk.","Remove all")) return;
                     try {
@@ -248,21 +290,42 @@ namespace PadLauncher {
         static void EnableEmulatorList(Settings settings,string id) {
             string list="source:emulator:"+id; if(settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(list)) settings.EnabledCollectionIds.Add(list);
         }
-        Dictionary<string,string> ChooseEmulatorGames(Window owner,EmulatorPreset preset,List<string> paths,int unreadableFolders) {
+        Dictionary<string,string> ChooseEmulatorGames(Window owner,EmulatorPreset preset,List<string> paths,int unreadableFolders,out string destination,out string newListName,List<string> readErrors=null,bool orphaned=false) {
             var dialog=new Window {Title="Add "+preset.Name+" games",Owner=owner,Width=760,Height=650,MinWidth=500,MinHeight=400,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,Topmost=true}; dialog.Resources.MergedDictionaries.Add(owner.Resources);
             var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
-            var heading=Label(paths.Count+" new games found",22,white); heading.Margin=new Thickness(0,0,0,12); DockPanel.SetDock(heading,Dock.Top); root.Children.Add(heading);
+            var heading=Label(paths.Count+(orphaned ? " orphaned games" : " new games found"),22,white); heading.Margin=new Thickness(0,0,0,12); DockPanel.SetDock(heading,Dock.Top); root.Children.Add(heading);
             var note=Label("Review the detected files before adding."+(preset.Id=="eden" ? " Deselect updates and DLC; only add base games." : "")+(unreadableFolders>0 ? " "+unreadableFolders+" folders could not be read." : ""),12,muted); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,12); DockPanel.SetDock(note,Dock.Top); root.Children.Add(note);
             var topActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,12)}; DockPanel.SetDock(topActions,Dock.Top); root.Children.Add(topActions);
+            if(readErrors!=null && readErrors.Count>0) {
+                var details=new Button {Content="View unreadable folders…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0)};
+                details.Click+=(s,e) => ShowEmulatorMessage(dialog,"Scan details","Folders that could not be read",String.Join("\n",readErrors));
+                topActions.Children.Add(details);
+            }
             var all=new Button {Content="Select all",Padding=new Thickness(12,7,12,7)}; var none=new Button {Content="Unselect all",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; topActions.Children.Add(all); topActions.Children.Add(none);
             var bottom=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,14,0,0)}; DockPanel.SetDock(bottom,Dock.Bottom); root.Children.Add(bottom);
             var add=new Button {Content="Add selected",Padding=new Thickness(12,7,12,7)}; var cancel=new Button {Content="Cancel",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; bottom.Children.Add(add); bottom.Children.Add(cancel);
+            var listPanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
+            DockPanel.SetDock(listPanel,Dock.Bottom); root.Children.Add(listPanel);
+            listPanel.Children.Add(Label("Add to list",12,mint));
+            var listOptions=new List<KeyValuePair<string,string>> {
+                new KeyValuePair<string,string>("","Only the "+preset.Name+" emulator list"),
+                new KeyValuePair<string,string>("new","Create a new list")
+            };
+            if(orphaned) listOptions.RemoveAt(0);
+            foreach(var list in settings.CustomLists ?? new List<CustomList>()) listOptions.Add(new KeyValuePair<string,string>(list.Id,list.Name));
+            var listPicker=new SettingsComboBox {ItemsSource=listOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
+            listPanel.Children.Add(listPicker);
+            var listName=new TextBox {Text=preset.Name+" games",MaxLength=80,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0),Visibility=Visibility.Collapsed,ToolTip="New list name"};
+            if(orphaned) listName.Visibility=Visibility.Visible;
+            listPanel.Children.Add(listName);
+            listPicker.SelectionChanged+=(s,e) => listName.Visibility=(string)listPicker.SelectedValue=="new" ? Visibility.Visible : Visibility.Collapsed;
             var entries=new StackPanel(); var boxes=new Dictionary<string,CheckBox>();
             var names=new Dictionary<string,TextBox>();
             var nameFields=new List<TextBox>();
             foreach(string path in paths) {
                 var row=new StackPanel();
-                var name=new TextBox {Text=EmulatorLibrary.SuggestedName(preset.Id,path),MaxLength=120,ToolTip="Game name",MinWidth=240};
+                var saved=orphaned ? (EmulatorLibrary.Config(settings,preset.Id).Games ?? new List<EmulatorGame>()).FirstOrDefault(game => String.Equals(game.Path,path,StringComparison.OrdinalIgnoreCase)) : null;
+                var name=new TextBox {Text=saved==null ? EmulatorLibrary.SuggestedName(preset.Id,path) : saved.Name,MaxLength=120,ToolTip="Game name",MinWidth=240,IsReadOnly=orphaned};
                 names[path]=name;
                 nameFields.Add(name);
                 EnableGameNameNavigation(name,nameFields);
@@ -276,8 +339,12 @@ namespace PadLauncher {
             }
             all.Click+=(s,e) => {foreach(var box in boxes.Values) box.IsChecked=true;}; none.Click+=(s,e) => {foreach(var box in boxes.Values) box.IsChecked=false;};
             Dictionary<string,string> result=null;
-            add.Click+=(s,e) => {result=boxes.Where(p => p.Value.IsChecked==true).ToDictionary(p => p.Key,p => names[p.Key].Text,StringComparer.OrdinalIgnoreCase); dialog.DialogResult=true;}; cancel.Click+=(s,e) => dialog.Close();
-            root.Children.Add(new ScrollViewer {Content=entries,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}); dialog.ShowDialog(); return result;
+            add.Click+=(s,e) => {
+                if((string)listPicker.SelectedValue=="new" && String.IsNullOrWhiteSpace(listName.Text)) {listName.Focus(); return;}
+                result=boxes.Where(p => p.Value.IsChecked==true).ToDictionary(p => p.Key,p => names[p.Key].Text,StringComparer.OrdinalIgnoreCase); dialog.DialogResult=true;
+            }; cancel.Click+=(s,e) => dialog.Close();
+            root.Children.Add(new ScrollViewer {Content=entries,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+            dialog.ShowDialog(); destination=listPicker.SelectedValue as string; newListName=listName.Text.Trim(); return result;
         }
     }
 }

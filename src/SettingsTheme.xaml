@@ -45,6 +45,20 @@
       <Border x:Name="Box" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/></Border>
       <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#A3F0CD"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#A3F0CD"/></Trigger><Trigger Property="IsPressed" Value="True"><Setter TargetName="Box" Property="Opacity" Value="0.7"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>
+    <Style.Triggers>
+      <Trigger Property="Content" Value="Save changes">
+        <Setter Property="Background" Value="#A3F0CD"/>
+        <Setter Property="Foreground" Value="#0D1922"/>
+        <Setter Property="BorderBrush" Value="#A3F0CD"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+      </Trigger>
+      <Trigger Property="Content" Value="Save arguments">
+        <Setter Property="Background" Value="#A3F0CD"/>
+        <Setter Property="Foreground" Value="#0D1922"/>
+        <Setter Property="BorderBrush" Value="#A3F0CD"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+      </Trigger>
+    </Style.Triggers>
   </Style>
   <Style TargetType="CheckBox">
     <Setter Property="Foreground" Value="#ECF3F2"/><Setter Property="Cursor" Value="Hand"/>

@@ -35,6 +35,7 @@ class EmulatorUiTests {
             if(stage==2 && commit!=null && commit.IsEnabled) {
                 stage=3;
                 if(!update) {
+                    ((ComboBox)Find(wizardContent,"EmulatorImportDestination")).SelectedValue="";
                     ((TextBox)Find(wizardContent,"EmulatorImportListName")).Text="Imported test list";
                     wizardContent.UpdateLayout(); var preview=new RenderTargetBitmap((int)wizardContent.ActualWidth+48,(int)wizardContent.ActualHeight+48,96,96,PixelFormats.Pbgra32);
                     preview.Render(wizardContent); var png=new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(preview)); using(var output=File.Create(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"Emulator-import-preview.png"))) png.Save(output);

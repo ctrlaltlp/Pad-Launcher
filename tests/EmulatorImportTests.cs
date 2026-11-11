@@ -107,7 +107,15 @@ class EmulatorImportTests {
             var edenSources=EmulatorImport.Sources("eden",eden,edenIni);
             Check(edenSources.Count==1 && EmulatorImport.Read("eden",eden,edenSources,null,token).Games.Count==1,"Eden reads Qt arrays and excludes logical NAND sources");
             string psp=Write(root,"PPSSPP\\PPSSPPWindows64.exe"),pspRoot=Path.GetDirectoryName(psp),pspGames=Path.Combine(root,"PSP games"),pspIso=Write(pspGames,"Game.iso");
-            Write(pspRoot,"memstick\\PSP\\GAME\\Game2\\EBOOT.PBP");
+            string pspPbp=Write(pspRoot,"memstick\\PSP\\GAME\\Game2\\EBOOT.PBP");
+            string pspSfo=Path.Combine(root,"pbp-param.sfo"); Sfo(pspSfo,"PSP game","MG");
+            byte[] pspMetadata=File.ReadAllBytes(pspSfo);
+            using(var writer=new BinaryWriter(File.Create(pspPbp))) {
+                writer.Write(0x50425000u); writer.Write(0x10000u);
+                writer.Write(40u);
+                for(int offset=0;offset<7;offset++) writer.Write((uint)(40+pspMetadata.Length));
+                writer.Write(pspMetadata);
+            }
             string pspCfg=Write(pspRoot,"memstick\\PSP\\SYSTEM\\ppsspp.ini","[PinnedPaths]\nPath0="+pspGames+"\n[Recent]\nFileName0="+pspIso+"\nFileName1=https://example.invalid/game.iso");
             var pspSources=EmulatorImport.Sources("ppsspp",psp,pspCfg);
             Check(pspSources.Count==3 && EmulatorImport.Read("ppsspp",psp,pspSources,null,token).Games.Count==3,"PPSSPP reads pinned/recent paths and installed PSP/GAME without fetching remote URLs");

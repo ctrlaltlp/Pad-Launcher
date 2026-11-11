@@ -48,8 +48,8 @@ class ListTransitionTests {
             Check(!window.ListTransitionActive && viewport.Children.Count==1,"Dismissing the overlay removes the transition layer");
             window.ShowOverlay(); Check(!window.ListTransitionActive && live.Opacity==1 && translation.X==0 && translation.Y==0,"Reopening never resumes a stale transition");
             window.SetAvailableCollections(new[]{"all","source:epic"}); Key(window,System.Windows.Input.Key.PageDown);
-            Check(carousel.Children.Count==0 && ((TextBlock)Find(content,"SelectedGameTitle")).Text=="No installed games in this list","Switching to an empty list updates its message immediately");
-            Pump(260); Check(viewport.Children.Count==1 && !window.ListTransitionActive,"Empty-list transitions also clean up");
+            Check(carousel.Children.Count>0 && label.Text!="Epic Games Store","Empty lists are skipped by default");
+            Pump(260); Check(viewport.Children.Count==1 && !window.ListTransitionActive,"Skipping an empty list leaves no transition layer");
             Console.WriteLine(checks+" list transition checks passed");
         } finally {if(window!=null) window.ExitApp(); if(Directory.Exists(root)) Directory.Delete(root,true);}
     }

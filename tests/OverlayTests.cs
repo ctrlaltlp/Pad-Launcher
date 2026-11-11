@@ -228,7 +228,7 @@ public static class OverlayTests {
             var helpTabs=(TabControl)FindElement(helpRoot,"HelpSettingsTabs");
             var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[0]).Content;
             var settingsPage=(ScrollViewer)((TabItem)helpTabs.Items[1]).Content;
-            Check(helpTabs.Items.Count==7 && (string)((TabItem)helpTabs.Items[0]).Header=="Controls" && (string)((TabItem)helpTabs.Items[1]).Header=="Appearance" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Integrations" && (string)((TabItem)helpTabs.Items[6]).Header=="System","Settings tabs keep System last");
+            Check(helpTabs.Items.Count==7 && (string)((TabItem)helpTabs.Items[0]).Header=="Controls" && (string)((TabItem)helpTabs.Items[1]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Integrations" && (string)((TabItem)helpTabs.Items[6]).Header=="System","Settings tabs keep System last");
             Check(helpPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto && settingsPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto,"Both tabs show their slim scrollbar only when scrolling is needed");
             var systemContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[6]).Content).Content;
             var integrationsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[3]).Content).Content;
@@ -238,10 +238,12 @@ public static class OverlayTests {
             Check(((StackPanel)integrationsContents).Children.OfType<Expander>().Count()==7 && ((StackPanel)integrationsContents).Children.OfType<Expander>().All(section => !section.IsExpanded),"Each launcher has its own initially collapsed integration section");
             var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[2]).Content).Content;
             Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
-            Check((string)((Expander)FindElement(listsContents,"CombinedListsSection")).Header=="Combine Lists","Combined list editor has its requested heading");
             var customSection=(Expander)FindElement(listsContents,"CustomListsSection");
             Check(customSection!=null && (string)customSection.Header=="Custom lists","Individual game lists have a separate editor in Lists");
             customSection.IsExpanded=true; helpTabs.SelectedIndex=2;
+            var customTabs=(TabControl)customSection.Content;
+            Check(customTabs.Items.Count==2 && (string)((TabItem)customTabs.Items[0]).Header=="Combine lists" && (string)((TabItem)customTabs.Items[1]).Header=="Add individual games","Custom lists contains both editing modes");
+            customTabs.SelectedIndex=1;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             Check(FindElement((FrameworkElement)customSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)customSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)customSection.Content,"SaveCustomList")!=null,"Custom list picker, name and save action are available");
             helpTabs.SelectedIndex=1;

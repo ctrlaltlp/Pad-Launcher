@@ -32,6 +32,11 @@ class CustomListTests {
         CustomLists.Delete(settings,id);
         Check(settings.CollectionId=="all" && settings.DefaultCollectionId=="remember" && settings.EnabledCollectionIds.SequenceEqual(new[]{"all"}),"Delete repairs selection and default");
         Check(CombinedCollections.Options(library,settings).Single(c => c.Id==combined).Games.SequenceEqual(new[]{"1"}),"Combined list handles deleted source");
+        CustomLists.Save(settings,library,combined,"Together",new[]{"epic:2"});
+        Check(CombinedCollections.Options(library,settings).Single(c => c.Id==combined).Games.SequenceEqual(new[]{"epic:2"}),"Combined list supports individual additions and removals");
+        Check(settings.CombinedCollections.Single().Sources.Contains("source:steam"),"Individual editing preserves combined source links");
+        library.Games.Add(new Game {Id="new-steam",Source="steam"});
+        Check(CombinedCollections.Options(library,settings).Single(c => c.Id==combined).Games.Contains("new-steam"),"Combined sources continue updating after individual editing");
         Console.WriteLine(checks+" custom list checks passed");
     }
 }

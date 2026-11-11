@@ -18,8 +18,10 @@ namespace PadLauncher {
     public class EmulatorScan {
         public List<string> Paths=new List<string>();
         public int UnreadableFolders;
+        public List<string> ReadErrors=new List<string>();
     }
     public class EmulatorConfig {
+        public string ListName {get;set;}
         public string Arguments {get;set;}
         public string Id {get;set;}
         public string Path {get;set;}
@@ -37,6 +39,14 @@ namespace PadLauncher {
         public string Filter {get {return Name+" games|"+String.Join(";",Extensions.Split(';').Where(e => e.Length>0).Select(e => "*"+e))+"|All files|*.*";}}
     }
     public static class EmulatorLibrary {
+        static EmulatorLibrary() {
+            var context=typeof(object).Assembly.GetType("System.AppContext");
+            var setSwitch=context==null ? null : context.GetMethod("SetSwitch",new[]{typeof(string),typeof(bool)});
+            if(setSwitch!=null) {
+                setSwitch.Invoke(null,new object[]{"Switch.System.IO.UseLegacyPathHandling",false});
+                setSwitch.Invoke(null,new object[]{"Switch.System.IO.BlockLongPaths",false});
+            }
+        }
         public static readonly EmulatorPreset[] Presets={
             new EmulatorPreset {Id="duckstation",Name="DuckStation",System="PlayStation",Extensions=".cue;.chd;.iso;.bin;.img;.pbp;.m3u;.ccd;.mds",Hint="For multi-track discs, choose the CUE file; for multi-disc games, choose an M3U playlist."},
             new EmulatorPreset {Id="xenia",Name="Xenia",System="Xbox 360",Extensions=".iso;.xex;.zar;.live;.con;.pirs;",Hint="Choose an ISO, extracted game's default.xex, or an extensionless Xbox 360 content file. Xenia Canary executables are supported."},
@@ -206,6 +216,19 @@ namespace PadLauncher {
             string core=id=="retroarch" ? Core(corePath ?? game.CorePath ?? config.CorePath) : null;
             game.Name=name; game.Path=normalized; game.CorePath=core; if(arguments!=null) game.Arguments=arguments.Trim();
         }
+        public static bool ConfirmMissingRom(string path) {
+            try {
+                if(String.IsNullOrWhiteSpace(path)) return false;
+                path=Path.GetFullPath(path);
+                string parent=Path.GetDirectoryName(path);
+                if(String.IsNullOrEmpty(parent)) return false;
+                // Enumerating the parent distinguishes absence from an inaccessible drive or folder.
+                if(Directory.GetFileSystemEntries(parent).Any(entry => String.Equals(entry,path,StringComparison.OrdinalIgnoreCase))) return false;
+                try {File.GetAttributes(path); return false;}
+                catch(FileNotFoundException) {return true;}
+            } catch(IOException) {} catch(UnauthorizedAccessException) {} catch(System.Security.SecurityException) {} catch(ArgumentException) {}
+            return false;
+        }
         public static void RemoveGame(Settings settings,string id,string gameId) {
             var config=Config(settings,id);
             if(config==null || config.Games==null || config.Games.RemoveAll(g => g.Id==gameId)==0) return;
@@ -223,7 +246,7 @@ namespace PadLauncher {
                     if(entry==null || String.IsNullOrEmpty(entry.Id) || !existingIds.Add(entry.Id)) continue;
                     library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="emulator",EmulatorId=preset.Id,LaunchId=entry.Path,Arguments=entry.Arguments});
                 }
-                library.Collections.Add(new Collection {Id="source:emulator:"+preset.Id,Source="emulator",Name=preset.Name,Games=library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==preset.Id).Select(g => g.Id).ToList()});
+                library.Collections.Add(new Collection {Id="source:emulator:"+preset.Id,Source="emulator",Name=String.IsNullOrWhiteSpace(config.ListName) ? preset.Name : config.ListName,Games=library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==preset.Id).Select(g => g.Id).ToList()});
             }
         }
         public static bool Missing(Game game,Settings settings) {
@@ -234,7 +257,12 @@ namespace PadLauncher {
         public static string SfoValue(string path,string field) {
             try {
                 if(path==null || !File.Exists(path) || new FileInfo(path).Length>1024*1024) return null;
-                byte[] data=File.ReadAllBytes(path); if(data.Length<20 || BitConverter.ToUInt32(data,0)!=0x46535000) return null;
+                return SfoDataValue(File.ReadAllBytes(path),field);
+            } catch {} return null;
+        }
+        static string SfoDataValue(byte[] data,string field) {
+            try {
+                if(data.Length<20 || BitConverter.ToUInt32(data,0)!=0x46535000) return null;
                 uint keys=BitConverter.ToUInt32(data,8),values=BitConverter.ToUInt32(data,12),count=BitConverter.ToUInt32(data,16);
                 if(count>(data.Length-20)/16) return null;
                 for(int index=0;index<count;index++) {
@@ -244,6 +272,29 @@ namespace PadLauncher {
                     return Encoding.UTF8.GetString(data,(int)value,(int)length).TrimEnd('\0').Replace("\r"," ").Replace("\n"," ").Trim();
                 }
             } catch {} return null;
+        }
+        static string PbpTitle(string path) {
+            try {
+                using(var stream=File.OpenRead(path))
+                using(var reader=new BinaryReader(stream)) {
+                    if(stream.Length<40 || reader.ReadUInt32()!=0x50425000) return null;
+                    reader.ReadUInt32();
+                    uint start=reader.ReadUInt32(),end=reader.ReadUInt32();
+                    if(start<40 || end<=start || end>stream.Length || end-start>1024*1024) return null;
+                    stream.Position=start;
+                    return SfoDataValue(reader.ReadBytes((int)(end-start)),"TITLE");
+                }
+            } catch(IOException) {} catch(UnauthorizedAccessException) {}
+            return null;
+        }
+        static bool IsPspScanCandidate(string path,string extension) {
+            if(extension==".elf" || extension==".prx") return false;
+            if(extension!=".pbp") return true;
+            if(!Path.GetFileName(path).Equals("EBOOT.PBP",StringComparison.OrdinalIgnoreCase)) return false;
+            string folder=Path.GetFileName(Path.GetDirectoryName(path));
+            if(folder.Contains("%")) return false;
+            string title=PbpTitle(path);
+            return !String.IsNullOrEmpty(title) && !Regex.IsMatch(title,@"^(?:DEVHOOK|Fastloader)(?:\b|\d)",RegexOptions.IgnoreCase);
         }
         public static string Folder(string folder) {
             if(String.IsNullOrWhiteSpace(folder)) throw new ArgumentException("Choose a ROM folder first.");
@@ -263,11 +314,13 @@ namespace PadLauncher {
                         token.ThrowIfCancellationRequested();
                         string extension=System.IO.Path.GetExtension(file).ToLowerInvariant();
                         if(!extensions.Contains(extension)) continue;
+                        if(id=="ppsspp" && !IsPspScanCandidate(file,extension)) continue;
                         if((id=="rpcs3" || id=="vita3k" || id=="shadps4") && !System.IO.Path.GetFileName(file).Equals("eboot.bin",StringComparison.OrdinalIgnoreCase)) continue;
-                        if(id=="eden" && !new[]{".xci",".nsp",".nro"}.Contains(extension)) continue;
+                        if(id=="eden" && !IsEdenScanCandidate(file,extension)) continue;
                         if((File.GetAttributes(file)&FileAttributes.ReparsePoint)==0) files.Add(file);
                     }
-                } catch(UnauthorizedAccessException) {result.UnreadableFolders++;} catch(IOException) {result.UnreadableFolders++;}
+                } catch(UnauthorizedAccessException error) {result.UnreadableFolders++; result.ReadErrors.Add(current+" — "+error.Message);}
+                catch(IOException error) {result.UnreadableFolders++; result.ReadErrors.Add(current+" — "+error.Message);}
             }
             var excluded=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if(id=="duckstation" || id=="retroarch") foreach(string file in files.Where(f => new[]{".cue",".m3u"}.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))) {
