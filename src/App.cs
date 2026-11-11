@@ -747,6 +747,8 @@ namespace PadLauncher {
             foreach(var item in settings.CustomLists ?? new List<CustomList>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
             foreach(var item in settings.CombinedCollections ?? new List<CombinedCollection>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
             var customListPicker=new SettingsComboBox {Name="CustomListPicker",ItemsSource=customListOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
+            var individualNote=Label("Create a list or select one to add and remove individual games.",12,muted);
+            individualNote.TextWrapping=TextWrapping.Wrap; individualNote.Margin=new Thickness(0,0,0,8); customListPanel.Children.Add(individualNote);
             customListPanel.Children.Add(customListPicker);
             var customNameCaption=Label("List name",12,muted); customListPanel.Children.Add(customNameCaption);
             var customListName=new TextBox {Name="CustomListName",Margin=new Thickness(0,8,0,12),Padding=new Thickness(8),MaxLength=80}; customListPanel.Children.Add(customListName);
@@ -808,7 +810,7 @@ namespace PadLauncher {
             } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
             customListActions.Children.Add(saveCustomList); customListActions.Children.Add(deleteCustomList); customListPanel.Children.Add(customListActions);
             listsLayout.Children.Add(customListSection);
-            var editLists=new Expander {Header="Rename or Duplicate lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listEditorExpanded};
+            var editLists=new Expander {Header="Edits lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listEditorExpanded};
             editLists.Content=CreateListEditor(dialog,rebuild);
             editLists.Expanded+=(sender,args) => listEditorExpanded=true;
             editLists.Collapsed+=(sender,args) => listEditorExpanded=false;
@@ -816,6 +818,8 @@ namespace PadLauncher {
             var combinedOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new list")};
             foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) {var list=CollectionOptions().FirstOrDefault(c => c.Id==combined.Id); combinedOptions.Add(new KeyValuePair<string,string>(combined.Id,list==null ? combined.Name : ListLabel(list)));}
             var combinedPicker=new SettingsComboBox {ItemsSource=combinedOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
+            var combineNote=Label("Combine source lists into one list that updates with its sources.",12,muted);
+            combineNote.TextWrapping=TextWrapping.Wrap; combineNote.Margin=new Thickness(0,0,0,8); combinePanel.Children.Add(combineNote);
             combinePanel.Children.Add(combinedPicker);
             var combinedName=new TextBox {Margin=new Thickness(0,10,0,10),Padding=new Thickness(8),MaxLength=80};
             var combinedNameCaption=Label("List name",12,muted); combinedNameCaption.Margin=new Thickness(0,14,0,0);
@@ -1422,6 +1426,8 @@ namespace PadLauncher {
             if(lists.Count==0) {
                 panel.Children.Add(Label("No custom, imported, or combined lists to edit.",14,white));
             } else {
+                var editNote=Label("Rename or duplicate a list, or delete a custom or combined list.",12,muted);
+                editNote.TextWrapping=TextWrapping.Wrap; editNote.Margin=new Thickness(0,0,0,8); panel.Children.Add(editNote);
                 panel.Children.Add(Label("List",12,mint));
                 var picker=new SettingsComboBox {ItemsSource=lists,DisplayMemberPath="Name",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,6,0,12)};
                 panel.Children.Add(picker);
