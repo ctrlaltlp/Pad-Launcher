@@ -4,9 +4,9 @@
 
 A transparent Windows overlay for Steam with an angled artwork carousel. Shows your games, the current collection and optionally a game title. It reads your existing Steam library, non-Steam shortcuts, custom artwork and collections.
 
-Integrations: **Steam**, **Epic Games Store**, **GOG Galaxy**, **EA App**, manual **Playnite** imports, and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
+Integrations: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, manual **Playnite** imports, and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
 
-Demo: https://www.youtube.com/watch?v=5UMPjjPBHiU
+Demo(outdated): https://www.youtube.com/watch?v=5UMPjjPBHiU
 
 ## Usage
 
