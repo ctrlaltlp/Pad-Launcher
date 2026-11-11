@@ -33,7 +33,20 @@ namespace PadLauncher {
                 try {var ea=EaLibrary.Scan(); result.Games.AddRange(ea); if(ea.Count>0) result.Collections.Add(new Collection {Id="source:ea",Name="EA App",Games=ea.Select(g => g.Id).ToList()});}
                 catch(Exception error) {result.Warnings.Add("EA library: "+error.Message);}
             }
+            if(settings.UbisoftEnabled) {
+                try {var ubisoft=UbisoftLibrary.Scan(); result.Games.AddRange(ubisoft); if(ubisoft.Count>0) result.Collections.Add(new Collection {Id="source:ubisoft",Name="Ubisoft Connect",Games=ubisoft.Select(g => g.Id).ToList()});}
+                catch(Exception error) {result.Warnings.Add("Ubisoft library: "+error.Message);}
+            }
+            if(settings.RockstarEnabled) {
+                try {var games=RockstarLibrary.Scan(); result.Games.AddRange(games); if(games.Count>0) result.Collections.Add(new Collection {Id="source:rockstar",Name="Rockstar Games Launcher",Games=games.Select(g => g.Id).ToList()});}
+                catch(Exception error) {result.Warnings.Add("Rockstar library: "+error.Message);}
+            }
+            if(settings.BattleNetEnabled) {
+                try {var games=BattleNetLibrary.Scan(); result.Games.AddRange(games); if(games.Count>0) result.Collections.Add(new Collection {Id="source:battlenet",Name="Battle.net",Games=games.Select(g => g.Id).ToList()});}
+                catch(Exception error) {result.Warnings.Add("Battle.net library: "+error.Message);}
+            }
             CustomGameLibrary.Apply(result,settings);
+            EmulatorLibrary.Apply(result,settings);
             if(settings.ReplacedGameIds!=null) result.Games.RemoveAll(g => settings.ReplacedGameIds.Contains(g.Id));
             foreach(var game in result.Games) ArtworkService.ApplyCached(game,settings);
             result.Games=result.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -42,6 +55,9 @@ namespace PadLauncher {
         }
     }
     public class CustomGame {
+        public string SteamShortcutKey {get;set;}
+        public string SteamLaunchId {get;set;}
+        public bool LaunchViaSteam {get;set;}
         public string PlayniteId {get;set;}
         public string PlayniteActionInfo {get;set;}
         public string Id {get;set;}
@@ -56,11 +72,16 @@ namespace PadLauncher {
         public static string Save(Settings settings,CustomGame game) {
             game.Name=(game.Name ?? "").Trim();
             if(game.Name.Length==0 || game.Name.Length>120) throw new ArgumentException("Enter a game name of 1–120 characters.");
-            game.Target=Path.GetFullPath(Environment.ExpandEnvironmentVariables((game.Target ?? "").Trim().Trim('"')));
-            string extension=Path.GetExtension(game.Target).ToLowerInvariant();
-            if(!new[]{".exe",".lnk",".bat",".cmd"}.Contains(extension) || !File.Exists(game.Target)) throw new ArgumentException("Choose an existing .exe, .lnk, .bat, or .cmd file.");
+            if(game.LaunchViaSteam) {
+                ulong steamId; if(!UInt64.TryParse(game.SteamLaunchId,out steamId) || steamId==0) throw new ArgumentException("This entry has no valid Steam launch ID.");
+            } else {
+                if(!String.IsNullOrEmpty(game.SteamLaunchId) && (game.Arguments ?? "").IndexOf("%command%",StringComparison.OrdinalIgnoreCase)>=0) throw new ArgumentException("These Steam launch options use a wrapper. Keep launch through Steam enabled, or edit the arguments for direct launch.");
+                game.Target=Path.GetFullPath(Environment.ExpandEnvironmentVariables((game.Target ?? "").Trim().Trim('"')));
+                string extension=Path.GetExtension(game.Target).ToLowerInvariant();
+                if(!new[]{".exe",".lnk",".bat",".cmd"}.Contains(extension) || !File.Exists(game.Target)) throw new ArgumentException("Choose an existing .exe, .lnk, .bat, or .cmd file.");
+            }
             game.WorkingDirectory=(game.WorkingDirectory ?? "").Trim().Trim('"');
-            if(game.WorkingDirectory.Length>0) {
+            if(game.WorkingDirectory.Length>0 && !game.LaunchViaSteam) {
                 game.WorkingDirectory=Path.GetFullPath(Environment.ExpandEnvironmentVariables(game.WorkingDirectory));
                 if(!Directory.Exists(game.WorkingDirectory)) throw new ArgumentException("The working folder does not exist.");
             }
@@ -73,6 +94,8 @@ namespace PadLauncher {
             }
             if(settings.CustomGames==null) settings.CustomGames=new List<CustomGame>();
             var previous=settings.CustomGames.FirstOrDefault(g => g.Id==game.Id);
+            if(previous!=null && String.IsNullOrEmpty(game.SteamShortcutKey)) game.SteamShortcutKey=previous.SteamShortcutKey;
+            if(previous!=null && String.IsNullOrEmpty(game.SteamLaunchId)) game.SteamLaunchId=previous.SteamLaunchId;
             if(previous!=null && String.IsNullOrEmpty(game.PlayniteId)) game.PlayniteId=previous.PlayniteId;
             if(previous!=null && String.IsNullOrEmpty(game.PlayniteActionInfo)) game.PlayniteActionInfo=previous.PlayniteActionInfo;
             if(!String.IsNullOrEmpty(game.Id) && !settings.CustomGames.Any(g => g.Id==game.Id)) throw new ArgumentException("This custom game no longer exists.");
@@ -83,7 +106,7 @@ namespace PadLauncher {
         public static void Apply(Library library,Settings settings) {
             library.Games.RemoveAll(g => g.Source=="custom"); library.Collections.RemoveAll(c => c.Id=="source:custom");
             foreach(var entry in settings.CustomGames ?? new List<CustomGame>()) {
-                library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="custom",LaunchId=entry.Target,Arguments=entry.Arguments,WorkingDirectory=entry.WorkingDirectory,ImportedActionInfo=entry.PlayniteActionInfo,Art=ArtworkPath(entry.Artwork)});
+                library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="custom",LaunchId=entry.Target,SteamLaunchId=entry.LaunchViaSteam ? entry.SteamLaunchId : null,Arguments=entry.Arguments,WorkingDirectory=entry.WorkingDirectory,ImportedActionInfo=entry.PlayniteActionInfo,Art=ArtworkPath(entry.Artwork)});
             }
             var games=library.Games.Where(g => g.Source=="custom").Select(g => g.Id).ToList();
             if(games.Count>0) library.Collections.Add(new Collection {Id="source:custom",Name="Custom games",Games=games});
@@ -155,6 +178,10 @@ namespace PadLauncher {
     }
     public static class GameLaunch {
         public static System.Diagnostics.ProcessStartInfo StartInfo(Game game,Settings settings=null) {
+            if(game.Source=="emulator") return EmulatorLibrary.StartInfo(game,settings);
+            if(game.Source=="rockstar") return RockstarLibrary.StartInfo(game,settings==null ? null : settings.RockstarLauncherPath);
+            if(game.Source=="battlenet") return BattleNetLibrary.StartInfo(game);
+            if(game.Source=="ubisoft") return UbisoftLibrary.StartInfo(game,settings==null ? null : settings.UbisoftLauncherPath);
             if(game.Source=="ea") return EaLibrary.StartInfo(game,settings==null ? null : settings.EaLauncherPath);
             if(game.Source=="epic") {
                 string uri=UriFor(game),path=settings==null || String.IsNullOrWhiteSpace(settings.EpicLauncherPath) ? EpicLibrary.DetectLauncher() : EpicLibrary.ValidateLauncher(settings.EpicLauncherPath);
@@ -163,12 +190,17 @@ namespace PadLauncher {
             }
             if(game.Source=="gog") return GogLibrary.StartInfo(game);
             if(game.Source!="custom") return new System.Diagnostics.ProcessStartInfo(UriFor(game)) {UseShellExecute=true};
+            if(!String.IsNullOrEmpty(game.SteamLaunchId)) {
+                ulong steamId; if(!UInt64.TryParse(game.SteamLaunchId,out steamId) || steamId==0) throw new InvalidOperationException("Invalid Steam launch ID.");
+                return new System.Diagnostics.ProcessStartInfo("steam://rungameid/"+game.SteamLaunchId) {UseShellExecute=true};
+            }
             if(!File.Exists(game.LaunchId)) throw new FileNotFoundException("The custom game's file could not be found. Edit its path in Custom games.",game.LaunchId);
             string folder=String.IsNullOrWhiteSpace(game.WorkingDirectory) ? Path.GetDirectoryName(game.LaunchId) : game.WorkingDirectory;
             if(!Directory.Exists(folder)) throw new DirectoryNotFoundException("The custom game's working folder could not be found.");
             return new System.Diagnostics.ProcessStartInfo(game.LaunchId,game.Arguments ?? "") {WorkingDirectory=folder,UseShellExecute=true};
         }
         public static string UriFor(Game game) {
+            if(game.Source=="ubisoft") return UbisoftLibrary.UriFor(game);
             if(game.Source=="ea") return EaLibrary.UriFor(game);
             if(game.Source=="epic") {
                 string[] ids=(game.LaunchId ?? "").Split(':');

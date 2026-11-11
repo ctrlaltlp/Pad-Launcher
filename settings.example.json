@@ -1,5 +1,7 @@
 {
   "ButtonPrompts": "PlayStation",
+  "LeftStickSpeed": 1,
+  "RightStickSpeed": 3,
   "ShowGameTitle": true,
   "ShowCollectionName": true,
   "OpenMonitor": "cursor",
@@ -17,7 +19,15 @@
   "GogEnabled": true,
   "EaEnabled": true,
   "EaLauncherPath": null,
+  "UbisoftEnabled": true,
+  "UbisoftLauncherPath": null,
   "SteamGridDbEnabled": true,
   "CollectionId": "all",
-  "SelectedId": null
+  "SelectedId": null,
+  "RockstarEnabled": true,
+  "RockstarLauncherPath": null,
+  "CustomLists": [],
+  "Emulators": [],
+  "VerticalListSwitch": "off",
+  "EmulatorImports": []
 }

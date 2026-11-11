@@ -28,7 +28,7 @@ namespace PadLauncher {
             ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
             var request=(HttpWebRequest)WebRequest.Create(url);
             request.Timeout=12000; request.ReadWriteTimeout=12000; request.AllowAutoRedirect=false;
-            request.UserAgent="PadLauncher/0.3.1";
+            request.UserAgent="PadLauncher/0.3.5";
             if(!String.IsNullOrEmpty(key)) {
                 if(new Uri(url).Host!="www.steamgriddb.com") throw new InvalidOperationException("Invalid API host.");
                 request.Headers["Authorization"]="Bearer "+key;
@@ -61,7 +61,7 @@ namespace PadLauncher {
     public static class ArtworkService {
         public static Func<string,string,CancellationToken,byte[]> Fetch=ArtworkNetwork.Get;
         static string Cache(Game game) {
-            using(var hash=SHA256.Create()) return Path.Combine(Storage.Root,"artwork",BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(game.Id+"|"+game.ArtworkUrl+(game.Source=="custom" ? "|"+game.Name : "")))).Replace("-","")+".img");
+            using(var hash=SHA256.Create()) return Path.Combine(Storage.Root,"artwork",BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(game.Id+"|"+game.ArtworkUrl+((game.Source=="custom" || game.Source=="emulator") ? "|"+game.Name : "")))).Replace("-","")+".img");
         }
         public static bool Portrait(string path) {
             try {using(var image=System.Drawing.Image.FromFile(path)) return EpicLibrary.SuitablePortrait(image.Width,image.Height);} catch {return false;}
@@ -132,6 +132,24 @@ namespace PadLauncher {
             var matches=candidates.Where(v => Normalize(v.Name)==Normalize(name)).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
             return matches.Length==1 ? matches[0].Id : 0;
         }
+        static string EmulatorArtworkTitle(string name) {
+            string title=Regex.Replace(name ?? "",@"\s*(?:\((?:disc|disk|cd)\s*\d+\)|\b(?:disc|disk|cd)\s*\d+)\s*(?=\(|$)"," ",RegexOptions.IgnoreCase).Trim();
+            switch(Normalize(title)) {
+                case "crashbandicoot1": return "Crash Bandicoot";
+                case "crashbandicoot2": return "Crash Bandicoot 2: Cortex Strikes Back";
+                case "crashbandicoot3": return "Crash Bandicoot: Warped";
+                case "reddeadredemptiongoty": return "Red Dead Redemption";
+                case "reddeadredemptiongotyundeadnightmareandonline": return "Red Dead Redemption: Undead Nightmare";
+                case "icoandshadowofthecolossuscolelction": return "Ico and Shadow of the Colossus Collection";
+                default: return title;
+            }
+        }
+        static int MatchGame(Game game,string key,CancellationToken token) {
+            int match=ExactMatch(game.Name,SearchGames(game.Name,key,token));
+            if(match!=0 || game.Source!="emulator") return match;
+            string title=EmulatorArtworkTitle(game.Name);
+            return Normalize(title)==Normalize(game.Name) ? 0 : ExactMatch(title,SearchGames(title,key,token));
+        }
         public static List<ArtworkGameMatch> SearchGames(string name,string key,CancellationToken token) {
             string query=SearchQuery(name); if(query.Length==0) return new List<ArtworkGameMatch>();
             var queries=new List<string> {query};
@@ -149,6 +167,10 @@ namespace PadLauncher {
         }
         public static List<ArtworkGameMatch> SearchForPicker(Game game,string query,string key,CancellationToken token) {
             var candidates=SearchGames(query,key,token);
+            if(game.Source=="emulator") {
+                string title=EmulatorArtworkTitle(query);
+                if(Normalize(title)!=Normalize(query)) candidates.AddRange(SearchGames(title,key,token));
+            }
             string normalized=Normalize(query);
             if(normalized.Length==0) return candidates;
             var known=new List<ArtworkGameMatch>();
@@ -176,13 +198,18 @@ namespace PadLauncher {
             if(matchedId>0) route="grids/game/"+matchedId;
             else if((String.IsNullOrEmpty(game.Source) || game.Source=="steam") && !game.Shortcut && UInt64.TryParse(game.Id,out id)) route="grids/steam/"+id;
             else {
-                int match=ExactMatch(game.Name,SearchGames(game.Name,key,token));
+                int match=MatchGame(game,key,token);
                 if(match==0) return new List<ArtworkChoice>();
                 route="grids/game/"+match;
             }
-            return Api(route+"?dimensions=600x900&types=static&nsfw=false&humor=false",key,token)
+            var grids=Api(route+"?dimensions=600x900&types=static&nsfw=false&humor=false",key,token)
                 .Where(v => ArtworkNetwork.AllowedImageUrl(Vdf.Str(v,"url")))
-                .Take(18).Select(v => new ArtworkChoice {Url=Vdf.Str(v,"url"),Thumbnail=ArtworkNetwork.AllowedImageUrl(Vdf.Str(v,"thumb")) ? Vdf.Str(v,"thumb") : Vdf.Str(v,"url")}).ToList();
+                .ToList();
+            if(grids.Count==0 && game.Source=="emulator")
+                grids=Api(route+"?types=static&nsfw=false&humor=false",key,token)
+                    .Where(v => ArtworkNetwork.AllowedImageUrl(Vdf.Str(v,"url")) &&
+                        EpicLibrary.SuitablePortrait(EpicLibrary.Number(Vdf.Get(v,"width")),EpicLibrary.Number(Vdf.Get(v,"height")))).ToList();
+            return grids.Take(18).Select(v => new ArtworkChoice {Url=Vdf.Str(v,"url"),Thumbnail=ArtworkNetwork.AllowedImageUrl(Vdf.Str(v,"thumb")) ? Vdf.Str(v,"thumb") : Vdf.Str(v,"url")}).ToList();
         }
         public static string SaveChoice(Game game,string url,CancellationToken token) {
             string name;
@@ -196,7 +223,7 @@ namespace PadLauncher {
             foreach(var game in games) {
                 token.ThrowIfCancellationRequested();
                 if(KeepArtwork(game)) continue;
-                string path=Cache(game),retry=path+".retry";
+                string path=Cache(game),retry=path+(game.Source=="emulator" ? ".emulator-v2.retry" : ".retry");
                 if(File.Exists(retry) && File.GetLastWriteTimeUtc(retry)>DateTime.UtcNow.AddHours(-6)) continue;
                 try {
                     string url=game.ArtworkUrl;

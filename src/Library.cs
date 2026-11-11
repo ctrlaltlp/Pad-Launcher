@@ -13,6 +13,7 @@ namespace PadLauncher {
         public string Name { get; set; }
         public string LaunchId { get; set; }
         public string Source { get; set; }
+        public string EmulatorId {get;set;}
         public string ArtworkUrl { get; set; }
         public string ArtworkProvider { get; set; }
         public string Arguments {get;set;}
@@ -24,6 +25,7 @@ namespace PadLauncher {
         public bool ArtworkTestUninstalled { get; set; }
 #endif
         public string ShortcutTarget { get; set; }
+        public string SteamLaunchId {get;set;}
         public string Art { get; set; }
         public string Hero { get; set; }
         public List<string> Tags { get; set; }
@@ -35,6 +37,7 @@ namespace PadLauncher {
         public Game() { Tags = new List<string>(); StoreTags = new List<string>(); Categories = new List<string>(); }
     }
     public class Collection {
+        public string Source {get;set;}
         public string Id { get; set; }
         public string Name { get; set; }
         public bool Dynamic { get; set; }
@@ -57,7 +60,43 @@ namespace PadLauncher {
         public string Name {get;set;}
         public List<string> Sources {get;set;}
     }
+    public class CustomList {
+        public string Id {get;set;}
+        public string Name {get;set;}
+        public List<string> Games {get;set;}
+    }
+    public static class CustomLists {
+        public static string Save(Settings settings,Library library,string id,string name,IEnumerable<string> games) {
+            name=(name ?? "").Trim();
+            if(name.Length==0 || name.Length>80) throw new ArgumentException("Enter a list name of 1–80 characters.");
+            if(CombinedCollections.Options(library,settings).Any(c => c.Id!=id && String.Equals(c.Name,name,StringComparison.CurrentCultureIgnoreCase))) throw new ArgumentException("A list with that name already exists.");
+            var chosen=(games ?? Enumerable.Empty<string>()).Where(g => !String.IsNullOrWhiteSpace(g)).Distinct().ToList();
+            if(chosen.Count==0) throw new ArgumentException("Select at least one game.");
+            if(settings.CustomLists==null) settings.CustomLists=new List<CustomList>();
+            var existing=settings.CustomLists.FirstOrDefault(c => c.Id==id);
+            if(id!=null && existing==null) throw new ArgumentException("This custom list no longer exists.");
+            var allowed=new HashSet<string>(library.Games.Select(g => g.Id).Concat(existing==null ? Enumerable.Empty<string>() : existing.Games ?? new List<string>()));
+            if(chosen.Any(g => !allowed.Contains(g))) throw new ArgumentException("One of the selected games is no longer available.");
+            if(existing==null) {existing=new CustomList {Id="list:"+Guid.NewGuid().ToString("N")}; settings.CustomLists.Add(existing);}
+            existing.Name=name; existing.Games=chosen;
+            if(settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(existing.Id)) settings.EnabledCollectionIds.Add(existing.Id);
+            return existing.Id;
+        }
+        public static void Delete(Settings settings,string id) {
+            if(settings.CustomLists!=null) settings.CustomLists.RemoveAll(c => c.Id==id);
+            if(settings.EmulatorImports!=null) settings.EmulatorImports.RemoveAll(d => d.ListId==id);
+            if(settings.EnabledCollectionIds!=null) {settings.EnabledCollectionIds.Remove(id); if(settings.EnabledCollectionIds.Count==0) settings.EnabledCollectionIds.Add("all");}
+            if(settings.CollectionId==id) settings.CollectionId="all";
+            if(settings.DefaultCollectionId==id) settings.DefaultCollectionId="remember";
+        }
+    }
     public static class CombinedCollections {
+        public static string Label(Collection list,Library library) {
+            if(list.Id=="unavailable-collections") return list.Name;
+            var available=new HashSet<string>(library.Games.Select(g => g.Id));
+            int count=list.UnsupportedDynamic ? 0 : list.Id=="all" ? available.Count : (list.Games ?? new List<string>()).Distinct().Count(available.Contains);
+            return list.Name+" ("+count+(count==1 ? " game)" : " games)");
+        }
         public static long RecentPlayed(Settings settings,Game game) {
             long launched=0;
             if(settings.LaunchHistory!=null) settings.LaunchHistory.TryGetValue(game.Id,out launched);
@@ -65,8 +104,20 @@ namespace PadLauncher {
         }
         public static List<Collection> Options(Library library,Settings settings) {
             var options=new List<Collection> {new Collection {Id="all",Name="All games",Games=library.Games.Select(g => g.Id).ToList()}};
-            options.AddRange(library.Collections ?? new List<Collection>());
+            options.AddRange((library.Collections ?? new List<Collection>()).Select(c => new Collection {
+                Id=c.Id,Name=SteamListName(c),Source=c.Source,Games=c.Games,Dynamic=c.Dynamic,UnsupportedDynamic=c.UnsupportedDynamic,UnsupportedReason=c.UnsupportedReason
+            }));
+            string[][] sources={new[]{"steam","Steam"},new[]{"epic","Epic Games Store"},new[]{"gog","GOG Galaxy"},new[]{"ea","EA App"},new[]{"ubisoft","Ubisoft Connect"},new[]{"rockstar","Rockstar Games Launcher"},new[]{"custom","Custom games"}};
+            foreach(var source in sources) {
+                string id="source:"+source[0]; if(options.Any(c => c.Id==id)) continue;
+                string provider=source[0];
+                options.Add(new Collection {Id=id,Name=source[1],Source=provider,Games=library.Games.Where(g => provider=="steam" ? String.IsNullOrEmpty(g.Source) || g.Source=="steam" : g.Source==provider).Select(g => g.Id).ToList()});
+            }
             options.Add(new Collection {Id="recent",Name="Recently played",Games=library.Games.Where(g => RecentPlayed(settings,g)>0).OrderByDescending(g => RecentPlayed(settings,g)).Select(g => g.Id).ToList()});
+            foreach(var list in settings.CustomLists ?? new List<CustomList>()) {
+                if(list==null || String.IsNullOrEmpty(list.Id) || options.Any(c => c.Id==list.Id)) continue;
+                options.Add(new Collection {Id=list.Id,Name=list.Name,Games=(list.Games ?? new List<string>()).Distinct().ToList()});
+            }
             var originals=options.ToDictionary(c => c.Id);
             foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) {
                 if(combined==null || String.IsNullOrEmpty(combined.Id) || options.Any(c => c.Id==combined.Id)) continue;
@@ -75,17 +126,22 @@ namespace PadLauncher {
             }
             return options;
         }
+        public static string SteamListName(Collection collection) {
+            bool steam=collection.Source=="steam" || (collection.Id ?? "").StartsWith("user-collections.",StringComparison.Ordinal) || (collection.Id ?? "").StartsWith("tag:",StringComparison.Ordinal);
+            string name=collection.Name ?? "";
+            return steam && !name.Equals("Steam",StringComparison.OrdinalIgnoreCase) && !name.EndsWith(" (Steam)",StringComparison.OrdinalIgnoreCase) ? name+" (Steam)" : name;
+        }
         public static string Save(Settings settings,Library library,string id,string name,IEnumerable<string> sources) {
             name=(name ?? "").Trim();
-            if(name.Length==0 || name.Length>80) throw new ArgumentException("Enter a collection name of 1–80 characters.");
+            if(name.Length==0 || name.Length>80) throw new ArgumentException("Enter a list name of 1–80 characters.");
             var options=Options(library,settings);
-            if(options.Any(c => c.Id!=id && String.Equals(c.Name,name,StringComparison.CurrentCultureIgnoreCase))) throw new ArgumentException("A collection with that name already exists.");
+            if(options.Any(c => c.Id!=id && String.Equals(c.Name,name,StringComparison.CurrentCultureIgnoreCase))) throw new ArgumentException("A list with that name already exists.");
             var chosen=(sources ?? Enumerable.Empty<string>()).Distinct().ToList();
             var originals=options.Where(c => !(settings.CombinedCollections ?? new List<CombinedCollection>()).Any(x => x.Id==c.Id)).ToList();
-            if(chosen.Count<2 || chosen.Any(source => !originals.Any(c => c.Id==source))) throw new ArgumentException("Select at least two source collections.");
+            if(chosen.Count<2 || chosen.Any(source => !originals.Any(c => c.Id==source))) throw new ArgumentException("Select at least two source lists.");
             if(settings.CombinedCollections==null) settings.CombinedCollections=new List<CombinedCollection>();
             var existing=settings.CombinedCollections.FirstOrDefault(c => c.Id==id);
-            if(id!=null && existing==null) throw new ArgumentException("This combined collection no longer exists.");
+            if(id!=null && existing==null) throw new ArgumentException("This combined list no longer exists.");
             if(existing==null) {existing=new CombinedCollection {Id="combined:"+Guid.NewGuid().ToString("N")}; settings.CombinedCollections.Add(existing);}
             existing.Name=name; existing.Sources=chosen;
             if(settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(existing.Id)) settings.EnabledCollectionIds.Add(existing.Id);
@@ -97,10 +153,15 @@ namespace PadLauncher {
         public string PlaynitePath {get;set;}
         public string PlayniteLibraryPath {get;set;}
         public double RightStickSpeed {get;set;}
+        public double LeftStickSpeed {get;set;}
+        public string VerticalListSwitch {get;set;}
         public Dictionary<string,long> LaunchHistory {get;set;}
         public Dictionary<string,string> ArtworkOverrides {get;set;}
         public List<CustomGame> CustomGames {get;set;}
         public List<CombinedCollection> CombinedCollections {get;set;}
+        public List<CustomList> CustomLists {get;set;}
+        public List<EmulatorConfig> Emulators {get;set;}
+        public List<EmulatorImportDefinition> EmulatorImports {get;set;}
         public string ButtonPrompts { get; set; }
         public bool ShowGameTitle { get; set; }
         public bool ShowCollectionName { get; set; }
@@ -120,9 +181,14 @@ namespace PadLauncher {
         public string EpicLauncherPath {get;set;}
         public bool GogEnabled {get;set;}
         public bool EaEnabled {get;set;}
+        public bool RockstarEnabled {get;set;}
+        public bool BattleNetEnabled {get;set;}
+        public string RockstarLauncherPath {get;set;}
+        public bool UbisoftEnabled {get;set;}
+        public string UbisoftLauncherPath {get;set;}
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { RightStickSpeed=3; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { LeftStickSpeed=1; RightStickSpeed=3; VerticalListSwitch="off"; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -139,7 +205,7 @@ namespace PadLauncher {
         }
         public static string Help(Settings settings) {
             var names=Buttons(settings);
-            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Collections     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  "+settings.RightStickSpeed.ToString("0.#")+"× speed";
+            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Lists     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  "+settings.RightStickSpeed.ToString("0.#")+"× speed";
         }
     }
     public enum ButtonGesture { None, Tap, Hold }
@@ -340,7 +406,7 @@ namespace PadLauncher {
             return users.FirstOrDefault();
         }
         public static string ShortcutLaunchId(uint id) { return (((ulong)id << 32) | 0x02000000UL).ToString(); }
-        static uint ShortcutId(string exe, string name) {
+        internal static uint ShortcutId(string exe, string name) {
             uint crc = 0xffffffff;
             foreach (byte b in Encoding.UTF8.GetBytes(exe + name)) { crc ^= b; for (int bit=0; bit<8; bit++) crc = (crc >> 1) ^ ((crc & 1) != 0 ? 0xedb88320U : 0); }
             return (crc ^ 0xffffffff) | 0x80000000;
@@ -404,7 +470,7 @@ namespace PadLauncher {
                     game.Art = Artwork(path, config, game, false) ?? game.Hero;
                 }
             } else {
-                result.Warnings.Add("No Steam profile found. Sign in to Steam, then refresh to load shortcuts and collections.");
+                result.Warnings.Add("No Steam profile found. Sign in to Steam, then refresh to load shortcuts and lists.");
                 foreach (var game in result.Games) { game.Hero = Artwork(path, null, game, true); game.Art = Artwork(path, null, game, false) ?? game.Hero; }
             }
             result.Games = result.Games.OrderBy(g => g.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -451,7 +517,7 @@ namespace PadLauncher {
                         c.Games = matches.Concat(Items(Vdf.Get(data, "added"))).Where(id => !removed.Contains(id)).Distinct().ToList();
                         if (!String.IsNullOrWhiteSpace(c.Name)) collections[key] = c;
                     }
-                } catch (Exception e) { result.Warnings.Add("Collections " + Path.GetFileName(file) + ": " + e.Message); }
+                } catch (Exception e) { result.Warnings.Add("Lists " + Path.GetFileName(file) + ": " + e.Message); }
             }
             // Steam stores non-Steam membership separately in this profile's WebStorage.
             string local = Path.Combine(config,"localconfig.vdf");
@@ -466,7 +532,7 @@ namespace PadLauncher {
                     if (removals.TryGetValue(c.Id,out cloudRemoved)) removed.UnionWith(cloudRemoved);
                     c.Games = c.Games.Concat(Items(Vdf.Get(pair.Value,"added"))).Where(id => !removed.Contains(id)).Distinct().ToList();
                 }
-            } catch (Exception e) { result.Warnings.Add("Local collection membership: "+e.Message); }
+            } catch (Exception e) { result.Warnings.Add("Local list membership: "+e.Message); }
             // Shortcut tags remain useful when no cloud collection has been cached yet.
             foreach (var game in result.Games.Where(g => g.Shortcut)) foreach (string tag in game.Tags) {
                 var collection = collections.Values.FirstOrDefault(c => c.Name.Equals(tag, StringComparison.OrdinalIgnoreCase));
@@ -476,6 +542,7 @@ namespace PadLauncher {
                 collections[key].Games.Add(game.Id);
             }
             result.Collections = collections.Values.OrderBy(c => c.Name).ToList();
+            foreach(var collection in result.Collections) collection.Source="steam";
         }
         static bool IsRuntime(string name) {
             return name.StartsWith("Proton ",StringComparison.OrdinalIgnoreCase) || name.StartsWith("Steam Linux Runtime",StringComparison.OrdinalIgnoreCase) || name.StartsWith("Source SDK",StringComparison.OrdinalIgnoreCase) || name.Equals("Steamworks Common Redistributables",StringComparison.OrdinalIgnoreCase);

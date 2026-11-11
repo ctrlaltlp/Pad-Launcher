@@ -83,7 +83,7 @@ namespace PadLauncher {
             string path=Path.Combine(steam,"appcache","appinfo.vdf");
             if (!File.Exists(path)) return;
             try { ReadAppInfo(path,library.Games); }
-            catch (Exception e) { library.Warnings.Add("Dynamic collection metadata: "+e.Message); }
+            catch (Exception e) { library.Warnings.Add("Dynamic list metadata: "+e.Message); }
         }
         static string CString(BinaryReader r) {
             var bytes=new List<byte>(); byte b;

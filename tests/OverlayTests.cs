@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -143,6 +144,25 @@ public static class OverlayTests {
             Check(!window.TryControllerNavigationKey(System.Windows.Input.Key.Right,new PadState()),"An idle controller does not intercept keyboard navigation");
             window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.Right) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
             Check(((TextBlock)gameTitle).Text!=afterPolling,"Normal keyboard arrow navigation continues to work");
+            window.SetVerticalListSwitch("dpad"); window.NavigateController(new PadState());
+            var selectedList=(TextBlock)FindElement(content,"SelectedCollection"); string beforeList=selectedList.Text;
+            var dpadDown=new PadState {Buttons=2};
+            Check(window.TryControllerNavigationKey(System.Windows.Input.Key.Down,dpadDown) && selectedList.Text!=beforeList,"Mapped D-pad down changes the list");
+            string afterList=selectedList.Text; window.NavigateController(dpadDown);
+            Check(selectedList.Text==afterList,"Mapped down before polling switches only one list");
+            window.NavigateController(new PadState()); window.NavigateController(new PadState {Buttons=1});
+            string afterListUp=selectedList.Text;
+            Check(afterListUp==beforeList && window.TryControllerNavigationKey(System.Windows.Input.Key.Up,new PadState {Buttons=1}) && selectedList.Text==afterListUp,"Mapped up after polling does not switch a second list");
+            window.SetVerticalListSwitch("stick"); window.NavigateController(dpadDown);
+            Check(selectedList.Text==beforeList && !window.TryControllerNavigationKey(System.Windows.Input.Key.Down,dpadDown),"Left-stick-only mode ignores D-pad list changes and mapped D-pad arrows");
+            window.NavigateController(new PadState()); window.NavigateController(new PadState {LY=-25000});
+            Check(selectedList.Text!=beforeList,"Left-stick mode changes lists directly");
+            window.SetCarouselLayout("grid"); string gridList=selectedList.Text; window.NavigateController(new PadState()); window.NavigateController(new PadState {LY=25000});
+            Check(selectedList.Text==gridList,"Grid vertical input moves within the current list");
+            window.SetCarouselLayout("angled"); window.SetVerticalListSwitch("off");
+            Check(Storage.Read<Settings>("settings.json").VerticalListSwitch=="off","List switching preference persists");
+            bool invalidListSwitch=false; try {window.SetVerticalListSwitch("invalid");} catch(ArgumentException) {invalidListSwitch=true;}
+            Check(invalidListSwitch && Storage.Read<Settings>("settings.json").VerticalListSwitch=="off","Invalid list switching modes preserve saved settings");
             Check(defaults.EnabledCollectionIds==null,"Older settings include every collection by default");
             window.SetDefaultCollection("all");
             window.SetAvailableCollections(new[]{"couch"});
@@ -151,7 +171,7 @@ public static class OverlayTests {
             Check(chosenCollections.DefaultCollectionId=="remember" && chosenCollections.CollectionId=="couch","Hiding the current or default collection switches safely to an enabled collection");
             window.ShowOverlay();
             window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.PageDown) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
-            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="Couch games","Collection cycling skips hidden collections, including All games");
+            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text.StartsWith("Couch games ("),"Collection cycling skips hidden collections, including All games");
             window.Close();
             bool hiddenDefault=false; try { window.SetDefaultCollection("all"); } catch(ArgumentException) { hiddenDefault=true; }
             Check(hiddenDefault,"A hidden collection cannot be selected as the default");
@@ -159,18 +179,18 @@ public static class OverlayTests {
             bool emptyCollections=false; try { window.SetAvailableCollections(new string[0]); } catch(ArgumentException) { emptyCollections=true; }
             Check(emptyCollections && File.ReadAllText(Path.Combine(Storage.Root,"settings.json"))==beforeEmptyCollections,"Selecting no collections is rejected without changing saved settings");
             var restoredCollections=new Launcher(true,true); restoredCollections.ShowOverlay();
-            Check(((TextBlock)FindElement((FrameworkElement)restoredCollections.Content,"SelectedCollection")).Text=="Couch games","Collection visibility survives restarting the launcher");
+            Check(((TextBlock)FindElement((FrameworkElement)restoredCollections.Content,"SelectedCollection")).Text.StartsWith("Couch games ("),"Collection visibility survives restarting the launcher");
             restoredCollections.ExitApp();
             var missingCollectionSettings=Storage.Read<Settings>("settings.json"); missingCollectionSettings.EnabledCollectionIds=new System.Collections.Generic.List<string> {"removed-collection"}; Storage.Write("settings.json",missingCollectionSettings);
             var missingCollections=new Launcher(true,true);
-            Check(((TextBlock)FindElement((FrameworkElement)missingCollections.Content,"SelectedCollection")).Text=="No available collections" && ((TextBlock)FindElement((FrameworkElement)missingCollections.Content,"SelectedGameTitle")).Text.Contains("Settings"),"Removed Steam collections do not expose hidden collections and provide a recovery instruction");
+            Check(((TextBlock)FindElement((FrameworkElement)missingCollections.Content,"SelectedCollection")).Text=="No available lists" && ((TextBlock)FindElement((FrameworkElement)missingCollections.Content,"SelectedGameTitle")).Text.Contains("Settings"),"Removed Steam collections do not expose hidden collections and provide a recovery instruction");
             missingCollections.ExitApp();
             window.SetAvailableCollections(null);
             Check(Storage.Read<Settings>("settings.json").EnabledCollectionIds==null,"All-collections mode can be restored for current and future collections");
             window.SetDefaultCollection("couch"); window.ShowOverlay();
-            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="Couch games","Chosen default collection is used when reopening the overlay");
+            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text.StartsWith("Couch games ("),"Chosen default collection is used when reopening the overlay");
             window.Close(); window.SetDefaultCollection("all"); window.ShowOverlay();
-            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="All games","All games can be selected as the opening collection");
+            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text.StartsWith("All games ("),"All games can be selected as the opening collection");
             window.Close(); window.SetDefaultCollection("remember");
             window.ShowControls(); // Exercises optional hint with no settings dialog.
             var resident=new Launcher(true,true);
@@ -208,10 +228,24 @@ public static class OverlayTests {
             var helpTabs=(TabControl)FindElement(helpRoot,"HelpSettingsTabs");
             var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[0]).Content;
             var settingsPage=(ScrollViewer)((TabItem)helpTabs.Items[1]).Content;
-            Check(helpTabs.Items.Count==4 && (string)((TabItem)helpTabs.Items[0]).Header=="Layout" && (string)((TabItem)helpTabs.Items[1]).Header=="Appearance" && (string)((TabItem)helpTabs.Items[2]).Header=="System","Help and settings have separate named tabs");
+            Check(helpTabs.Items.Count==7 && (string)((TabItem)helpTabs.Items[0]).Header=="Controls" && (string)((TabItem)helpTabs.Items[1]).Header=="Appearance" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Integrations" && (string)((TabItem)helpTabs.Items[6]).Header=="System","Settings tabs keep System last");
             Check(helpPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto && settingsPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto,"Both tabs show their slim scrollbar only when scrolling is needed");
+            var systemContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[6]).Content).Content;
+            var integrationsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[3]).Content).Content;
+            Check(FindElement(systemContents,"StartWithWindowsSetting")!=null && FindElement(systemContents,"SteamGridDbSetting")!=null,"System contains startup and SteamGridDB settings");
+            var steamSection=(Expander)FindElement(integrationsContents,"SteamIntegrationSection");
+            Check(FindElement(systemContents,"SteamPathSetting")==null && FindElement((FrameworkElement)steamSection.Content,"SteamPathSetting")!=null,"Launcher path settings live in the Steam integration dropdown");
+            Check(((StackPanel)integrationsContents).Children.OfType<Expander>().Count()==7 && ((StackPanel)integrationsContents).Children.OfType<Expander>().All(section => !section.IsExpanded),"Each launcher has its own initially collapsed integration section");
+            var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[2]).Content).Content;
+            Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
+            Check((string)((Expander)FindElement(listsContents,"CombinedListsSection")).Header=="Combine Lists","Combined list editor has its requested heading");
+            var customSection=(Expander)FindElement(listsContents,"CustomListsSection");
+            Check(customSection!=null && (string)customSection.Header=="Custom lists","Individual game lists have a separate editor in Lists");
+            customSection.IsExpanded=true; helpTabs.SelectedIndex=2;
+            helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
+            Check(FindElement((FrameworkElement)customSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)customSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)customSection.Content,"SaveCustomList")!=null,"Custom list picker, name and save action are available");
             helpTabs.SelectedIndex=1;
-            helpRoot.Measure(new Size(540,650)); helpRoot.Arrange(new Rect(0,0,540,650)); helpRoot.UpdateLayout();
+            helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             settingsPage.ScrollToVerticalOffset(100); helpRoot.UpdateLayout();
             Check(settingsPage.ScrollableHeight>0 && settingsPage.VerticalOffset>0,"Settings remain scrollable with the slim scrollbar");
             var slimBar=(System.Windows.Controls.Primitives.ScrollBar)settingsPage.Template.FindName("PART_VerticalScrollBar",settingsPage);
@@ -247,7 +281,7 @@ public static class OverlayTests {
             wheelCombo.IsDropDownOpen=false; wheelWindow.Close();
             Check(closedWheel,"Closed dropdown wheel scrolls settings without changing selection");
             Check(openWheel,"Open game dropdown wheel scrolls its list without moving settings or changing selection");
-            var helpScreenshot=new RenderTargetBitmap(540,650,96,96,PixelFormats.Pbgra32); helpScreenshot.Render(helpRoot);
+            var helpScreenshot=new RenderTargetBitmap(660,650,96,96,PixelFormats.Pbgra32); helpScreenshot.Render(helpRoot);
             var helpEncoder=new PngBitmapEncoder(); helpEncoder.Frames.Add(BitmapFrame.Create(helpScreenshot));
             using(var stream=File.Create(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"settings-tabs-preview.png"))) helpEncoder.Save(stream);
             helpDialog.Close();

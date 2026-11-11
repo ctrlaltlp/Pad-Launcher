@@ -26,6 +26,10 @@ namespace PadLauncher {
             public string Name;
             public List<Alternative> Alternatives=new List<Alternative>();
         }
+        public static string ImportIdentity(CustomGame game) {
+            if(!String.IsNullOrEmpty(game.SteamShortcutKey)) return "steam:"+game.SteamShortcutKey;
+            return String.IsNullOrEmpty(game.PlayniteId) ? null : "playnite:"+game.PlayniteId;
+        }
         public static string ActionKey(string target,string arguments,string folder,string details=null) {
             // Windows file paths are case-insensitive; arguments remain case-sensitive.
             return (target ?? "").Trim().ToUpperInvariant()+"\n"+(arguments ?? "").Trim()+"\n"+(folder ?? "").Trim().ToUpperInvariant()+"\n"+(details ?? "");
@@ -36,7 +40,8 @@ namespace PadLauncher {
                 var group=new Conflict {Name=names.First().Name};
                 group.Alternatives.AddRange(library.Games.Where(g => ArtworkService.Normalize(g.Name)==names.Key).Select(g => new Alternative {Existing=g,Keep=true}));
                 foreach(var game in names) {
-                    var previous=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.PlayniteId==game.PlayniteId);
+                    string identity=ImportIdentity(game);
+                    var previous=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => identity!=null && ImportIdentity(g)==identity);
                     var identical=previous==null ? null : group.Alternatives.FirstOrDefault(a => a.Existing!=null && a.Existing.Id==previous.Id && ActionKey(a.Existing.LaunchId,a.Existing.Arguments,a.Existing.WorkingDirectory,a.Existing.ImportedActionInfo)==ActionKey(game.Target,game.Arguments,game.WorkingDirectory,game.PlayniteActionInfo));
                     if(identical!=null) identical.Incoming=game;
                     else group.Alternatives.Add(new Alternative {Incoming=game,Keep=group.Alternatives.Count==0});
@@ -57,7 +62,7 @@ namespace PadLauncher {
                 }
                 foreach(var kept in group.Alternatives.Where(a => a.Keep && a.Existing!=null)) {
                     var custom=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==kept.Existing.Id);
-                    if(custom!=null && group.Alternatives.Any(a => a.Keep && a.Existing==null && a.Incoming.PlayniteId==custom.PlayniteId)) custom.PlayniteId=null;
+                    if(custom!=null && ImportIdentity(custom)!=null && group.Alternatives.Any(a => a.Keep && a.Existing==null && ImportIdentity(a.Incoming)==ImportIdentity(custom))) {custom.PlayniteId=null; custom.SteamShortcutKey=null;}
                 }
             }
             int count=0; foreach(var game in prepared.Where(g => !excluded.Contains(g))) {Merge(settings,game); count++;} return count;
@@ -123,6 +128,8 @@ namespace PadLauncher {
             return new PlayniteGame {Id=id.ToString(),Name=name.Trim(),Cover=resolved,Installed=Vdf.Str(value,"IsInstalled").Equals("true",StringComparison.OrdinalIgnoreCase),Hidden=Vdf.Str(value,"Hidden").Equals("true",StringComparison.OrdinalIgnoreCase),NativeId=Vdf.Str(value,"GameId"),PluginId=GuidValue(Vdf.Get(value,"PluginId")),ActionDescription=String.Join("\n\n",descriptions)};
         }
         public static bool NativeDuplicate(PlayniteGame game,Library library) {
+            if(String.Equals(game.PluginId,"88409022-088a-4de8-805a-fdbac291f00a",StringComparison.OrdinalIgnoreCase)) return library.Games.Any(g => g.Source=="rockstar" && String.Equals(g.LaunchId,game.NativeId,StringComparison.OrdinalIgnoreCase));
+            if(String.Equals(game.PluginId,"c2f038e5-8b92-4877-91f1-da9094155fc5",StringComparison.OrdinalIgnoreCase)) return library.Games.Any(g => g.Source=="ubisoft" && g.LaunchId==game.NativeId);
             if(String.Equals(game.PluginId,"cb91dfc9-b977-43bf-8e70-55f46e410fab",StringComparison.OrdinalIgnoreCase)) return library.Games.Any(g => (String.IsNullOrEmpty(g.Source) || g.Source=="steam") && g.Id==game.NativeId);
             if(String.Equals(game.PluginId,"00000002-dbd1-46c6-b5d0-b1ba559d10e4",StringComparison.OrdinalIgnoreCase)) return library.Games.Any(g => g.Source=="epic" && (g.LaunchId ?? "").EndsWith(":"+game.NativeId,StringComparison.OrdinalIgnoreCase));
             if(String.Equals(game.PluginId,"aebe8b7c-6dc3-4a66-af31-e7375c6b5e9e",StringComparison.OrdinalIgnoreCase)) return library.Games.Any(g => g.Source=="gog" && g.LaunchId==game.NativeId);
@@ -146,6 +153,7 @@ namespace PadLauncher {
             return new CustomGame {Name=record.Name,Target=Path.Combine(folder,"Playnite.DesktopApp.exe"),Arguments="--start "+id+" --hidesplashscreen --nolibupdate",WorkingDirectory=folder,Artwork=art,PlayniteId=id.ToString(),PlayniteActionInfo=record.ActionDescription};
         }
         public static void Merge(Settings settings,CustomGame game) {
+            if(!String.IsNullOrEmpty(game.SteamShortcutKey)) {SteamShortcutImport.Merge(settings,game); return;}
             Guid id; if(!Guid.TryParse(game.PlayniteId,out id) || id==Guid.Empty) throw new ArgumentException("Invalid Playnite import identity.");
             game.PlayniteId=id.ToString();
             var existing=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => String.Equals(g.PlayniteId,game.PlayniteId,StringComparison.OrdinalIgnoreCase));
