@@ -43,13 +43,7 @@ Left and right stick speeds are adjustable in Controls (defaults: 1× and 3×). 
 
 ## Manual Configuration
 
-The app is portable. Its settings, imported games, lists and artwork are stored in **`PadLauncher.Data` beside `PadLauncher.exe`**. Copy the executable and this folder together to keep your setup. A fresh executable without that folder starts with fresh settings and detects available launchers; no older settings are migrated.
-
-Use the tray's **Settings** menu for Controls, Overlay, Lists, Launchers, Custom games, Emulators and System. Steam is optional. Set its installation folder and local user ID under Launchers if automatic detection chooses the wrong installation or profile. Reimport buttons at the end of each launcher section update its games and lists without creating duplicates.
-
 To edit files manually, exit the app completely first, then edit `PadLauncher.Data/settings.json`. `settings.example.json` shows a subset of the available fields. Keep a backup before editing; game IDs link games to lists and artwork. The SteamGridDB API key is stored separately as `PadLauncher.Data/steamgriddb.key`, encrypted for your Windows account, so enter it again when moving to another account or PC.
-
-Custom games can launch executables or shortcuts, while Playnite imports delegate launching to Playnite. Steam shortcut imports support direct launch, launching through Steam, or both, with per-game and bulk list destinations. Emulator settings include executable paths, core selection where needed, and editable global/per-game launch arguments. Import libraries or scan ROM folders from the Emulators → Games tab.
 
 ## Inspiration
 
