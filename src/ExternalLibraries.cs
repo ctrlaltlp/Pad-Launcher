@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections;
@@ -8,7 +8,65 @@ using System.Text.RegularExpressions;
 
 namespace PadLauncher {
     public static class LauncherLibrary {
+        public static Library ScanSource(Settings settings,string source) {
+            if(source=="steam") {
+                string root=String.IsNullOrWhiteSpace(settings.SteamPath) ? SteamLibrary.DetectSteam() : settings.SteamPath;
+                if(String.IsNullOrWhiteSpace(root)) throw new IOException("Configure the Steam path first.");
+                var steam=SteamLibrary.Scan(root,settings.UserId);
+                if(String.IsNullOrEmpty(steam.UserId) || steam.Warnings.Count>0) throw new IOException(String.Join("\n",steam.Warnings.Concat(new[]{"Check the Steam path and user before reimporting."})));
+                steam.Collections.Add(new Collection {Id="source:steam",Name="Steam",Source="steam",Games=steam.Games.Select(g => g.Id).ToList()});
+                return steam;
+            }
+            var result=new Library();
+            switch(source) {
+                case "epic":
+                    string data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"Epic","EpicGamesLauncher","Data");
+                    result.Games=EpicLibrary.Scan(Path.Combine(data,"Manifests"),Path.Combine(data,"Catalog","catcache.bin"),result.Warnings); break;
+                case "gog": result.Games=GogLibrary.Scan(); break;
+                case "ea": result.Games=EaLibrary.Scan(); break;
+                case "ubisoft": result.Games=UbisoftLibrary.Scan(); break;
+                case "rockstar": result.Games=RockstarLibrary.Scan(); break;
+                case "battlenet": result.Games=BattleNetLibrary.Scan(); break;
+                default: throw new ArgumentException("Unknown launcher.");
+            }
+            if(result.Warnings.Count>0) throw new IOException(String.Join("\n",result.Warnings));
+            string name=source=="epic" ? "Epic Games Store" : source=="gog" ? "GOG Galaxy" : source=="ea" ? "EA App" : source=="ubisoft" ? "Ubisoft Connect" : source=="rockstar" ? "Rockstar Games Launcher" : "Battle.net";
+            result.Collections.Add(new Collection {Id="source:"+source,Name=name,Source=source,Games=result.Games.Select(g => g.Id).Distinct().ToList()});
+            return result;
+        }
+        public static void MergeSource(Library current,Library fresh,Settings settings,string source) {
+            Func<Game,bool> owns=g => source=="steam" ? String.IsNullOrEmpty(g.Source) || g.Source=="steam" : g.Source==source;
+            if(source=="steam") {
+                var imports=(settings.CustomGames ?? new List<CustomGame>()).Where(g => !String.IsNullOrEmpty(g.SteamShortcutKey)).ToList();
+                var importedIds=new HashSet<string>(imports.Select(g => g.Id));
+                var steamLists=new HashSet<string>(current.Collections.Where(c => c.Source=="steam" || c.Id=="source:steam").Select(c => c.Id).Concat(fresh.Collections.Select(c => c.Id)));
+                if(settings.ListGameAdditions==null) settings.ListGameAdditions=new Dictionary<string,List<string>>();
+                foreach(string id in steamLists) {
+                    List<string> additions;
+                    if(settings.ListGameAdditions.TryGetValue(id,out additions)) additions.RemoveAll(importedIds.Contains);
+                }
+                foreach(var list in fresh.Collections.Where(c => c.Id!="source:steam")) {
+                    var members=new HashSet<string>(list.Games ?? new List<string>());
+                    var mapped=imports.Where(g => g.SteamShortcutKey.StartsWith(fresh.UserId+":",StringComparison.Ordinal) && members.Contains(g.SteamShortcutKey.Split(':')[1])).Select(g => g.Id);
+                    List<string> additions;
+                    if(!settings.ListGameAdditions.TryGetValue(list.Id,out additions)) settings.ListGameAdditions[list.Id]=additions=new List<string>();
+                    settings.ListGameAdditions[list.Id]=additions.Concat(mapped).Distinct().ToList();
+                }
+                current.SteamPath=fresh.SteamPath; current.UserId=fresh.UserId;
+            }
+            current.Games.RemoveAll(g => owns(g));
+            current.Games.AddRange(fresh.Games.Where(owns).Where(g => !(settings.ReplacedGameIds ?? new List<string>()).Contains(g.Id)).GroupBy(g => g.Id).Select(g => g.First()));
+            current.Collections.RemoveAll(c => c.Source==source || c.Id=="source:"+source || (source=="steam" && ((c.Id ?? "").StartsWith("tag:") || (c.Id ?? "").StartsWith("user-collections."))));
+            current.Collections.AddRange(fresh.Collections.GroupBy(c => c.Id).Select(group => group.First()));
+            current.Games=current.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
         public static Library Scan(Settings settings,string manifestFolder=null,string catalogFile=null) {
+            if(TestEnvironment.FirstStartup) {
+                var isolated=new Library();
+                CustomGameLibrary.Apply(isolated,settings); EmulatorLibrary.Apply(isolated,settings);
+                foreach(var game in isolated.Games) ArtworkService.ApplyCached(game,settings);
+                return isolated;
+            }
             string steam=settings.SteamPath;
             if(String.IsNullOrWhiteSpace(steam)) steam=SteamLibrary.DetectSteam();
             var result=new Library {SteamPath=steam,UserId=settings.UserId};
@@ -50,7 +108,7 @@ namespace PadLauncher {
             if(settings.ReplacedGameIds!=null) result.Games.RemoveAll(g => settings.ReplacedGameIds.Contains(g.Id));
             foreach(var game in result.Games) ArtworkService.ApplyCached(game,settings);
             result.Games=result.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
-            if(result.Games.Count==0 && String.IsNullOrWhiteSpace(steam)) result.Warnings.Add("No games found. Choose your Steam folder or install a game through Epic Games Store.");
+            if(result.Games.Count==0 && String.IsNullOrWhiteSpace(steam)) result.Warnings.Add("No games found. Configure your launchers, emulators, or custom games in Settings.");
             return result;
         }
     }
@@ -68,6 +126,11 @@ namespace PadLauncher {
         public string Artwork {get;set;}
     }
     public static class CustomGameLibrary {
+        public static bool MissingTarget(CustomGame game) {
+            if(game==null || String.IsNullOrWhiteSpace(game.Target) || !Path.IsPathRooted(game.Target)) return false;
+            return new[]{".exe",".lnk",".bat",".cmd"}.Contains(Path.GetExtension(game.Target).ToLowerInvariant()) &&
+                EmulatorLibrary.ConfirmMissingRom(game.Target);
+        }
         public static string ArtworkPath(string path) {return String.IsNullOrWhiteSpace(path) ? null : Path.IsPathRooted(path) ? path : Path.Combine(Storage.Root,path);}
         public static string Save(Settings settings,CustomGame game) {
             game.Name=(game.Name ?? "").Trim();
@@ -114,6 +177,7 @@ namespace PadLauncher {
     }
     public static class EpicLibrary {
         public static string DetectLauncher() {
+            if(TestEnvironment.FirstStartup) return null;
             try {
                 using(var key=Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(@"com.epicgames.launcher\shell\open\command")) {
                     string command=key==null ? "" : Convert.ToString(key.GetValue(""));
@@ -177,6 +241,24 @@ namespace PadLauncher {
         internal static IEnumerable<object> Entries(object value) { var items=value as IEnumerable; if(items==null || value is string) yield break; foreach(var item in items) yield return item; }
     }
     public static class GameLaunch {
+        public static void RepairPath(Settings settings,Game game,string replacement) {
+            if(game.Source=="emulator") {
+                var config=EmulatorLibrary.Config(settings,game.EmulatorId);
+                var entry=config==null ? null : (config.Games ?? new List<EmulatorGame>()).FirstOrDefault(item => item.Id==game.Id);
+                if(entry==null) throw new InvalidOperationException("This emulator game no longer exists.");
+                string path=EmulatorLibrary.GamePath(game.EmulatorId,replacement);
+                if(config.Games.Any(item => item.Id!=entry.Id && String.Equals(item.Path,path,StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException("That game file is already added to this emulator.");
+                entry.Path=path;
+            } else if(game.Source=="custom") {
+                string path=Path.GetFullPath(replacement);
+                if(!File.Exists(path) || !new[]{".exe",".lnk",".bat",".cmd"}.Contains(Path.GetExtension(path).ToLowerInvariant())) throw new ArgumentException("Choose an existing game executable or shortcut.");
+                var entry=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(item => item.Id==game.Id);
+                if(entry==null) throw new InvalidOperationException("This custom game no longer exists.");
+                string oldFolder=String.IsNullOrEmpty(entry.Target) ? null : Path.GetDirectoryName(entry.Target);
+                if(oldFolder!=null && String.Equals(entry.WorkingDirectory,oldFolder,StringComparison.OrdinalIgnoreCase)) entry.WorkingDirectory=Path.GetDirectoryName(path);
+                entry.Target=path;
+            } else throw new ArgumentException("Repair is available for custom and emulator games.");
+        }
         public static System.Diagnostics.ProcessStartInfo StartInfo(Game game,Settings settings=null) {
             if(game.Source=="emulator") return EmulatorLibrary.StartInfo(game,settings);
             if(game.Source=="rockstar") return RockstarLibrary.StartInfo(game,settings==null ? null : settings.RockstarLauncherPath);

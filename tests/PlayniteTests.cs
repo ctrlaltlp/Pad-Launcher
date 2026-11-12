@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -15,6 +15,11 @@ class PlayniteTests {
             var game=PlayniteImport.Parse(fixture,library);
             Check(game.Id==id && game.Installed && !game.Hidden && game.Cover==cover,"BSON JSON game fields and local cover resolved");
             var native=new Library {Games=new List<Game>{new Game {Id="10"}}}; Check(PlayniteImport.NativeDuplicate(game,native),"Native Steam IDs prevent duplicate imports");
+            game.LaunchPaths=new List<string>{Path.Combine(root,"different","Game.exe")};
+            var pathsLibrary=new Library {Games=new List<Game>{new Game {Name=game.Name,Source="custom",LaunchId=Path.Combine(root,"original","Game.exe")}}};
+            Check(PlayniteImport.DetectedUnderDifferentPath(game,pathsLibrary),"Matching name with different executable gets different-path status");
+            game.LaunchPaths=new List<string>{pathsLibrary.Games[0].LaunchId};
+            Check(!PlayniteImport.DetectedUnderDifferentPath(game,pathsLibrary),"Matching executable is not labelled different path");
             game.PluginId="other"; Check(!PlayniteImport.NativeDuplicate(game,native),"Same numeric ID from another platform is not mistaken for Steam");
             var prepared=PlayniteImport.Prepare(game,app); var settings=new Settings(); PlayniteImport.Merge(settings,prepared);
             string importedId=settings.CustomGames.Single().Id;

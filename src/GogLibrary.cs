@@ -15,6 +15,7 @@ namespace PadLauncher {
     // Native installed-game adapter. UI/library wiring is intentionally separate.
     public static class GogLibrary {
         public static string DetectClient() {
+            if(TestEnvironment.FirstStartup) return null;
             foreach(var view in new[]{RegistryView.Registry32,RegistryView.Registry64}) try {
                 using(var root=RegistryKey.OpenBaseKey(RegistryHive.LocalMachine,view))
                 using(var key=root.OpenSubKey(@"SOFTWARE\GOG.com\GalaxyClient\paths")) {

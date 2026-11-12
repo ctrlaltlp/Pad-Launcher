@@ -8,10 +8,12 @@ $refs = @('System.dll','System.Core.dll','System.Security.dll','System.Web.Exten
 $librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'),(Join-Path $PSScriptRoot 'src\ExternalLibraries.cs'),(Join-Path $PSScriptRoot 'src\ArtworkService.cs'),(Join-Path $PSScriptRoot 'src\StartupSetting.cs'),(Join-Path $PSScriptRoot 'src\PlayniteImport.cs'),(Join-Path $PSScriptRoot 'src\GogLibrary.cs'),(Join-Path $PSScriptRoot 'src\EaLibrary.cs'),(Join-Path $PSScriptRoot 'src\SteamShortcutImport.cs'),(Join-Path $PSScriptRoot 'src\UbisoftLibrary.cs'),(Join-Path $PSScriptRoot 'src\RockstarLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImport.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSqlite.cs'))
 $librarySources += (Join-Path $PSScriptRoot 'src\BattleNetLibrary.cs')
 $appSources = @((Join-Path $PSScriptRoot 'src\App.cs'),(Join-Path $PSScriptRoot 'src\PlayStationInput.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSettings.cs'),(Join-Path $PSScriptRoot 'src\ListTransitions.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImportSettings.cs'))
+$appSources += (Join-Path $PSScriptRoot 'src\ListToolsSettings.cs')
 $refs += '/resource:' + (Join-Path $PSScriptRoot 'src\SettingsTheme.xaml') + ',SettingsTheme.xaml'
 $artworkTest = $args -contains '-ArtworkTest'
-$executableName = if($artworkTest) { 'PadLauncher.ArtworkTest' } else { 'PadLauncher' }
-$defines = if($artworkTest) { @('/define:ARTWORK_TEST') } else { @() }
+$firstStartupTest = $args -contains '-FirstStartupTest'
+$executableName = if($firstStartupTest) { 'PadLauncher.FirstStartupTest' } elseif($artworkTest) { 'PadLauncher.ArtworkTest' } else { 'PadLauncher' }
+$defines = if($firstStartupTest) { @('/define:FIRST_START_TEST') } elseif($artworkTest) { @('/define:ARTWORK_TEST') } else { @() }
 $stagedExecutable = Join-Path $out ($executableName + '.build.exe')
 $iconPath = Join-Path $PSScriptRoot 'assets\PadLauncher.ico'
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ $defines ('/win32manifest:' + (Join-Path $PSScriptRoot 'src\App.manifest')) ('/win32icon:' + $iconPath) ('/resource:' + $iconPath + ',PadLauncher.ico') ('/out:' + $stagedExecutable) $refs $librarySources $appSources

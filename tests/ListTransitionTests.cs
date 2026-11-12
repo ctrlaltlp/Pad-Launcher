@@ -50,6 +50,49 @@ class ListTransitionTests {
             window.SetAvailableCollections(new[]{"all","source:epic"}); Key(window,System.Windows.Input.Key.PageDown);
             Check(carousel.Children.Count>0 && label.Text!="Epic Games Store","Empty lists are skipped by default");
             Pump(260); Check(viewport.Children.Count==1 && !window.ListTransitionActive,"Skipping an empty list leaves no transition layer");
+            var navigationLibrary=new Library();
+            navigationLibrary.Games.Add(new Game {Id="one",Name="One",LaunchId="1"});
+            navigationLibrary.Games.Add(new Game {Id="two",Name="Two",LaunchId="2"});
+            navigationLibrary.Collections.Add(new Collection {Id="first",Name="First",Games=new System.Collections.Generic.List<string>{"one"}});
+            navigationLibrary.Collections.Add(new Collection {Id="second",Name="Second",Games=new System.Collections.Generic.List<string>{"two"}});
+            Storage.Write("settings.json",new Settings {CollectionId="first"});
+            Storage.Write("library.json",navigationLibrary);
+            var persisted=new Launcher(false,true);
+            try {
+                persisted.SetAvailableCollections(new[]{"first","second"}); persisted.ShowOverlay();
+                string savedBefore=File.ReadAllText(Path.Combine(Storage.Root,"settings.json"));
+                Key(persisted,System.Windows.Input.Key.PageDown);
+                Check(File.ReadAllText(Path.Combine(Storage.Root,"settings.json"))==savedBefore,"List switching does not synchronously write settings");
+                for(int index=0;index<20;index++) Key(persisted,System.Windows.Input.Key.PageDown);
+                Pump(500);
+                Check(Storage.Read<Settings>("settings.json").CollectionId=="second","Rapid list switches save the final list after browsing pauses");
+                Key(persisted,System.Windows.Input.Key.PageDown);
+                var binding=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+                var savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
+                navigationLibrary.Collections[0].Games.Add("two");
+                typeof(Launcher).GetField("library",binding).SetValue(persisted,navigationLibrary);
+                persisted.SetAvailableCollections(new[]{"first","second"});
+                Key(persisted,System.Windows.Input.Key.Right);
+                string remembered=((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text;
+                Key(persisted,System.Windows.Input.Key.PageDown); Key(persisted,System.Windows.Input.Key.PageUp);
+                Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text==remembered,"Switching lists restores the selected game for each list");
+                savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
+                savedSettings.ListLayouts=new System.Collections.Generic.Dictionary<string,ListLayout> {{"first",new ListLayout {Layout="grid",PanelScale=1,Columns=2,Rows=1,AngledSizing="fit"}}};
+                persisted.SetAvailableCollections(new[]{"first","second"});
+                Check((string)typeof(Launcher).GetProperty("ActiveLayout",binding).GetValue(persisted,null)=="grid" && savedSettings.CarouselLayout=="angled","Per-list layout overrides the overlay without changing the global default");
+                Key(persisted,System.Windows.Input.Key.PageDown);
+                Check((string)typeof(Launcher).GetProperty("ActiveLayout",binding).GetValue(persisted,null)=="angled","Other lists inherit the global layout");
+                persisted.ApplyControllerState(new PadState {Buttons=0x0080},"test",0);
+                Check(Storage.Read<Settings>("settings.json").FavouriteGameIds.Contains("two"),"R3 always adds the selected game to favourites");
+                Check(!Storage.Read<Settings>("settings.json").EnabledCollectionIds.Contains("favourites"),"Adding a favourite preserves a hidden Favourites list");
+                persisted.ApplyControllerState(new PadState {Buttons=0x0080},"test",3);
+                Check(Storage.Read<Settings>("settings.json").FavouriteGameIds.Count==1,"Holding R3 cannot repeatedly toggle favourites");
+                persisted.ApplyControllerState(new PadState(),"test",4);
+                persisted.ApplyControllerState(new PadState {Buttons=0x0080},"test",5);
+                Check(Storage.Read<Settings>("settings.json").FavouriteGameIds.Count==0,"A second R3 click removes the favourite");
+                Key(persisted,System.Windows.Input.Key.PageUp); persisted.ExitApp();
+                Check(Storage.Read<Settings>("settings.json").CollectionId=="first","Exiting flushes the final navigation selection");
+            } finally {persisted.ExitApp();}
             Console.WriteLine(checks+" list transition checks passed");
         } finally {if(window!=null) window.ExitApp(); if(Directory.Exists(root)) Directory.Delete(root,true);}
     }

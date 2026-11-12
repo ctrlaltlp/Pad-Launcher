@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -28,7 +28,7 @@ namespace PadLauncher {
             ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
             var request=(HttpWebRequest)WebRequest.Create(url);
             request.Timeout=12000; request.ReadWriteTimeout=12000; request.AllowAutoRedirect=false;
-            request.UserAgent="PadLauncher/0.4.0";
+            request.UserAgent="PadLauncher/0.4.1";
             if(!String.IsNullOrEmpty(key)) {
                 if(new Uri(url).Host!="www.steamgriddb.com") throw new InvalidOperationException("Invalid API host.");
                 request.Headers["Authorization"]="Bearer "+key;
@@ -65,6 +65,19 @@ namespace PadLauncher {
         }
         public static bool Portrait(string path) {
             try {using(var image=System.Drawing.Image.FromFile(path)) return EpicLibrary.SuitablePortrait(image.Width,image.Height);} catch {return false;}
+        }
+        public static string SaveLocalChoice(string path) {
+            using(var artwork=System.Drawing.Image.FromFile(path)) {
+                if(artwork.Width<1 || artwork.Height<1) throw new IOException("Choose a valid artwork image.");
+            }
+            string name;
+            using(var stream=File.OpenRead(path))
+            using(var hash=SHA256.Create()) name=BitConverter.ToString(hash.ComputeHash(stream)).Replace("-","")+".img";
+            string relative=Path.Combine("artwork","chosen",name),destination=Path.Combine(Storage.Root,relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            if(!String.Equals(Path.GetFullPath(path),Path.GetFullPath(destination),StringComparison.OrdinalIgnoreCase))
+                File.Copy(path,destination,true);
+            return relative;
         }
         public static bool KeepArtwork(Game game) {
             // Steam's own artwork and user-selected shortcut art take priority,

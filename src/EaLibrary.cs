@@ -15,6 +15,7 @@ namespace PadLauncher {
     }
     public static class EaLibrary {
         public static string DetectClient() {
+            if(TestEnvironment.FirstStartup) return null;
             try {
                 using(var key=Registry.ClassesRoot.OpenSubKey(@"origin2\shell\open\command")) {
                     string command=key==null ? "" : Convert.ToString(key.GetValue(""));

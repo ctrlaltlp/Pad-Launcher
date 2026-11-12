@@ -14,6 +14,7 @@ namespace PadLauncher {
     }
     public static class UbisoftLibrary {
         public static string DetectClient() {
+            if(TestEnvironment.FirstStartup) return null;
             try {
                 using(var key=Registry.ClassesRoot.OpenSubKey(@"uplay\shell\open\command")) {
                     string command=key==null ? "" : Convert.ToString(key.GetValue(""));

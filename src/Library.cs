@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -8,6 +8,17 @@ using System.Web.Script.Serialization;
 using Microsoft.Win32;
 
 namespace PadLauncher {
+    public static class TestEnvironment {
+        public static bool FirstStartup {
+            get {
+#if FIRST_START_TEST
+                return true;
+#else
+                return false;
+#endif
+            }
+        }
+    }
     public class Game {
         public string Id { get; set; }
         public string Name { get; set; }
@@ -92,10 +103,28 @@ namespace PadLauncher {
             if(id!=null && existing==null) throw new ArgumentException("This custom list no longer exists.");
             var allowed=new HashSet<string>(library.Games.Select(g => g.Id).Concat(existing==null ? Enumerable.Empty<string>() : existing.Games ?? new List<string>()));
             if(chosen.Any(g => !allowed.Contains(g))) throw new ArgumentException("One of the selected games is no longer available.");
-            if(existing==null) {existing=new CustomList {Id="list:"+Guid.NewGuid().ToString("N")}; settings.CustomLists.Add(existing);}
+            bool created=existing==null;
+            if(created) {existing=new CustomList {Id="list:"+Guid.NewGuid().ToString("N")}; settings.CustomLists.Add(existing);}
             existing.Name=name; existing.Games=chosen;
-            if(settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(existing.Id)) settings.EnabledCollectionIds.Add(existing.Id);
+            if(created && settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(existing.Id)) settings.EnabledCollectionIds.Add(existing.Id);
             return existing.Id;
+        }
+        public static void SetGameList(Settings settings,Library library,string gameId,string listId) {
+            if(!String.IsNullOrEmpty(listId) &&
+                !(settings.CustomLists ?? new List<CustomList>()).Any(list => list.Id==listId) &&
+                !(settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => list.Id==listId))
+                throw new ArgumentException("The selected list no longer exists.");
+            foreach(var list in settings.CustomLists ?? new List<CustomList>()) {
+                if(list.Games==null) list.Games=new List<string>();
+                list.Games.RemoveAll(id => id==gameId);
+                if(list.Id==listId) list.Games.Add(gameId);
+            }
+            foreach(var list in settings.CombinedCollections ?? new List<CombinedCollection>()) {
+                if(list.AddedGames==null) list.AddedGames=new List<string>();
+                if(list.ExcludedGames==null) list.ExcludedGames=new List<string>();
+                list.AddedGames.RemoveAll(id => id==gameId);
+                if(list.Id==listId) {list.AddedGames.Add(gameId); list.ExcludedGames.RemoveAll(id => id==gameId);}
+            }
         }
         public static void Delete(Settings settings,string id) {
             if(settings.CustomLists!=null) settings.CustomLists.RemoveAll(c => c.Id==id);
@@ -133,14 +162,23 @@ namespace PadLauncher {
                 options.Add(new Collection {Id=id,Name=source[1],Source=provider,Games=library.Games.Where(g => provider=="steam" ? String.IsNullOrEmpty(g.Source) || g.Source=="steam" : g.Source==provider).Select(g => g.Id).ToList()});
             }
             options.Add(new Collection {Id="recent",Name="Recently played",Games=library.Games.Where(g => RecentPlayed(settings,g)>0).OrderByDescending(g => RecentPlayed(settings,g)).Select(g => g.Id).ToList()});
+            bool favouriteNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Favourites",StringComparison.OrdinalIgnoreCase)) ||
+                (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => String.Equals(list.Name,"Favourites",StringComparison.OrdinalIgnoreCase));
+            options.Add(new Collection {Id="favourites",Name=favouriteNameUsed ? "Favourites (R3)" : "Favourites",Games=(settings.FavouriteGameIds ?? new List<string>()).Distinct().ToList()});
             foreach(var list in settings.CustomLists ?? new List<CustomList>()) {
                 if(list==null || String.IsNullOrEmpty(list.Id) || options.Any(c => c.Id==list.Id)) continue;
                 options.Add(new Collection {Id=list.Id,Name=list.Name,Games=(list.Games ?? new List<string>()).Distinct().ToList()});
+            }
+            foreach(var list in options) {
+                List<string> additions;
+                if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(list.Id,out additions)) list.Games=(list.Games ?? new List<string>()).Concat(additions ?? new List<string>()).Distinct().ToList();
             }
             var originals=options.ToDictionary(c => c.Id);
             foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) {
                 if(combined==null || String.IsNullOrEmpty(combined.Id) || options.Any(c => c.Id==combined.Id)) continue;
                 var games=(combined.Sources ?? new List<string>()).Where(originals.ContainsKey).SelectMany(id => originals[id].Games).Concat(combined.AddedGames ?? new List<string>()).Except(combined.ExcludedGames ?? new List<string>()).Distinct().ToList();
+                List<string> additions;
+                if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(combined.Id,out additions)) games=games.Concat(additions ?? new List<string>()).Distinct().ToList();
                 options.Add(new Collection {Id=combined.Id,Name=combined.Name,Games=games});
             }
             return options;
@@ -167,7 +205,17 @@ namespace PadLauncher {
             return existing.Id;
         }
     }
+    public class ListLayout {
+        public string Layout {get;set;}
+        public double PanelScale {get;set;}
+        public int Columns {get;set;}
+        public int Rows {get;set;}
+        public string AngledSizing {get;set;}
+    }
     public class Settings {
+        public Dictionary<string,ListLayout> ListLayouts {get;set;}
+        public Dictionary<string,string> SelectedGamesByList {get;set;}
+        public List<string> FavouriteGameIds {get;set;}
         public List<string> ReplacedGameIds {get;set;}
         public string PlaynitePath {get;set;}
         public string PlayniteLibraryPath {get;set;}
@@ -176,6 +224,7 @@ namespace PadLauncher {
         public string VerticalListSwitch {get;set;}
         public Dictionary<string,long> LaunchHistory {get;set;}
         public Dictionary<string,string> ArtworkOverrides {get;set;}
+        public Dictionary<string,List<string>> ListGameAdditions {get;set;}
         public List<CustomGame> CustomGames {get;set;}
         public List<CombinedCollection> CombinedCollections {get;set;}
         public List<CustomList> CustomLists {get;set;}
@@ -184,6 +233,7 @@ namespace PadLauncher {
         public string ButtonPrompts { get; set; }
         public bool ShowGameTitle { get; set; }
         public bool ShowCollectionName { get; set; }
+        public bool ShowListGameCount {get;set;}
         public string OpenMonitor { get; set; }
         public string SteamPath { get; set; }
         public string UserId { get; set; }
@@ -202,6 +252,7 @@ namespace PadLauncher {
         public bool EaEnabled {get;set;}
         public bool RockstarEnabled {get;set;}
         public bool SkipEmptyLists {get;set;}
+        public string DefaultCustomGameListId {get;set;}
         public List<string> OverlayListOrder {get;set;}
         public string JumpListButton {get;set;}
         public string JumpListId {get;set;}
@@ -212,7 +263,7 @@ namespace PadLauncher {
         public string UbisoftLauncherPath {get;set;}
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=1; RightStickSpeed=3; VerticalListSwitch="off"; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { ShowListGameCount=true; RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=1; RightStickSpeed=3; VerticalListSwitch="off"; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -229,7 +280,7 @@ namespace PadLauncher {
         }
         public static string Help(Settings settings) {
             var names=Buttons(settings);
-            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Lists     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  "+settings.RightStickSpeed.ToString("0.#")+"× speed";
+            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Lists     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  "+settings.RightStickSpeed.ToString("0.#")+"× speed"+"     R3  Toggle favourite";
         }
     }
     public enum ButtonGesture { None, Tap, Hold }
@@ -250,53 +301,7 @@ namespace PadLauncher {
     }
     public static class Storage {
         public static string Root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"PadLauncher.Data");
-        public static void InitializePortable(params string[] legacyRoots) {
-            Directory.CreateDirectory(Root);
-            if(File.Exists(Path.Combine(Root,"settings.json"))) return;
-            string legacy=legacyRoots.FirstOrDefault(folder => !String.Equals(Path.GetFullPath(folder),Path.GetFullPath(Root),StringComparison.OrdinalIgnoreCase) && File.Exists(Path.Combine(folder,"settings.json")));
-            if(legacy==null) return;
-            // Copy, rather than move, so the previous installation remains recoverable.
-            string oldArt=Path.Combine(legacy,"artwork"),newArt=Path.Combine(Root,"artwork");
-            if(Directory.Exists(oldArt)) CopyArtworkTree(oldArt,newArt);
-            string key=Path.Combine(legacy,"steamgriddb.key"),newKey=Path.Combine(Root,"steamgriddb.key");
-            if(File.Exists(key) && !File.Exists(newKey)) File.Copy(key,newKey);
-            string cache=Path.Combine(legacy,"library.json");
-            if(File.Exists(cache)) {
-                try {
-                    var library=Json().Deserialize<Library>(File.ReadAllText(cache));
-                    foreach(var game in library.Games) {
-                        if(!String.IsNullOrEmpty(game.Art) && game.Art.StartsWith(oldArt+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) game.Art=Path.Combine(newArt,game.Art.Substring(oldArt.Length+1));
-                    }
-                    Write("library.json",library);
-                } catch { /* The normal scan reconstructs a missing or invalid library cache. */ }
-            }
-            // Settings are copied last and mark the migration as complete.
-            string settingsFile=File.ReadAllText(Path.Combine(legacy,"settings.json"));
-            var migrated=Json().Deserialize<Settings>(settingsFile); bool changed=false;
-            foreach(var game in migrated.CustomGames ?? new List<CustomGame>()) {
-                if(!String.IsNullOrEmpty(game.Artwork) && game.Artwork.StartsWith(oldArt+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) {game.Artwork=Path.Combine("artwork",game.Artwork.Substring(oldArt.Length+1)); changed=true;}
-            }
-            File.WriteAllText(Path.Combine(Root,"settings.json"),changed ? Json().Serialize(migrated) : settingsFile);
-        }
-        static void CopyArtworkTree(string source,string target) {
-            Directory.CreateDirectory(target);
-            foreach(string file in Directory.GetFiles(source)) {
-                if((File.GetAttributes(file)&FileAttributes.ReparsePoint)!=0) continue;
-                string destination=Path.Combine(target,Path.GetFileName(file)); if(!File.Exists(destination)) File.Copy(file,destination);
-            }
-            foreach(string folder in Directory.GetDirectories(source)) {
-                if((File.GetAttributes(folder)&FileAttributes.ReparsePoint)!=0) continue;
-                CopyArtworkTree(folder,Path.Combine(target,Path.GetFileName(folder)));
-            }
-        }
-        public static void MigrateFrom(string legacyRoot) {
-            if(!Directory.Exists(legacyRoot)) return;
-            Directory.CreateDirectory(Root);
-            foreach(string name in new[]{"settings.json","library.json"}) {
-                string source=Path.Combine(legacyRoot,name),target=Path.Combine(Root,name);
-                if(File.Exists(source) && (!File.Exists(target) || File.GetLastWriteTimeUtc(source)>File.GetLastWriteTimeUtc(target))) File.Copy(source,target,true);
-            }
-        }
+        public static void InitializePortable() { Directory.CreateDirectory(Root); }
         public static JavaScriptSerializer Json() { return new JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024 }; }
         public static T Read<T>(string name) where T : class {
             try { return Json().Deserialize<T>(File.ReadAllText(Path.Combine(Root, name))); } catch { return null; }
@@ -400,6 +405,7 @@ namespace PadLauncher {
             } catch(ArgumentException) { return null; } catch(NotSupportedException) { return null; }
         }
         public static string DetectSteam() {
+            if(TestEnvironment.FirstStartup) return null;
             foreach (RegistryView view in new [] { RegistryView.Registry32, RegistryView.Registry64 }) {
                 foreach (RegistryHive hive in new [] { RegistryHive.CurrentUser, RegistryHive.LocalMachine }) {
                     using (var root = RegistryKey.OpenBaseKey(hive, view))

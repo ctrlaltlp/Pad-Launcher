@@ -30,6 +30,7 @@ namespace PadLauncher {
             {"gtasaunreal",new[]{"Grand Theft Auto: San Andreas – The Definitive Edition",@"Gameface\Binaries\Win64\SanAndreas.exe"}}
         };
         public static string DetectClient() {
+            if(TestEnvironment.FirstStartup) return null;
             try {using(var key=Registry.ClassesRoot.OpenSubKey(@"rockstar\shell\open\command")) {
                 var match=Regex.Match(key==null ? "" : Convert.ToString(key.GetValue("")),@"^\s*""([^""]+\.exe)""",RegexOptions.IgnoreCase);
                 if(match.Success && File.Exists(match.Groups[1].Value)) return match.Groups[1].Value;
@@ -80,7 +81,7 @@ namespace PadLauncher {
             if(!Directory.Exists(game.WorkingDirectory) || !title.Skip(1).Any(file => File.Exists(Path.Combine(game.WorkingDirectory,file)))) throw new FileNotFoundException("The Rockstar game's installed executable is missing.");
             string folder=Path.GetFullPath(game.WorkingDirectory).TrimEnd('\\');
             string client=String.IsNullOrWhiteSpace(customPath) ? DetectClient() : ValidateClient(customPath);
-            if(String.IsNullOrEmpty(client)) throw new FileNotFoundException("Rockstar Games Launcher could not be found. Choose its path in Integrations.");
+            if(String.IsNullOrEmpty(client)) throw new FileNotFoundException("Rockstar Games Launcher could not be found. Choose its path in Launchers.");
             return new ProcessStartInfo(client,"-launchTitleInFolder \""+folder+"\"") {UseShellExecute=true,WorkingDirectory=Path.GetDirectoryName(client)};
         }
     }

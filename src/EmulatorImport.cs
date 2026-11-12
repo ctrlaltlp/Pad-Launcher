@@ -80,7 +80,7 @@ namespace PadLauncher {
         public static Dictionary<string,string> SettingsFile(string path) {
             var result=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase); string section="";
             foreach(string raw in Text(path).Split('\n')) {
-                string line=raw.Trim(); if(line.Length==0 || line.StartsWith("#") || line.StartsWith(";")) continue;
+                string line=WithoutComment(raw,System.IO.Path.GetExtension(path).Equals(".toml",StringComparison.OrdinalIgnoreCase)).Trim(); if(line.Length==0) continue;
                 if(line.StartsWith("[") && line.EndsWith("]")) {section=line.Substring(1,line.Length-2); continue;}
                 var match=Regex.Match(line,@"^([^=]+?)\s*=\s*(.*)$");
                 if(match.Success) {
@@ -91,6 +91,22 @@ namespace PadLauncher {
                 }
             }
             return result;
+        }
+        static string WithoutComment(string line,bool toml) {
+            char quote='\0';
+            for(int i=0;i<line.Length;i++) {
+                char ch=line[i];
+                if(quote=='"') {
+                    if(ch=='\\' && i+1<line.Length && (line[i+1]=='\\' || line[i+1]=='"')) {i++; continue;}
+                    if(ch=='"') quote='\0';
+                } else if(quote=='\'') {
+                    if(ch=='\'') quote='\0';
+                } else {
+                    if((ch=='#' && toml) || ((ch=='#' || ch==';') && (i==0 || Char.IsWhiteSpace(line[i-1])))) return line.Substring(0,i);
+                    if((ch=='"' || ch=='\'') && (i==0 || Char.IsWhiteSpace(line[i-1]) || line[i-1]=='=' || line[i-1]==',' || line[i-1]=='[')) quote=ch;
+                }
+            }
+            return line;
         }
         public static Dictionary<string,string> YamlScalars(string path) {
             var result=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
@@ -287,26 +303,6 @@ namespace PadLauncher {
         static bool XeniaGame(string path) {
             if(path.EndsWith("default.xex",StringComparison.OrdinalIgnoreCase) || path.EndsWith(".iso",StringComparison.OrdinalIgnoreCase)) return true;
             return EmulatorLibrary.IsXeniaGamePackage(path);
-        }
-        internal static Dictionary<string,List<EmulatorImportGame>> ReadAllEmulatorGames(Settings settings,List<string> warnings) {
-            var batches=new Dictionary<string,List<EmulatorImportGame>>();
-            foreach(var preset in EmulatorLibrary.Presets) {
-                var config=EmulatorLibrary.Config(settings,preset.Id);
-                if(config==null || String.IsNullOrWhiteSpace(config.Path)) continue;
-                var sources=new List<EmulatorImportSource>();
-                try {
-                    string location=String.IsNullOrWhiteSpace(config.ImportPath) ? DetectLocation(preset.Id,config.Path) : config.ImportPath;
-                    if(!String.IsNullOrWhiteSpace(location)) sources.AddRange(Sources(preset.Id,config.Path,location));
-                } catch(Exception error) {warnings.Add(preset.Name+": "+error.Message);}
-                try {
-                    if(sources.Count==0) continue;
-                    var batch=Read(preset.Id,config.Path,sources,config.CorePath,CancellationToken.None);
-                    warnings.AddRange(batch.Warnings.Select(warning => preset.Name+": "+warning));
-                    var games=batch.Games.Where(game => String.IsNullOrEmpty(game.Problem)).ToList();
-                    if(games.Count>0) batches.Add(preset.Id,games);
-                } catch(Exception error) {warnings.Add(preset.Name+": "+error.Message);}
-            }
-            return batches;
         }
         internal static List<string> AddEntries(Settings settings,string emulator,string executable,IEnumerable<EmulatorImportGame> chosen) {
             var entries=chosen.ToList(); if(entries.Count==0) throw new ArgumentException("Select at least one game.");

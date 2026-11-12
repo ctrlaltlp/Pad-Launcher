@@ -20,6 +20,9 @@ namespace PadLauncher {
         public int UnreadableFolders;
         public List<string> ReadErrors=new List<string>();
     }
+    public class OrphanedEmulatorGame {
+        public string EmulatorId,Id,Name,Path,Reason;
+    }
     public class EmulatorConfig {
         public string ListName {get;set;}
         public string Arguments {get;set;}
@@ -220,20 +223,70 @@ namespace PadLauncher {
             try {
                 if(String.IsNullOrWhiteSpace(path)) return false;
                 path=Path.GetFullPath(path);
-                string parent=Path.GetDirectoryName(path);
-                if(String.IsNullOrEmpty(parent)) return false;
-                // Enumerating the parent distinguishes absence from an inaccessible drive or folder.
-                if(Directory.GetFileSystemEntries(parent).Any(entry => String.Equals(entry,path,StringComparison.OrdinalIgnoreCase))) return false;
-                try {File.GetAttributes(path); return false;}
-                catch(FileNotFoundException) {return true;}
+                string candidate=path;
+                while(true) {
+                    string parent=Path.GetDirectoryName(candidate);
+                    if(String.IsNullOrEmpty(parent) || parent==candidate) return false;
+                    try {
+                        // A readable ancestor can confirm that a whole game folder was deleted.
+                        // Existing but unreadable folders and disconnected drives remain protected.
+                        return !Directory.GetFileSystemEntries(parent).Any(entry => String.Equals(entry,candidate,StringComparison.OrdinalIgnoreCase));
+                    } catch(DirectoryNotFoundException) {candidate=parent;}
+                }
             } catch(IOException) {} catch(UnauthorizedAccessException) {} catch(System.Security.SecurityException) {} catch(ArgumentException) {}
             return false;
+        }
+        public static List<OrphanedEmulatorGame> FindOrphanedGames(Settings settings,bool includeAbsent,CancellationToken token,List<string> warnings) {
+            var result=new List<OrphanedEmulatorGame>();
+            foreach(var preset in Presets) {
+                token.ThrowIfCancellationRequested();
+                var config=Config(settings,preset.Id);
+                if(config==null || config.Games==null) continue;
+                var importedIds=new HashSet<string>((settings.EmulatorImports ?? new List<EmulatorImportDefinition>())
+                    .Where(import => import.EmulatorId==preset.Id)
+                    .SelectMany(import => import.ImportedGames ?? new List<string>()));
+                HashSet<string> detected=null;
+                if(includeAbsent) try {
+                    string location=String.IsNullOrWhiteSpace(config.ImportPath) ? EmulatorImport.DetectLocation(preset.Id,config.Path) : config.ImportPath;
+                    if(String.IsNullOrWhiteSpace(location)) warnings.Add(preset.Name+": no emulator library is configured.");
+                    else {
+                        var sources=EmulatorImport.Sources(preset.Id,config.Path,location);
+                        if(sources.Count==0) warnings.Add(preset.Name+": no library sources were found.");
+                        else {
+                            var batch=EmulatorImport.Read(preset.Id,config.Path,sources,config.CorePath,token);
+                            if(batch.Warnings.Count>0 || batch.Games.Any(game => !String.IsNullOrEmpty(game.Problem)))
+                                warnings.Add(preset.Name+": library detection was incomplete. Entries absent from its library were kept.");
+                            else detected=new HashSet<string>(batch.Games.Select(game => game.Path),StringComparer.OrdinalIgnoreCase);
+                        }
+                    }
+                } catch(OperationCanceledException) {throw;}
+                catch(Exception error) {warnings.Add(preset.Name+": "+error.Message);}
+                foreach(var game in config.Games) {
+                    token.ThrowIfCancellationRequested();
+                    string reason=null;
+                    if(ConfirmMissingRom(game.Path)) reason="ROM file is missing";
+                    else if(detected!=null && importedIds.Contains(game.Id) && !detected.Contains(game.Path)) {
+                        try {
+                            string parent=System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(game.Path));
+                            Directory.GetFileSystemEntries(parent);
+                            File.GetAttributes(game.Path);
+                            reason="No longer detected in the emulator library";
+                        } catch(IOException) {} catch(UnauthorizedAccessException) {} catch(System.Security.SecurityException) {} catch(ArgumentException) {}
+                    }
+                    if(reason!=null) result.Add(new OrphanedEmulatorGame {EmulatorId=preset.Id,Id=game.Id,Name=game.Name,Path=game.Path,Reason=reason});
+                }
+            }
+            return result;
         }
         public static void RemoveGame(Settings settings,string id,string gameId) {
             var config=Config(settings,id);
             if(config==null || config.Games==null || config.Games.RemoveAll(g => g.Id==gameId)==0) return;
             foreach(var list in settings.CustomLists ?? new List<CustomList>())
                 if(list.Games!=null) list.Games.Remove(gameId);
+            foreach(var list in settings.CombinedCollections ?? new List<CombinedCollection>()) {
+                if(list.AddedGames!=null) list.AddedGames.RemoveAll(idValue => idValue==gameId);
+                if(list.ExcludedGames!=null) list.ExcludedGames.RemoveAll(idValue => idValue==gameId);
+            }
             foreach(var import in settings.EmulatorImports ?? new List<EmulatorImportDefinition>())
                 if(import.ImportedGames!=null) import.ImportedGames.Remove(gameId);
         }

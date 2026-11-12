@@ -19,6 +19,7 @@ namespace PadLauncher {
             {"libra","LBRA"},{"pinta","PNTA"},{"aqua","AQUA"}
         };
         public static string DetectClient() {
+            if(TestEnvironment.FirstStartup) return null;
             foreach(var view in new[]{RegistryView.Registry32,RegistryView.Registry64}) try {
                 using(var root=RegistryKey.OpenBaseKey(RegistryHive.LocalMachine,view))
                 using(var key=root.OpenSubKey(@"SOFTWARE\Blizzard Entertainment\Battle.net\Capabilities")) {

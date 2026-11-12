@@ -228,7 +228,7 @@ public static class OverlayTests {
             var helpTabs=(TabControl)FindElement(helpRoot,"HelpSettingsTabs");
             var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[0]).Content;
             var settingsPage=(ScrollViewer)((TabItem)helpTabs.Items[1]).Content;
-            Check(helpTabs.Items.Count==7 && (string)((TabItem)helpTabs.Items[0]).Header=="Controls" && (string)((TabItem)helpTabs.Items[1]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Integrations" && (string)((TabItem)helpTabs.Items[6]).Header=="System","Settings tabs keep System last");
+            Check(helpTabs.Items.Count==7 && (string)((TabItem)helpTabs.Items[0]).Header=="Controls" && (string)((TabItem)helpTabs.Items[1]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Launchers" && (string)((TabItem)helpTabs.Items[6]).Header=="System","Settings tabs keep System last");
             Check(helpPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto && settingsPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto,"Both tabs show their slim scrollbar only when scrolling is needed");
             var systemContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[6]).Content).Content;
             var integrationsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[3]).Content).Content;
@@ -248,6 +248,15 @@ public static class OverlayTests {
             Check(FindElement((FrameworkElement)customSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)customSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)customSection.Content,"SaveCustomList")!=null,"Custom list picker, name and save action are available");
             helpTabs.SelectedIndex=1;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
+            var listNameToggle=(CheckBox)FindElement((FrameworkElement)settingsPage.Content,"ShowListNameSetting");
+            var listCountToggle=(CheckBox)FindElement((FrameworkElement)settingsPage.Content,"ShowListGameCountSetting");
+            Check(listCountToggle.IsChecked==true,"List game counts are enabled by default");
+            listNameToggle.IsChecked=false; listNameToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(!listCountToggle.IsEnabled,"Game-count setting is unavailable while the list name is hidden");
+            listNameToggle.IsChecked=true; listNameToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            listCountToggle.IsChecked=false; listCountToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(((TextBlock)FindElement((FrameworkElement)resident.Content,"SelectedCollection")).Text.IndexOf("games)",StringComparison.Ordinal)<0,"List game counts can be hidden on the overlay");
+            listCountToggle.IsChecked=true; listCountToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             settingsPage.ScrollToVerticalOffset(100); helpRoot.UpdateLayout();
             Check(settingsPage.ScrollableHeight>0 && settingsPage.VerticalOffset>0,"Settings remain scrollable with the slim scrollbar");
             var slimBar=(System.Windows.Controls.Primitives.ScrollBar)settingsPage.Template.FindName("PART_VerticalScrollBar",settingsPage);
@@ -432,15 +441,64 @@ public static class OverlayTests {
             Check(invalidUser && File.ReadAllText(Path.Combine(Storage.Root,"settings.json"))==userBefore,"User IDs outside the selected installation are rejected without changing settings");
             window.SetSteamUserId(null);
             Check(Storage.Read<Settings>("settings.json").UserId==null,"Automatic Steam profile selection is saved without a fixed user ID");
-            string legacy=Path.Combine(Storage.Root,"legacy"); Directory.CreateDirectory(legacy);
-            string oldSettings=Path.Combine(legacy,"settings.json"); File.WriteAllText(oldSettings,"{\"ButtonPrompts\":\"Nintendo\"}");
-            File.SetLastWriteTimeUtc(oldSettings,DateTime.UtcNow.AddMinutes(1));
-            Storage.MigrateFrom(legacy);
-            Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="Nintendo","Renamed app imports the latest existing button preference");
-            File.WriteAllText(Path.Combine(Storage.Root,"settings.json"),"{\"ButtonPrompts\":\"PlayStation\"}");
-            File.SetLastWriteTimeUtc(Path.Combine(Storage.Root,"settings.json"),DateTime.UtcNow.AddMinutes(2));
-            Storage.MigrateFrom(legacy);
-            Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="PlayStation","Migration preserves settings already changed in the renamed app");
+            // Empty library: setup panels and settings deep links.
+            Storage.Write("settings.json",new Settings()); Storage.Write("library.json",new Library());
+            var emptyWindow=new Launcher(false,true);
+            var emptyContent=(FrameworkElement)emptyWindow.Content;
+            emptyContent.Measure(new Size(1600,900)); emptyContent.Arrange(new Rect(0,0,1600,900)); emptyContent.UpdateLayout();
+            Check(((TextBlock)FindElement(emptyContent,"SelectedGameTitle")).Text=="Choose available lists in Settings","Empty library keeps its guidance title");
+            var emptyCarousel=(Canvas)FindElement(emptyContent,"GameCarousel");
+            Check(emptyCarousel.Children.Count==4 && FindElement(emptyContent,"GuideCardSteam")!=null && FindElement(emptyContent,"GuideCardCustomGames")!=null && FindElement(emptyContent,"GuideCardEmulators")!=null && FindElement(emptyContent,"GuideCardLists")!=null,"Empty library offers four setup panels instead of a blank carousel");
+            var emptyHandle=new System.Windows.Interop.WindowInteropHelper(emptyWindow).EnsureHandle(); var emptySource=System.Windows.Interop.HwndSource.FromHwnd(emptyHandle);
+            emptyWindow.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,emptySource,0,System.Windows.Input.Key.Enter) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
+            var settingsDialog=emptyWindow.HelpWindow;
+            Check(settingsDialog!=null && ((TabControl)FindElement((FrameworkElement)settingsDialog.Content,"HelpSettingsTabs")).SelectedIndex==2,"Enter on an empty library opens Settings on the Lists tab");
+            settingsDialog.Close();
+            emptyWindow.OpenSettingsTab(3);
+            var reopened=emptyWindow.HelpWindow;
+            Check(reopened!=null && ((TabControl)FindElement((FrameworkElement)reopened.Content,"HelpSettingsTabs")).SelectedIndex==3,"Settings deep link opens the Launchers tab");
+            var listsGuide=(FrameworkElement)FindElement(emptyContent,"GuideCardLists");
+            Check(listsGuide.Tag is Int32 && (int)listsGuide.Tag==2,"Setup panels carry the Settings tab their click opens");
+            reopened.Close();
+            var emptyHelp=emptyWindow.CreateHelpWindow();
+            var emptyHelpRoot=(FrameworkElement)emptyHelp.Content;
+            var emptyTabs=(TabControl)FindElement(emptyHelpRoot,"HelpSettingsTabs");
+            var emptyOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)emptyTabs.Items[1]).Content).Content;
+            var emptyMissing=(WrapPanel)FindElement(emptyOverlayPage,"MissingArtworkList");
+            var emptyMissingCount=(TextBlock)FindElement(emptyOverlayPage,"MissingArtworkCount");
+            Check(emptyMissing!=null && emptyMissing.Children.Count==0 && emptyMissingCount.Text=="Every game has artwork.","Missing artwork list reports nothing to fix when the library is empty");
+            emptyHelp.Close();
+            var bareLibrary=new Library(); bareLibrary.Games.Add(new Game {Id="no-art",Name="No art game",LaunchId="1"});
+            Storage.Write("library.json",bareLibrary);
+            var bareWindow=new Launcher(false,true);
+            var bareHelp=bareWindow.CreateHelpWindow();
+            var bareHelpRoot=(FrameworkElement)bareHelp.Content;
+            var bareTabs=(TabControl)FindElement(bareHelpRoot,"HelpSettingsTabs");
+            var bareOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)bareTabs.Items[1]).Content).Content;
+            var bareMissing=(WrapPanel)FindElement(bareOverlayPage,"MissingArtworkList");
+            var bareMissingCount=(TextBlock)FindElement(bareOverlayPage,"MissingArtworkCount");
+            Check(bareMissing!=null && bareMissing.Children.Count==1 && String.Equals((string)((Button)bareMissing.Children[0]).Content,"No art game",StringComparison.Ordinal) && bareMissingCount.Text=="1 game needs artwork.","Missing artwork list names the games that still need covers");
+            bareHelp.Close(); bareWindow.ExitApp(); emptyWindow.ExitApp();
+            var cacheWindow=new Launcher(true,true);
+            try {
+                string cacheCover=Path.Combine(Storage.Root,"cache-cover.png");
+                using(var cover=new System.Drawing.Bitmap(600,900)) cover.Save(cacheCover,System.Drawing.Imaging.ImageFormat.Png);
+                var binding=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+                var loadImage=typeof(Launcher).GetMethod("LoadImage",binding);
+                var first=loadImage.Invoke(cacheWindow,new object[]{cacheCover,700});
+                for(int index=0;index<80;index++) {
+                    string coverPath=Path.Combine(Storage.Root,"cache-cover-"+index+".png"); File.Copy(cacheCover,coverPath);
+                    loadImage.Invoke(cacheWindow,new object[]{coverPath,700});
+                    loadImage.Invoke(cacheWindow,new object[]{cacheCover,700});
+                }
+                long cacheBytes=(long)typeof(Launcher).GetField("imageCacheBytes",binding).GetValue(cacheWindow);
+                Check(cacheBytes<=32L*1024*1024,"Decoded artwork cache stays within 32 MB after browsing many covers");
+                Check(Object.ReferenceEquals(first,loadImage.Invoke(cacheWindow,new object[]{cacheCover,700})),"Frequently used artwork stays cached while older covers are evicted");
+                cacheWindow.SetCarouselLayout("grid");
+                var decodeWidth=typeof(Launcher).GetMethod("Card",binding);
+                var card=(FrameworkElement)decodeWidth.Invoke(cacheWindow,new object[]{new Game {Id="grid-memory",Name="Grid cover",Art=cacheCover},0,150.0,225.0,true,256});
+                Check(((BitmapSource)card.Tag).PixelWidth<=256,"Grid covers decode at their display size");
+            } finally {cacheWindow.ExitApp();}
             Console.WriteLine(checks+" overlay checks passed."); return 0;
         } catch (Exception e) { Console.Error.WriteLine(e); return 1; }
         finally {

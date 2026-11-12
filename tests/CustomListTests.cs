@@ -9,7 +9,7 @@ class CustomListTests {
     public static void Main() {
         var library=new Library {Games=new List<Game> {new Game {Id="1",Source="steam"},new Game {Id="epic:2",Source="epic"}}};
         var settings=new Settings {EnabledCollectionIds=new List<string>{"all"}};
-        string id=CustomLists.Save(settings,library,null,"Favourites",new[]{"1","epic:2","1"});
+        string id=CustomLists.Save(settings,library,null,"Mixed favourites",new[]{"1","epic:2","1"});
         Check(settings.CustomLists.Single().Games.Count==2,"Cross-launcher membership deduplicated");
         Check(settings.EnabledCollectionIds.Contains(id),"New list immediately available");
         var restored=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));

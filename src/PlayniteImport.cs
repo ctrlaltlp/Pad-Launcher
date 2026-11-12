@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -13,6 +13,7 @@ namespace PadLauncher {
         public string PluginId {get;set;}
         public string NativeId {get;set;}
         public string ActionDescription {get;set;}
+        public List<string> LaunchPaths {get;set;}
         public bool Installed {get;set;}
         public bool Hidden {get;set;}
     }
@@ -27,7 +28,7 @@ namespace PadLauncher {
             public List<Alternative> Alternatives=new List<Alternative>();
         }
         public static string ImportIdentity(CustomGame game) {
-            if(!String.IsNullOrEmpty(game.SteamShortcutKey)) return "steam:"+game.SteamShortcutKey;
+            if(!String.IsNullOrEmpty(game.SteamShortcutKey)) return "steam:"+game.SteamShortcutKey+(game.LaunchViaSteam ? ":steam" : ":direct");
             return String.IsNullOrEmpty(game.PlayniteId) ? null : "playnite:"+game.PlayniteId;
         }
         public static string ActionKey(string target,string arguments,string folder,string details=null) {
@@ -53,7 +54,7 @@ namespace PadLauncher {
         public static int ApplyChoices(Settings settings,List<CustomGame> prepared,List<Conflict> conflicts) {
             var excluded=new HashSet<CustomGame>();
             foreach(var group in conflicts) {
-                if(!group.Alternatives.Any(a => a.Keep)) throw new ArgumentException("Keep at least one entry for "+group.Name+".");
+
                 foreach(var choice in group.Alternatives) {
                     if(choice.Incoming!=null && !choice.Keep) excluded.Add(choice.Incoming);
                     if(choice.Existing==null || choice.Keep) continue;
@@ -120,12 +121,24 @@ namespace PadLauncher {
                     if(candidate.StartsWith(root,StringComparison.OrdinalIgnoreCase) && File.Exists(candidate)) resolved=candidate;
                 } catch { /* Invalid or remote artwork is left for artwork fallback. */ }
             }
-            var descriptions=new List<string>();
+            var descriptions=new List<string>(); var launchPaths=new List<string>();
+            string installDirectory=Environment.ExpandEnvironmentVariables(Vdf.Str(value,"InstallDirectory"));
             foreach(var action in EpicLibrary.Entries(Vdf.Get(value,"GameActions"))) {
+                string actionPath=Environment.ExpandEnvironmentVariables(Vdf.Str(action,"Path")).Replace("{InstallDir}",installDirectory).Trim().Trim('"');
+                try {if(!Path.IsPathRooted(actionPath) && !String.IsNullOrEmpty(installDirectory)) actionPath=Path.Combine(installDirectory,actionPath);
+                    if(Path.IsPathRooted(actionPath) && actionPath.IndexOf('{')<0) launchPaths.Add(Path.GetFullPath(actionPath));} catch {}
                 descriptions.Add(Vdf.Str(action,"Name")+" [type "+Vdf.Str(action,"Type")+"]\n"+Vdf.Str(action,"Path")+" "+Vdf.Str(action,"Arguments")+(String.IsNullOrWhiteSpace(Vdf.Str(action,"WorkingDir")) ? "" : "\nFolder: "+Vdf.Str(action,"WorkingDir")));
             }
             if(Vdf.Str(value,"IncludeLibraryPluginAction").Equals("true",StringComparison.OrdinalIgnoreCase)) descriptions.Add("Library plugin: "+GuidValue(Vdf.Get(value,"PluginId"))+"\nGame ID: "+Vdf.Str(value,"GameId"));
-            return new PlayniteGame {Id=id.ToString(),Name=name.Trim(),Cover=resolved,Installed=Vdf.Str(value,"IsInstalled").Equals("true",StringComparison.OrdinalIgnoreCase),Hidden=Vdf.Str(value,"Hidden").Equals("true",StringComparison.OrdinalIgnoreCase),NativeId=Vdf.Str(value,"GameId"),PluginId=GuidValue(Vdf.Get(value,"PluginId")),ActionDescription=String.Join("\n\n",descriptions)};
+            return new PlayniteGame {Id=id.ToString(),Name=name.Trim(),Cover=resolved,Installed=Vdf.Str(value,"IsInstalled").Equals("true",StringComparison.OrdinalIgnoreCase),Hidden=Vdf.Str(value,"Hidden").Equals("true",StringComparison.OrdinalIgnoreCase),NativeId=Vdf.Str(value,"GameId"),PluginId=GuidValue(Vdf.Get(value,"PluginId")),ActionDescription=String.Join("\n\n",descriptions),LaunchPaths=launchPaths};
+        }
+        public static bool DetectedUnderDifferentPath(PlayniteGame game,Library library) {
+            var paths=game.LaunchPaths ?? new List<string>();
+            if(paths.Count==0) return false;
+            var existing=library.Games.Where(g => ArtworkService.Normalize(g.Name)==ArtworkService.Normalize(game.Name))
+                .Select(g => !String.IsNullOrEmpty(g.ShortcutTarget) ? g.ShortcutTarget : g.Source=="custom" || g.Source=="emulator" ? g.LaunchId : null)
+                .Where(p => !String.IsNullOrWhiteSpace(p) && Path.IsPathRooted(p)).ToList();
+            return existing.Count>0 && !existing.Any(p => paths.Any(other => String.Equals(p.Trim().Trim('"'),other,StringComparison.OrdinalIgnoreCase)));
         }
         public static bool NativeDuplicate(PlayniteGame game,Library library) {
             if(String.Equals(game.PluginId,"88409022-088a-4de8-805a-fdbac291f00a",StringComparison.OrdinalIgnoreCase)) return library.Games.Any(g => g.Source=="rockstar" && String.Equals(g.LaunchId,game.NativeId,StringComparison.OrdinalIgnoreCase));

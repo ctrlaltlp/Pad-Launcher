@@ -129,6 +129,10 @@ class EmulatorImportTests {
             byte[] stfs=new byte[0x348]; Array.Copy(Encoding.ASCII.GetBytes("LIVE"),stfs,4); stfs[0x346]=0x70; File.WriteAllBytes(Path.Combine(content,"game"),stfs); stfs[0x346]=0; stfs[0x347]=1; File.WriteAllBytes(Path.Combine(content,"save"),stfs);
             string xeniaCfg=Write(xeniaRoot,"xenia.config.toml","[Storage]\ncontent_root = \"content\"");
             Check(EmulatorImport.Read("xenia",xenia,EmulatorImport.Sources("xenia",xenia,xeniaCfg),null,token).Games.Single().Name=="game","Xenia imports game containers and skips saved-game content");
+            File.WriteAllText(xeniaCfg,"[Storage] # storage options\nstorage_root = \"\"# use default\ncontent_root = \"content\" # installed content\nquoted = 'folder #1; games' # comment\nescaped = \"folder\\\"#1\" # comment");
+            var commented=EmulatorImport.SettingsFile(xeniaCfg);
+            Check(EmulatorImport.Read("xenia",xenia,EmulatorImport.Sources("xenia",xenia,xeniaCfg),null,token).Games.Single().Name=="game","Xenia ignores inline comments after empty and quoted paths");
+            Check(EmulatorImport.Scalar(commented["Storage/quoted"])=="folder #1; games" && EmulatorImport.Scalar(commented["Storage/escaped"])=="folder\"#1","Comment markers inside quoted paths and escaped quotes are preserved");
             using(var cancel=new CancellationTokenSource()) {cancel.Cancel(); bool stopped=false; try {EmulatorImport.Read("xenia",xenia,EmulatorImport.Sources("xenia",xenia,xeniaCfg),null,cancel.Token);} catch(OperationCanceledException) {stopped=true;} Check(stopped,"Discovery can be cancelled");}
             Console.WriteLine(checks+" emulator library import checks passed");
         } finally {Directory.Delete(root,true);}
