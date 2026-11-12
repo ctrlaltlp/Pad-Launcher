@@ -41,10 +41,6 @@ Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**.
 
 Left and right stick speeds are adjustable in Controls (defaults: 1× and 3×). You can also enable up/down list switching for Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 always toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
 
-## Manual Configuration
-
-To edit files manually, exit the app completely first, then edit `PadLauncher.Data/settings.json`. `settings.example.json` shows a subset of the available fields. Keep a backup before editing; game IDs link games to lists and artwork. The SteamGridDB API key is stored separately as `PadLauncher.Data/steamgriddb.key`, encrypted for your Windows account, so enter it again when moving to another account or PC.
-
 ## Inspiration
 
 https://github.com/motor-dev/wallpaperCarousel
