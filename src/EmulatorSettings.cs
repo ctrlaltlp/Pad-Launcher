@@ -107,8 +107,22 @@ namespace PadLauncher {
                     if(file.ShowDialog(dialog)==true) {path.Text=file.FileName; savePath.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}
                 };
                 if(id=="retroarch") {
-                    defaultCore=field("Default core for new games","EmulatorDefaultCore"); defaultCore.Text=config==null ? "" : config.CorePath ?? "";
+                    defaultCore=field("Default core path for new games","EmulatorDefaultCore"); defaultCore.Text=config==null ? "" : config.CorePath ?? "";
+                    panel.Children.Remove(defaultCore);
+                    var corePathBox=new Grid(); corePathBox.Children.Add(defaultCore);
+                    var corePathPlaceholder=Label("Enter a RetroArch core .dll path or browse…",12,muted);
+                    corePathPlaceholder.Margin=new Thickness(19,0,9,0); corePathPlaceholder.VerticalAlignment=VerticalAlignment.Center; corePathPlaceholder.IsHitTestVisible=false;
+                    corePathBox.Children.Add(corePathPlaceholder); panel.Children.Add(corePathBox);
+                    Action updateCorePathPlaceholder=() => corePathPlaceholder.Visibility=String.IsNullOrEmpty(defaultCore.Text) ? Visibility.Visible : Visibility.Collapsed;
+                    defaultCore.TextChanged+=(s,e) => updateCorePathPlaceholder(); updateCorePathPlaceholder();
+
                     var coreChoices=new SettingsComboBox {Name="EmulatorInstalledCores",DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(coreChoices);
+                    panel.Children.Remove(coreChoices);
+                    var installedCoreBox=new Grid {Margin=new Thickness(0,8,0,0)}; coreChoices.Margin=new Thickness(0); installedCoreBox.Children.Add(coreChoices);
+                    var installedCorePlaceholder=Label("…or select an installed core",12,muted);
+                    installedCorePlaceholder.Margin=new Thickness(10,0,35,0); installedCorePlaceholder.VerticalAlignment=VerticalAlignment.Center; installedCorePlaceholder.IsHitTestVisible=false;
+                    installedCoreBox.Children.Add(installedCorePlaceholder); panel.Children.Add(installedCoreBox);
+                    coreChoices.SelectionChanged+=(s,e) => installedCorePlaceholder.Visibility=coreChoices.SelectedIndex<0 ? Visibility.Visible : Visibility.Collapsed;
                     Action findCores=() => {coreChoices.ItemsSource=EmulatorLibrary.Cores(path.Text).Select(p => new KeyValuePair<string,string>(p,System.IO.Path.GetFileNameWithoutExtension(p))).ToList();}; findCores();
                     coreChoices.SelectionChanged+=(s,e) => {if(coreChoices.SelectedValue is string) defaultCore.Text=(string)coreChoices.SelectedValue;};
                     var coreActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)}; panel.Children.Add(coreActions);

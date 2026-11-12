@@ -1177,7 +1177,7 @@ namespace PadLauncher {
             var epicPathField=new TextBox {Text=settings.EpicLauncherPath ?? "",Padding=new Thickness(8)};
             var epicPathBox=new Grid(); epicPathBox.Children.Add(epicPathField);
             string epicDetectedPath=EpicLibrary.DetectLauncher();
-            var epicPlaceholder=Label(String.IsNullOrEmpty(epicDetectedPath) ? "Automatic detection" : epicDetectedPath,12,muted); epicPlaceholder.Margin=new Thickness(9,0,9,0); epicPlaceholder.IsHitTestVisible=false; epicPathBox.Children.Add(epicPlaceholder);
+            var epicPlaceholder=Label(String.IsNullOrEmpty(epicDetectedPath) ? "Automatic detection" : epicDetectedPath,12,muted); epicPlaceholder.Margin=new Thickness(19,0,9,0); epicPlaceholder.IsHitTestVisible=false; epicPathBox.Children.Add(epicPlaceholder);
             epicPathField.TextChanged+=(s,e) => epicPlaceholder.Visibility=String.IsNullOrEmpty(epicPathField.Text) ? Visibility.Visible : Visibility.Collapsed;
             epicPlaceholder.Visibility=String.IsNullOrEmpty(epicPathField.Text) ? Visibility.Visible : Visibility.Collapsed; epicPathRow.Children.Add(epicPathBox); epicIntegration.Children.Add(epicPathRow);
             var epicPathStatus=Label("",12,muted); epicPathStatus.TextWrapping=TextWrapping.Wrap;
@@ -1195,7 +1195,7 @@ namespace PadLauncher {
             var eaCaption=Label("EA App path",14,mint); eaCaption.Margin=new Thickness(0,10,0,8); eaIntegration.Children.Add(eaCaption);
             var eaRow=new DockPanel(); var browseEa=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseEa,Dock.Right); eaRow.Children.Add(browseEa);
             var eaPath=new TextBox {Text=settings.EaLauncherPath ?? "",Padding=new Thickness(8),ToolTip="Leave empty for automatic detection; choose EALauncher.exe to override."};
-            var eaField=new Grid(); eaField.Children.Add(eaPath); string eaDetectedPath=EaLibrary.DetectClient(); var eaHint=Label(String.IsNullOrEmpty(eaDetectedPath) ? "Automatic detection" : eaDetectedPath,12,muted); eaHint.Margin=new Thickness(9,0,9,0); eaHint.IsHitTestVisible=false; eaField.Children.Add(eaHint);
+            var eaField=new Grid(); eaField.Children.Add(eaPath); string eaDetectedPath=EaLibrary.DetectClient(); var eaHint=Label(String.IsNullOrEmpty(eaDetectedPath) ? "Automatic detection" : eaDetectedPath,12,muted); eaHint.Margin=new Thickness(19,0,9,0); eaHint.IsHitTestVisible=false; eaField.Children.Add(eaHint);
             eaPath.TextChanged+=(s,e) => eaHint.Visibility=String.IsNullOrEmpty(eaPath.Text) ? Visibility.Visible : Visibility.Collapsed; eaHint.Visibility=String.IsNullOrEmpty(eaPath.Text) ? Visibility.Visible : Visibility.Collapsed;
             eaRow.Children.Add(eaField); eaIntegration.Children.Add(eaRow);
             var eaStatus=Label("",12,muted); eaStatus.TextWrapping=TextWrapping.Wrap;
@@ -1212,7 +1212,7 @@ namespace PadLauncher {
             var ubisoftCaption=Label("Ubisoft Connect path",14,mint); ubisoftCaption.Margin=new Thickness(0,10,0,8); ubisoftIntegration.Children.Add(ubisoftCaption);
             var ubisoftRow=new DockPanel(); var browseUbisoft=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseUbisoft,Dock.Right); ubisoftRow.Children.Add(browseUbisoft);
             var ubisoftPath=new TextBox {Text=settings.UbisoftLauncherPath ?? "",Padding=new Thickness(8)};
-            var ubisoftField=new Grid(); ubisoftField.Children.Add(ubisoftPath); string ubisoftDetectedPath=UbisoftLibrary.DetectClient(); var ubisoftHint=Label(String.IsNullOrEmpty(ubisoftDetectedPath) ? "Automatic detection" : ubisoftDetectedPath,12,muted); ubisoftHint.Margin=new Thickness(9,0,9,0); ubisoftHint.IsHitTestVisible=false; ubisoftField.Children.Add(ubisoftHint);
+            var ubisoftField=new Grid(); ubisoftField.Children.Add(ubisoftPath); string ubisoftDetectedPath=UbisoftLibrary.DetectClient(); var ubisoftHint=Label(String.IsNullOrEmpty(ubisoftDetectedPath) ? "Automatic detection" : ubisoftDetectedPath,12,muted); ubisoftHint.Margin=new Thickness(19,0,9,0); ubisoftHint.IsHitTestVisible=false; ubisoftField.Children.Add(ubisoftHint);
             ubisoftPath.TextChanged+=(s,e) => ubisoftHint.Visibility=String.IsNullOrEmpty(ubisoftPath.Text) ? Visibility.Visible : Visibility.Collapsed; ubisoftHint.Visibility=String.IsNullOrEmpty(ubisoftPath.Text) ? Visibility.Visible : Visibility.Collapsed; ubisoftRow.Children.Add(ubisoftField); ubisoftIntegration.Children.Add(ubisoftRow);
             var ubisoftStatus=Label("",12,muted); ubisoftStatus.TextWrapping=TextWrapping.Wrap;
             Action updateUbisoftStatus=() => {string detected=UbisoftLibrary.DetectClient(); ubisoftStatus.Text=String.IsNullOrEmpty(settings.UbisoftLauncherPath) ? String.IsNullOrEmpty(detected) ? "Automatic: uses Ubisoft's registered launch link." : "" : "Custom launcher path saved.";}; updateUbisoftStatus();
@@ -1233,7 +1233,7 @@ namespace PadLauncher {
             var rockstarCaption=Label("Rockstar Games Launcher path",14,mint); rockstarCaption.Margin=new Thickness(0,10,0,8); rockstarIntegration.Children.Add(rockstarCaption);
             var rockstarRow=new DockPanel(); var browseRockstar=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseRockstar,Dock.Right); rockstarRow.Children.Add(browseRockstar);
             var rockstarPath=new TextBox {Text=settings.RockstarLauncherPath ?? "",Padding=new Thickness(8)};
-            var rockstarField=new Grid(); rockstarField.Children.Add(rockstarPath); string rockstarDetectedPath=RockstarLibrary.DetectClient(); var rockstarHint=Label(String.IsNullOrEmpty(rockstarDetectedPath) ? "Automatic detection" : rockstarDetectedPath,12,muted); rockstarHint.Margin=new Thickness(9,0,9,0); rockstarHint.IsHitTestVisible=false; rockstarField.Children.Add(rockstarHint);
+            var rockstarField=new Grid(); rockstarField.Children.Add(rockstarPath); string rockstarDetectedPath=RockstarLibrary.DetectClient(); var rockstarHint=Label(String.IsNullOrEmpty(rockstarDetectedPath) ? "Automatic detection" : rockstarDetectedPath,12,muted); rockstarHint.Margin=new Thickness(19,0,9,0); rockstarHint.IsHitTestVisible=false; rockstarField.Children.Add(rockstarHint);
             foreach(var hint in new[]{epicPlaceholder,eaHint,ubisoftHint,rockstarHint}) {
                 hint.TextTrimming=TextTrimming.CharacterEllipsis;
                 hint.HorizontalAlignment=HorizontalAlignment.Stretch;
@@ -1893,7 +1893,7 @@ namespace PadLauncher {
             art.ToolTip="Leave artwork empty to use SteamGridDB fallback when enabled.";
             panel.Children.Remove(art);
             var artworkField=new Grid(); artworkField.Children.Add(art);
-            var artworkHint=Label("Leave empty to use SteamGridDB automatically",12,muted); artworkHint.Margin=new Thickness(9,0,9,0); artworkHint.IsHitTestVisible=false;
+            var artworkHint=Label("Leave empty to use SteamGridDB automatically",12,muted); artworkHint.Margin=new Thickness(19,0,9,0); artworkHint.IsHitTestVisible=false;
             artworkField.Children.Add(artworkHint); panel.Children.Add(artworkField);
             Action updateArtworkHint=() => artworkHint.Visibility=String.IsNullOrEmpty(art.Text) ? Visibility.Visible : Visibility.Collapsed;
             art.TextChanged+=(s,e) => updateArtworkHint(); updateArtworkHint();
