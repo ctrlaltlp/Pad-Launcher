@@ -1,4 +1,4 @@
-# Pad Launcher (outdated README, will update asap)
+# Pad Launcher
 
 ![Pad Launcher showing the .Installed Steam collection over a Windows desktop with the taskbar visible](assets/preview.png)
 
