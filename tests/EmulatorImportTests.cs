@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -20,6 +20,15 @@ class EmulatorImportTests {
         }
     }
     static string Quote(string value) {return "\""+value.Replace("\\","\\\\").Replace("\"","\\\"")+"\"";}
+    static string AzaharApp(string root,string relative,uint category,bool executable=true) {
+        string path=Write(root,relative); byte[] data=new byte[0x1000];
+        Encoding.ASCII.GetBytes("NCCH").CopyTo(data,0x100);
+        BitConverter.GetBytes(((ulong)category<<32)|0x123400UL).CopyTo(data,0x118);
+        data[0x18d]=(byte)(executable ? 2 : 1); BitConverter.GetBytes(1u).CopyTo(data,0x1a0); BitConverter.GetBytes(5u).CopyTo(data,0x1a4);
+        Encoding.ASCII.GetBytes("icon").CopyTo(data,0x200); BitConverter.GetBytes(0x408u).CopyTo(data,0x20c);
+        Encoding.ASCII.GetBytes("SMDH").CopyTo(data,0x400); Encoding.Unicode.GetBytes("Example 3DS title").CopyTo(data,0x688);
+        File.WriteAllBytes(path,data); return path;
+    }
     [DllImport("winsqlite3.dll",CallingConvention=CallingConvention.Cdecl)] static extern int sqlite3_open_v2(byte[] name,out IntPtr db,int flags,IntPtr vfs);
     [DllImport("winsqlite3.dll",CallingConvention=CallingConvention.Cdecl)] static extern int sqlite3_exec(IntPtr db,byte[] sql,IntPtr callback,IntPtr arg,IntPtr error);
     [DllImport("winsqlite3.dll",CallingConvention=CallingConvention.Cdecl)] static extern int sqlite3_close(IntPtr db);
@@ -36,6 +45,26 @@ class EmulatorImportTests {
         string root=Path.Combine(Path.GetTempPath(),"EmulatorImportTests-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try {
             var token=CancellationToken.None;
+            string azahar=Write(root,"Azahar/azahar.exe"),azRoot=Path.GetDirectoryName(azahar);
+            string azRom=Write(azRoot,"roms/Cartridge (USA).cci"),nested=Write(azRoot,"roms/nested/Other.zcci");
+            Write(azRoot,"roms/Installer.cia");
+            string azApp=AzaharApp(azRoot,"user/sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000/00123400/content/00000000.app",0x00040000);
+            AzaharApp(azRoot,"roms/update.app",0x0004000e); AzaharApp(azRoot,"roms/dlc.app",0x0004008c); AzaharApp(azRoot,"roms/data.app",0x00040000,false);
+            string azConfig=Write(azRoot,"user/config/qt-config.ini","[Paths]\ngamedirs\\1\\path="+Path.Combine(azRoot,"roms").Replace("\\","/")+"\ngamedirs\\1\\deep_scan=true\ngamedirs\\2\\path=INSTALLED\ngamedirs\\size=2\n");
+            Check(Path.GetFullPath(EmulatorImport.DetectLocation("azahar",azahar))==Path.GetFullPath(azConfig),"Azahar detects portable config before installed data");
+            var azSources=EmulatorImport.Sources("azahar",azahar,azConfig);
+            Check(azSources.Count==2 && azSources.All(source => source.Recursive),"Azahar discovers configured recursive folder and installed titles");
+            var azBatch=EmulatorImport.Read("azahar",azahar,azSources,null,token);
+            Check(azBatch.Games.Count==3 && azBatch.Games.Any(g => g.Path==Path.GetFullPath(azRom)) && azBatch.Games.Any(g => g.Path==Path.GetFullPath(nested)) && azBatch.Games.Any(g => g.Path==Path.GetFullPath(azApp)),"Azahar imports base games and excludes CIA installers, updates, DLC and nonexecutables");
+            Check(azBatch.Games.Single(g => g.Path==Path.GetFullPath(azApp)).Name=="Example 3DS title","Azahar installed games use embedded English title");
+            var azSettings=new Settings(); EmulatorLibrary.SavePath(azSettings,"azahar",azahar);
+            Check(EmulatorLibrary.AddGames(azSettings,"azahar",azBatch.Games.Select(g => g.Path))==3 && EmulatorLibrary.AddGames(azSettings,"azahar",azBatch.Games.Select(g => g.Path))==0,"Azahar repeated imports do not duplicate games");
+            var azLibrary=new Library(); EmulatorLibrary.Apply(azLibrary,azSettings);
+            Check(GameLaunch.StartInfo(azLibrary.Games.First(),azSettings).Arguments.StartsWith("-f \""),"Azahar launches fullscreen with a quoted game path");
+            Write(azRoot,"user/config/qt-config.ini","[Paths]\ngamedirs\\1\\path="+Path.Combine(azRoot,"roms").Replace("\\","/")+"\ngamedirs\\1\\deep_scan=false\n[Data Storage]\nuse_custom_storage=true\nsdmc_directory="+Path.Combine(azRoot,"customsd").Replace("\\","/")+"\n");
+            var shallow=EmulatorImport.Read("azahar",azahar,EmulatorImport.Sources("azahar",azahar,azConfig),null,token);
+            Check(shallow.Games.Count==1 && shallow.Games[0].Path==Path.GetFullPath(azRom),"Azahar respects nonrecursive folder setting and custom SD location");
+
             string retro=Write(root,"Retro Arch\\retroarch.exe"),retroRoot=Path.GetDirectoryName(retro),core=Write(retroRoot,"cores\\snes9x_libretro.dll"),otherCore=Write(retroRoot,"cores\\mgba_libretro.dll");
             string rom=Write(retroRoot,"roms\\Game #1.sfc"),extra=Write(retroRoot,"roms\\New game.sfc");
             string retroCfg=Write(retroRoot,"retroarch.cfg","playlist_directory = \"playlists\"");

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -35,6 +35,7 @@ namespace PadLauncher {
                 case "duckstation": return new[]{"settings.ini"};
                 case "pcsx2": return new[]{"inis/PCSX2.ini","PCSX2.ini"};
                 case "dolphin": return new[]{"User/Config/Dolphin.ini","Config/Dolphin.ini","Dolphin.ini"};
+                case "azahar":
                 case "eden": return new[]{"user/config/qt-config.ini","config/qt-config.ini","qt-config.ini"};
                 case "retroarch": return new[]{"retroarch.cfg"};
                 case "rpcs3": return new[]{"games.yml","vfs.yml"};
@@ -50,6 +51,10 @@ namespace PadLauncher {
             string folder=System.IO.Path.GetDirectoryName(EmulatorLibrary.Executable(executable));
             var roots=new List<string> {folder};
             if(id=="rpcs3" || id=="vita3k") roots.Insert(0,System.IO.Path.Combine(folder,"portable"));
+            if(id=="azahar" && Directory.Exists(System.IO.Path.Combine(folder,"user"))) {
+                foreach(string relative in ConfigNames(id)) {string portable=System.IO.Path.Combine(folder,relative.Replace('/',System.IO.Path.DirectorySeparatorChar)); if(File.Exists(portable)) return portable;}
+                return System.IO.Path.Combine(folder,"user");
+            }
             if(id=="rpcs3") roots.Insert(0,System.IO.Path.Combine(folder,"config"));
             string docs=Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),roaming=Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),local=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             string[] names=id=="dolphin" ? new[]{"Dolphin Emulator"} : id=="pcsx2" ? new[]{"PCSX2"} : id=="ppsspp" ? new[]{"PPSSPP"} : id=="vita3k" ? new[]{"Vita3K/Vita3K","Vita3K"} : id=="xenia" ? new[]{"Xenia"} : new[]{EmulatorLibrary.Preset(id).Name,id};
@@ -185,7 +190,7 @@ namespace PadLauncher {
             }
             if(file==null) throw new IOException("No supported configuration found here. Browse to the emulator's configuration file.");
             Action<string,bool> folder=(path,recursive) => {
-                if(String.IsNullOrWhiteSpace(path) || new[]{"UserNAND","SysNAND","SDMC","default","."}.Contains(path)) return;
+                if(String.IsNullOrWhiteSpace(path) || new[]{"UserNAND","SysNAND","SDMC","INSTALLED","SYSTEM","default","."}.Contains(path)) return;
                 try {string resolved=Resolve(path,root); if(!Directory.Exists(resolved)) return; var source=Source("Folder: "+resolved,"folder",resolved,recursive); var existing=sources.FirstOrDefault(s => s.Id==source.Id); if(existing==null) sources.Add(source); else existing.Recursive|=recursive;} catch(ArgumentException) {}
             };
             if(id=="cemu") {
@@ -201,9 +206,20 @@ namespace PadLauncher {
                 var exclusions=StringList(GetRaw(settings,"GameList/ExcludedPaths")).Select(p => Resolve(p,root)).ToList(); foreach(var source in sources) source.Exclusions=exclusions;
             } else if(id=="dolphin") {
                 foreach(var setting in settings.Where(p => Regex.IsMatch(p.Key,@"^General/ISOPath\d+$",RegexOptions.IgnoreCase))) folder(Scalar(setting.Value),Yes(Get(settings,"General/RecursiveISOPaths")));
-            } else if(id=="eden") {
+            } else if(id=="eden" || id=="azahar") {
                 foreach(var setting in settings.Where(p => Regex.IsMatch(p.Key,@"(?:^|[/\\])gamedirs[/\\]\d+[/\\]path$",RegexOptions.IgnoreCase))) {string prefix=setting.Key.Substring(0,setting.Key.Length-4); folder(Scalar(setting.Value),Yes(Get(settings,prefix+"deep_scan")));}
-                if(sources.Count==0) folder(Get(settings,"UI/Paths/gameListRootDir",Get(settings,"UI/gameListRootDir")),Yes(Get(settings,"UI/Paths/gameListDeepScan")));
+                if(id=="azahar") {
+                    if(sources.Count==0) {string legacy=Get(settings,"Paths/gameListRootDir"); if(legacy!=".") folder(legacy,Yes(Get(settings,"Paths/gameListDeepScan")));}
+                    sources.RemoveAll(source => new[]{"INSTALLED","SYSTEM"}.Contains(System.IO.Path.GetFileName(source.Path)));
+                    string userRoot=System.IO.Path.GetFileName(root).Equals("config",StringComparison.OrdinalIgnoreCase) ? System.IO.Path.GetDirectoryName(root) : root;
+                    string sd=Get(settings,"Data Storage/sdmc_directory");
+                    if(!Yes(Get(settings,"Data Storage/use_custom_storage")) || String.IsNullOrWhiteSpace(sd)) sd=System.IO.Path.Combine(userRoot,"sdmc"); else sd=Resolve(sd,userRoot);
+                    string titles=System.IO.Path.Combine(sd,"Nintendo 3DS","00000000000000000000000000000000","00000000000000000000000000000000","title");
+                    foreach(string category in new[]{"00040000","00040002"}) {
+                        string installed=System.IO.Path.Combine(titles,category);
+                        if(Directory.Exists(installed)) sources.Add(Source(category=="00040000" ? "Installed 3DS games" : "Installed 3DS demos","folder",installed,true));
+                    }
+                } else if(sources.Count==0) folder(Get(settings,"UI/Paths/gameListRootDir",Get(settings,"UI/gameListRootDir")),Yes(Get(settings,"UI/Paths/gameListDeepScan")));
             } else if(id=="ppsspp") {
                 foreach(var setting in settings.Where(p => p.Key.StartsWith("PinnedPaths/",StringComparison.OrdinalIgnoreCase))) folder(Scalar(setting.Value),true);
                 folder(Get(settings,"General/CurrentDirectory"),true);

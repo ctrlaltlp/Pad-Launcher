@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -57,6 +57,7 @@ namespace PadLauncher {
             new EmulatorPreset {Id="pcsx2",Name="PCSX2",System="PlayStation 2",Extensions=".iso;.chd;.cso;.bin;.gz;.elf",Hint="Choose a PS2 disc image or ELF file."},
             new EmulatorPreset {Id="dolphin",Name="Dolphin",System="GameCube / Wii",Extensions=".iso;.gcm;.rvz;.wbfs;.wia;.ciso;.gcz;.dol;.elf;.wad;.json",Hint="Choose a GameCube/Wii image, homebrew executable, or Dolphin mod preset. Display preferences follow Dolphin's settings."},
             new EmulatorPreset {Id="eden",Name="Eden",System="Nintendo Switch",Extensions=".xci;.nsp;.nro;.nso;.nca",Hint="Choose a base game file. Updates and DLC are managed inside Eden."},
+            new EmulatorPreset {Id="azahar",Name="Azahar",System="Nintendo 3DS",Extensions=".cci;.3ds;.cxi;.3dsx;.elf;.axf;.zcci;.zcxi;.z3dsx;.bcci;.bcxi;.app",Hint="Choose a compatible decrypted 3DS game. Install CIA packages in Azahar first, then import its library. Updates and DLC are not separate games."},
             new EmulatorPreset {Id="melonds",Name="melonDS",System="Nintendo DS / DSi",Extensions=".nds;.srl;.zip;.7z",Hint="Choose a DS ROM or a supported archive containing a DS ROM."},
             new EmulatorPreset {Id="vita3k",Name="Vita3K",System="PlayStation Vita",Extensions=".bin",Hint="Select an installed title folder inside Vita3K's ux0/app folder, or its eboot.bin. Install games in Vita3K first."},
             new EmulatorPreset {Id="retroarch",Name="RetroArch",System="Multiple systems",Extensions=".nes;.fds;.sfc;.smc;.snes;.gb;.gbc;.gba;.sgb;.n64;.z64;.v64;.nds;.md;.gen;.smd;.32x;.sms;.gg;.pce;.sgx;.ngp;.ngc;.ws;.wsc;.a26;.a52;.a78;.lnx;.j64;.jag;.cue;.chd;.iso;.pbp;.m3u;.ccd;.cso;.zip;.7z;.bin;.rom;.col;.int;.vec;.vb;.uze;.bs;.st;.msa;.adf;.hdf;.d64;.d81;.prg;.tap;.crt;.dsk;.mx1;.mx2;.cas;.tzx;.z80;.sna;.nib",Hint="Select a core before adding games. Scan a folder for that core's system; core metadata filters compatible extensions when available. Existing games keep their assigned core."},
@@ -132,6 +133,7 @@ namespace PadLauncher {
             if(id=="shadps4" && Directory.Exists(path)) path=Path.Combine(path,"eboot.bin");
             if(!File.Exists(path)) throw new FileNotFoundException("The game file could not be found.",path);
             string extension=System.IO.Path.GetExtension(path).ToLowerInvariant();
+            if(id=="azahar" && extension==".app" && !IsAzaharApplication(path)) throw new ArgumentException("Choose an installed executable 3DS base game, not content data, an update or DLC.");
             if(id=="dolphin" && extension==".json") ValidateDolphinPreset(path);
             if(!preset.Extensions.Split(';').Contains(extension) || ((id=="rpcs3" || id=="shadps4") && extension==".bin" && !System.IO.Path.GetFileName(path).Equals("EBOOT.BIN",StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("Choose a supported "+preset.Name+" game file. "+preset.Hint);
             return path;
@@ -152,6 +154,7 @@ namespace PadLauncher {
             throw new ArgumentException("Choose a Dolphin game mod preset saved from Dolphin.");
         }
         public static string SuggestedName(string id,string path) {
+            if(id=="azahar") {string embedded=AzaharTitle(path); if(!String.IsNullOrEmpty(embedded)) return embedded;}
             string sfo=null;
             if(id=="vita3k") sfo=System.IO.Path.Combine(path,"sce_sys","param.sfo");
             if(id=="shadps4") sfo=Path.Combine(Path.GetDirectoryName(path),"sce_sys","param.sfo");
@@ -370,6 +373,7 @@ namespace PadLauncher {
                         if(id=="ppsspp" && !IsPspScanCandidate(file,extension)) continue;
                         if((id=="rpcs3" || id=="vita3k" || id=="shadps4") && !System.IO.Path.GetFileName(file).Equals("eboot.bin",StringComparison.OrdinalIgnoreCase)) continue;
                         if(id=="eden" && !IsEdenScanCandidate(file,extension)) continue;
+                        if(id=="azahar" && extension==".app" && !IsAzaharApplication(file)) continue;
                         if((File.GetAttributes(file)&FileAttributes.ReparsePoint)==0) files.Add(file);
                     }
                 } catch(UnauthorizedAccessException error) {result.UnreadableFolders++; result.ReadErrors.Add(current+" — "+error.Message);}
@@ -404,10 +408,43 @@ namespace PadLauncher {
                 if(!extensions.Contains(extension)) continue;
                 if((id=="rpcs3" || id=="vita3k" || id=="shadps4") && !System.IO.Path.GetFileName(file).Equals("eboot.bin",StringComparison.OrdinalIgnoreCase)) continue;
                 if(id=="eden" && !IsEdenScanCandidate(file,extension)) continue;
+                        if(id=="azahar" && extension==".app" && !IsAzaharApplication(file)) continue;
                 if(id=="xenia" && (extension=="" || extension==".live" || extension==".con" || extension==".pirs") && !IsXeniaGamePackage(file)) continue;
                 try {result.Paths.Add(GamePath(id,file));} catch(ArgumentException) {} catch(IOException) {} catch(UnauthorizedAccessException) {}
             }
             result.Paths=result.Paths.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(p => p,StringComparer.CurrentCultureIgnoreCase).ToList(); return result;
+        }
+        public static bool IsAzaharApplication(string path) {
+            try {
+                using(var file=File.OpenRead(path)) using(var reader=new BinaryReader(file)) {
+                    if(file.Length<0x200) return false;
+                    file.Position=0x100; if(Encoding.ASCII.GetString(reader.ReadBytes(4))!="NCCH") return false;
+                    file.Position=0x118; ulong title=reader.ReadUInt64(); uint category=(uint)(title>>32);
+                    if(category!=0x00040000 && category!=0x00040002) return false;
+                    file.Position=0x18d; if((reader.ReadByte()&2)==0) return false;
+                    file.Position=0x1a4; return reader.ReadUInt32()>0;
+                }
+            } catch(IOException) {return false;} catch(UnauthorizedAccessException) {return false;}
+        }
+        static string AzaharTitle(string path) {
+            try {
+                using(var file=File.OpenRead(path)) using(var reader=new BinaryReader(file)) {
+                    if(file.Length<0x200) return null;
+                    file.Position=0x100; if(Encoding.ASCII.GetString(reader.ReadBytes(4))!="NCCH") return null;
+                    file.Position=0x1a0; long exefs=(long)reader.ReadUInt32()*0x200;
+                    if(exefs<0x200 || exefs+0x200>file.Length) return null;
+                    for(int i=0;i<10;i++) {
+                        file.Position=exefs+i*16; string name=Encoding.ASCII.GetString(reader.ReadBytes(8)).TrimEnd('\0'); uint offset=reader.ReadUInt32(),size=reader.ReadUInt32();
+                        if(name!="icon" || size<0x408) continue;
+                        long icon=exefs+0x200+offset; if(icon+0x408>file.Length) return null;
+                        file.Position=icon; if(Encoding.ASCII.GetString(reader.ReadBytes(4))!="SMDH") return null;
+                        file.Position=icon+8+0x200+0x80; string title=Encoding.Unicode.GetString(reader.ReadBytes(0x100)).Split('\0')[0].Trim();
+                        if(title.Length==0) {file.Position=icon+8+0x200; title=Encoding.Unicode.GetString(reader.ReadBytes(0x80)).Split('\0')[0].Trim();}
+                        return String.IsNullOrEmpty(title) ? null : title.Replace("\r"," ").Replace("\n"," ");
+                    }
+                }
+            } catch(IOException) {} catch(UnauthorizedAccessException) {}
+            return null;
         }
         private static bool IsEdenScanCandidate(string path,string extension) {
             if(extension==".nro") return true;
@@ -437,7 +474,7 @@ namespace PadLauncher {
                 case "rpcs3": return "--no-gui --fullscreen {game}";
                 case "dolphin": return "-b -e {game}";
                 case "eden": case "cemu": return "-f -g {game}";
-                case "melonds": case "mgba": return "-f {game}";
+                case "azahar": case "melonds": case "mgba": return "-f {game}";
                 case "ppsspp": return "--fullscreen --pause-menu-exit {game}";
                 case "retroarch": return "-f -L {core} {game}";
                 case "vita3k": return "--fullscreen -r {title}";

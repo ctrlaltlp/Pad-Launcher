@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -18,7 +18,7 @@ class EmulatorTests {
         string root=Path.Combine(Path.GetTempPath(),"EmulatorTests-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try {
             var settings=new Settings();
-            Check(settings.Emulators==null && EmulatorLibrary.Presets.Length==13,"Existing settings need no migration and all thirteen emulators are available");
+            Check(settings.Emulators==null && EmulatorLibrary.Presets.Length==14,"Existing settings need no migration and all fourteen emulators are available");
             Check(settings.RemoveMissingEmulatorGames,"Missing-ROM cleanup is enabled by default");
             string missingProbe=FileAt(root,"missing-check\\game.iso");
             Check(!EmulatorLibrary.ConfirmMissingRom(missingProbe),"Existing ROM is preserved");
@@ -49,6 +49,7 @@ class EmulatorTests {
             Check(EmulatorLibrary.Scan("shadps4",Path.Combine(root,"PS4"),System.Threading.CancellationToken.None,null,true).Paths.SequenceEqual(new[]{paths["shadps4"]}),"shadPS4 scans game executables only");
             string core=FileAt(root,"Emulators and games\\cores\\snes9x_libretro.dll"),otherCore=FileAt(root,"Emulators and games\\cores\\mgba_libretro.dll");
             EmulatorLibrary.SaveCore(settings,core);
+            paths["azahar"]=FileAt(root,"3DS/Example (USA).cci");
             foreach(var preset in EmulatorLibrary.Presets) {
                 EmulatorLibrary.SavePath(settings,preset.Id,executable);
                 Check(EmulatorLibrary.AddGames(settings,preset.Id,new[]{paths[preset.Id],paths[preset.Id]})==1,"Adds one unique game for "+preset.Name);
