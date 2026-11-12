@@ -114,6 +114,12 @@ namespace PadLauncher {
                 !(settings.CustomLists ?? new List<CustomList>()).Any(list => list.Id==listId) &&
                 !(settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => list.Id==listId))
                 throw new ArgumentException("The selected list no longer exists.");
+            var customGame=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(game => game.Id==gameId);
+            if(customGame!=null && !String.IsNullOrEmpty(customGame.SteamShortcutKey)) {
+                customGame.IncludeInCustomGamesList=String.IsNullOrEmpty(listId);
+                List<string> additions;
+                if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue("source:custom",out additions)) additions.RemoveAll(id => id==gameId);
+            }
             foreach(var list in settings.CustomLists ?? new List<CustomList>()) {
                 if(list.Games==null) list.Games=new List<string>();
                 list.Games.RemoveAll(id => id==gameId);
@@ -161,6 +167,8 @@ namespace PadLauncher {
                 string provider=source[0];
                 options.Add(new Collection {Id=id,Name=source[1],Source=provider,Games=library.Games.Where(g => provider=="steam" ? String.IsNullOrEmpty(g.Source) || g.Source=="steam" : g.Source==provider).Select(g => g.Id).ToList()});
             }
+            var customSource=options.FirstOrDefault(list => list.Id=="source:custom");
+            if(customSource!=null) customSource.Games=CustomGameLibrary.CustomListGameIds(library,settings);
             options.Add(new Collection {Id="recent",Name="Recently played",Games=library.Games.Where(g => RecentPlayed(settings,g)>0).OrderByDescending(g => RecentPlayed(settings,g)).Select(g => g.Id).ToList()});
             bool favouriteNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Favourites",StringComparison.OrdinalIgnoreCase)) ||
                 (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => String.Equals(list.Name,"Favourites",StringComparison.OrdinalIgnoreCase));
@@ -186,7 +194,9 @@ namespace PadLauncher {
         public static string SteamListName(Collection collection) {
             bool steam=collection.Source=="steam" || (collection.Id ?? "").StartsWith("user-collections.",StringComparison.Ordinal) || (collection.Id ?? "").StartsWith("tag:",StringComparison.Ordinal);
             string name=collection.Name ?? "";
-            return steam && !name.Equals("Steam",StringComparison.OrdinalIgnoreCase) && !name.EndsWith(" (Steam)",StringComparison.OrdinalIgnoreCase) ? name+" (Steam)" : name;
+            if(!steam || name.Equals("Steam",StringComparison.OrdinalIgnoreCase)) return name;
+            if(name.EndsWith(" (Steam)",StringComparison.OrdinalIgnoreCase)) name=name.Substring(0,name.Length-8);
+            return name.EndsWith(" (Steam collection)",StringComparison.OrdinalIgnoreCase) ? name : name+" (Steam collection)";
         }
         public static string Save(Settings settings,Library library,string id,string name,IEnumerable<string> sources) {
             name=(name ?? "").Trim();

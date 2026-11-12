@@ -75,10 +75,10 @@ class ExternalTests {
             Console.WriteLine("9 combined collection checks passed");
             var namedLists=new Library {Collections=new List<Collection>{new Collection {Id="user-collections.cached",Name="Installed",Games=new List<string>{"1"}},new Collection {Id="tag:Arcade",Name="Arcade"},new Collection {Id="source:epic",Name="Epic Games Store"},new Collection {Id="source:steam",Name="Steam",Source="steam"}}};
             var displayedLists=CombinedCollections.Options(namedLists,new Settings());
-            Check(displayedLists.Single(c => c.Id=="user-collections.cached").Name=="Installed (Steam)" && displayedLists.Single(c => c.Id=="tag:Arcade").Name=="Arcade (Steam)","Cached Steam lists and shortcut tags get Steam labels");
+            Check(displayedLists.Single(c => c.Id=="user-collections.cached").Name=="Installed (Steam collection)" && displayedLists.Single(c => c.Id=="tag:Arcade").Name=="Arcade (Steam collection)","Cached Steam lists and shortcut tags get Steam labels");
             Check(namedLists.Collections[0].Name=="Installed" && displayedLists.Single(c => c.Id=="user-collections.cached").Games.Contains("1"),"Steam labels preserve source names, IDs and membership");
             Check(displayedLists.Single(c => c.Id=="source:epic").Name=="Epic Games Store" && displayedLists.Single(c => c.Id=="source:steam").Name=="Steam","Other launchers and the Steam source list keep clear names");
-            Check(CombinedCollections.SteamListName(new Collection {Id="tag:test",Name="Arcade (Steam)"})=="Arcade (Steam)","Steam suffix is never duplicated");
+            Check(CombinedCollections.SteamListName(new Collection {Id="tag:test",Name="Arcade (Steam)"})=="Arcade (Steam collection)","Steam suffix is never duplicated");
             Console.WriteLine("4 list label checks passed");
             var emptySources=CombinedCollections.Options(new Library(),new Settings());
             Check(emptySources.Any(c => c.Id=="source:custom" && c.Games.Count==0) && emptySources.Any(c => c.Id=="source:gog" && c.Games.Count==0),"Empty Custom games and GOG lists remain available to combine");

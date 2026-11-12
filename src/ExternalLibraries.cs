@@ -116,6 +116,7 @@ namespace PadLauncher {
         public string SteamShortcutKey {get;set;}
         public string SteamLaunchId {get;set;}
         public bool LaunchViaSteam {get;set;}
+        public bool? IncludeInCustomGamesList {get;set;}
         public string PlayniteId {get;set;}
         public string PlayniteActionInfo {get;set;}
         public string Id {get;set;}
@@ -126,6 +127,20 @@ namespace PadLauncher {
         public string Artwork {get;set;}
     }
     public static class CustomGameLibrary {
+        public static bool InCustomGamesList(Settings settings,CustomGame game) {
+            if(game.IncludeInCustomGamesList.HasValue) return game.IncludeInCustomGamesList.Value;
+            if(String.IsNullOrEmpty(game.SteamShortcutKey)) return true;
+            List<string> explicitCustom;
+            if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue("source:custom",out explicitCustom) && explicitCustom.Contains(game.Id)) return true;
+            bool assigned=(settings.CustomLists ?? new List<CustomList>()).Any(l => (l.Games ?? new List<string>()).Contains(game.Id))
+                || (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(l => (l.AddedGames ?? new List<string>()).Contains(game.Id))
+                || (settings.ListGameAdditions ?? new Dictionary<string,List<string>>()).Any(pair => pair.Key!="source:custom" && (pair.Value ?? new List<string>()).Contains(game.Id));
+            return !assigned;
+        }
+        public static List<string> CustomListGameIds(Library library,Settings settings) {
+            var entries=(settings.CustomGames ?? new List<CustomGame>()).ToDictionary(g => g.Id);
+            return library.Games.Where(g => g.Source=="custom" && (!entries.ContainsKey(g.Id) || InCustomGamesList(settings,entries[g.Id]))).Select(g => g.Id).Distinct().ToList();
+        }
         public static bool MissingTarget(CustomGame game) {
             if(game==null || String.IsNullOrWhiteSpace(game.Target) || !Path.IsPathRooted(game.Target)) return false;
             return new[]{".exe",".lnk",".bat",".cmd"}.Contains(Path.GetExtension(game.Target).ToLowerInvariant()) &&
@@ -157,6 +172,7 @@ namespace PadLauncher {
             }
             if(settings.CustomGames==null) settings.CustomGames=new List<CustomGame>();
             var previous=settings.CustomGames.FirstOrDefault(g => g.Id==game.Id);
+            if(previous!=null && !game.IncludeInCustomGamesList.HasValue) game.IncludeInCustomGamesList=previous.IncludeInCustomGamesList;
             if(previous!=null && String.IsNullOrEmpty(game.SteamShortcutKey)) game.SteamShortcutKey=previous.SteamShortcutKey;
             if(previous!=null && String.IsNullOrEmpty(game.SteamLaunchId)) game.SteamLaunchId=previous.SteamLaunchId;
             if(previous!=null && String.IsNullOrEmpty(game.PlayniteId)) game.PlayniteId=previous.PlayniteId;
@@ -171,7 +187,7 @@ namespace PadLauncher {
             foreach(var entry in settings.CustomGames ?? new List<CustomGame>()) {
                 library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="custom",LaunchId=entry.Target,SteamLaunchId=entry.LaunchViaSteam ? entry.SteamLaunchId : null,Arguments=entry.Arguments,WorkingDirectory=entry.WorkingDirectory,ImportedActionInfo=entry.PlayniteActionInfo,Art=ArtworkPath(entry.Artwork)});
             }
-            var games=library.Games.Where(g => g.Source=="custom").Select(g => g.Id).ToList();
+            var games=CustomListGameIds(library,settings);
             if(games.Count>0) library.Collections.Add(new Collection {Id="source:custom",Name="Custom games",Games=games});
         }
     }

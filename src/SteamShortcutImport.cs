@@ -90,6 +90,12 @@ namespace PadLauncher {
                     || (settings.CustomGames ?? new List<CustomGame>()).Any(c => c.Id==g.Id && c.SteamShortcutKey==group.Key)).Select(g => g.Id));
                 var retained=group.Where(g => !String.IsNullOrEmpty(g.Id) && (settings.CustomGames ?? new List<CustomGame>()).Any(c => c.Id==g.Id)).Select(g => g.Id).ToList();
                 if(retained.Count==0 && !String.IsNullOrEmpty(destination)) retained.AddRange(before.Games.Where(g => sourceIds.Contains(g.Id) && !(settings.ReplacedGameIds ?? new List<string>()).Contains(g.Id)).Select(g => g.Id));
+                bool includeCustom=destination=="source:custom" || (String.IsNullOrEmpty(destination) && lists.Any(list => list.Id=="source:custom" && (list.Games ?? new List<string>()).Any(sourceIds.Contains)));
+                foreach(var entry in settings.CustomGames ?? new List<CustomGame>()) if(retained.Contains(entry.Id)) entry.IncludeInCustomGamesList=includeCustom;
+                if(!includeCustom) {
+                    List<string> additions;
+                    if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue("source:custom",out additions)) additions.RemoveAll(retained.Contains);
+                }
                 var targets=String.IsNullOrEmpty(destination) ? lists.Where(l => l.Id!="all" && l.Id!="recent" && !l.Id.StartsWith("source:") && (l.Games ?? new List<string>()).Any(sourceIds.Contains)).Select(l => l.Id) : new[]{destination};
                 foreach(string id in targets) {
                     var custom=(settings.CustomLists ?? new List<CustomList>()).FirstOrDefault(l => l.Id==id);

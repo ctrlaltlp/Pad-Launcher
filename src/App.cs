@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.1.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.1")]
+[assembly: System.Reflection.AssemblyVersion("0.4.2.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.2.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.2")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -853,7 +853,7 @@ namespace PadLauncher {
             var listLayoutSection=new Expander {Header="Per-list layout",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listLayoutExpanded};
             listLayoutSection.Expanded+=(s,e) => listLayoutExpanded=true; listLayoutSection.Collapsed+=(s,e) => listLayoutExpanded=false;
             listLayoutSection.Content=CreateListLayoutSettings(dialog,rebuild); listsLayout.Children.Add(listLayoutSection);
-            var customListSection=new Expander {Name="CustomListsSection",Header="Custom lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0)};
+            var customListSection=new Expander {Name="CustomListsSection",Header="Combine lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0)};
             var customListPanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             var customListOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new list")};
             foreach(var item in settings.CustomLists ?? new List<CustomList>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
@@ -922,7 +922,7 @@ namespace PadLauncher {
             } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
             customListActions.Children.Add(saveCustomList); customListActions.Children.Add(deleteCustomList); customListPanel.Children.Add(customListActions);
             listsLayout.Children.Add(customListSection);
-            var editLists=new Expander {Header="Edits lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listEditorExpanded};
+            var editLists=new Expander {Header="Rename / Duplicate lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listEditorExpanded};
             editLists.Content=CreateListEditor(dialog,rebuild);
             editLists.Expanded+=(sender,args) => listEditorExpanded=true;
             editLists.Collapsed+=(sender,args) => listEditorExpanded=false;
@@ -974,11 +974,9 @@ namespace PadLauncher {
                 } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Combine lists");}
             };
             combinedActions.Children.Add(saveCombined); combinedActions.Children.Add(deleteCombined); combinePanel.Children.Add(combinedActions);
-            var customListTabs=new TabControl {Name="CustomListTabs",Background=dialog.Background,Foreground=white,Margin=new Thickness(0,12,0,0)};
-            StyleSettingsSubtabs(customListTabs);
-            customListTabs.Items.Add(new TabItem {Header="Combine lists",Content=combinePanel});
-            customListTabs.Items.Add(new TabItem {Header="Add individual games",Content=customListPanel});
-            customListSection.Content=customListTabs;
+            customListSection.Content=combinePanel;
+            var individualGamesSection=new Expander {Name="EditListGamesSection",Header="Edit list's games",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),Content=customListPanel};
+            listsLayout.Children.Add(individualGamesSection);
             listsLayout.Children.Add(editLists);
             layout.Children.Add(skipEmpty);
             var removeMissing=new CheckBox {Content="Remove missing emulator and custom games on refresh",IsChecked=settings.RemoveMissingEmulatorGames,FontSize=14,Foreground=white,Margin=new Thickness(0,0,0,8)};
@@ -2154,6 +2152,7 @@ namespace PadLauncher {
             string oldId = remember ? settings.SelectedId : visible.Count > selected ? visible[selected].Id : null;
             string remembered;
             if(settings.SelectedGamesByList!=null && settings.SelectedGamesByList.TryGetValue(filter.Id,out remembered)) oldId=remembered;
+            if(filter.Id=="recent") oldId=null;
             var membership=new HashSet<string>(filter.Games ?? new List<string>());
             visible = library.Games.Where(g => filter.Id == "all" || (!filter.UnsupportedDynamic && membership.Contains(g.Id))).ToList();
             if(filter.Id=="recent") visible=visible.OrderByDescending(g => CombinedCollections.RecentPlayed(settings,g)).ToList();
@@ -2202,7 +2201,8 @@ namespace PadLauncher {
             }
             Game current = visible[selected]; settings.SelectedId = current.Id;
             if(settings.SelectedGamesByList==null) settings.SelectedGamesByList=new Dictionary<string,string>();
-            settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
+            if(filters[collectionIndex].Id=="recent") settings.SelectedGamesByList.Remove("recent");
+            else settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
             title.Text = current.Name+(GameFileMissing(current) ? " · Game file missing" : "");
             var keep = new HashSet<string>();
             bool gridLayout=ActiveLayout=="grid";

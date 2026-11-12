@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -239,13 +239,11 @@ public static class OverlayTests {
             var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[2]).Content).Content;
             Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
             var customSection=(Expander)FindElement(listsContents,"CustomListsSection");
-            Check(customSection!=null && (string)customSection.Header=="Custom lists","Individual game lists have a separate editor in Lists");
-            customSection.IsExpanded=true; helpTabs.SelectedIndex=2;
-            var customTabs=(TabControl)customSection.Content;
-            Check(customTabs.Items.Count==2 && (string)((TabItem)customTabs.Items[0]).Header=="Combine lists" && (string)((TabItem)customTabs.Items[1]).Header=="Add individual games","Custom lists contains both editing modes");
-            customTabs.SelectedIndex=1;
+            var individualSection=(Expander)FindElement(listsContents,"EditListGamesSection");
+            Check(customSection!=null && (string)customSection.Header=="Combine lists" && individualSection!=null && (string)individualSection.Header=="Edit list's games","Combine lists and individual game editor have separate dropdown sections");
+            customSection.IsExpanded=true; individualSection.IsExpanded=true; helpTabs.SelectedIndex=2;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
-            Check(FindElement((FrameworkElement)customSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)customSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)customSection.Content,"SaveCustomList")!=null,"Custom list picker, name and save action are available");
+            Check(FindElement((FrameworkElement)individualSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)individualSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)individualSection.Content,"SaveCustomList")!=null,"Individual list editor keeps picker, name and save action");
             helpTabs.SelectedIndex=1;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             var listNameToggle=(CheckBox)FindElement((FrameworkElement)settingsPage.Content,"ShowListNameSetting");

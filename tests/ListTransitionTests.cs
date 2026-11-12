@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -76,6 +76,16 @@ class ListTransitionTests {
                 string remembered=((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text;
                 Key(persisted,System.Windows.Input.Key.PageDown); Key(persisted,System.Windows.Input.Key.PageUp);
                 Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text==remembered,"Switching lists restores the selected game for each list");
+                savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
+                navigationLibrary.Games[0].LastPlayed=200; navigationLibrary.Games[1].LastPlayed=100;
+                savedSettings.SelectedGamesByList["recent"]="two";
+                persisted.SetAvailableCollections(new[]{"first","recent"});
+                Key(persisted,System.Windows.Input.Key.PageDown);
+                Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("One"),"Recently played ignores saved selection and starts on newest game");
+                Key(persisted,System.Windows.Input.Key.Right); Key(persisted,System.Windows.Input.Key.PageUp); Key(persisted,System.Windows.Input.Key.PageDown);
+                savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
+                Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("One") && !savedSettings.SelectedGamesByList.ContainsKey("recent"),"Recently played resets on returning and does not store a selection");
+                persisted.SetAvailableCollections(new[]{"first","second"});
                 savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
                 savedSettings.ListLayouts=new System.Collections.Generic.Dictionary<string,ListLayout> {{"first",new ListLayout {Layout="grid",PanelScale=1,Columns=2,Rows=1,AngledSizing="fit"}}};
                 persisted.SetAvailableCollections(new[]{"first","second"});

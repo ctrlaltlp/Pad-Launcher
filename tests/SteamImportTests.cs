@@ -73,6 +73,17 @@ class SteamImportTests {
             var chosen=SteamShortcutImport.Prepare(record,false); SteamShortcutImport.Merge(destinationSettings,chosen);
             SteamShortcutImport.PreserveLists(destinationSettings,oldLibrary,new List<CustomGame>{chosen},new Dictionary<string,string>{{record.Key,"list:chosen"}});
             Check(destinationSettings.CustomLists[0].Games.Contains(chosen.Id),"Explicit destination adds imported game to chosen list");
+            destinationSettings.CombinedCollections=new List<CombinedCollection>{new CombinedCollection {Id="combined:pc",Name="PC",Sources=new List<string>{"source:custom"}}};
+            var assignedLibrary=new Library(); CustomGameLibrary.Apply(assignedLibrary,destinationSettings);
+            var assignedLists=CombinedCollections.Options(assignedLibrary,destinationSettings);
+            Check(assignedLibrary.Games.Any(g => g.Id==chosen.Id) && assignedLists.Single(l => l.Id=="list:chosen").Games.Contains(chosen.Id) && !assignedLists.Single(l => l.Id=="source:custom").Games.Contains(chosen.Id) && !assignedLists.Single(l => l.Id=="combined:pc").Games.Contains(chosen.Id),"Explicit Steam import destination does not feed Custom games or its combined lists");
+            chosen.IncludeInCustomGamesList=null;
+            Check(!CustomGameLibrary.InCustomGamesList(destinationSettings,chosen),"Previously imported Steam entries already assigned to a list are excluded from automatic Custom games");
+            SteamShortcutImport.PreserveLists(destinationSettings,assignedLibrary,new List<CustomGame>{chosen},new Dictionary<string,string>{{record.Key,"source:custom"}});
+            CustomGameLibrary.Apply(assignedLibrary,destinationSettings);
+            Check(CombinedCollections.Options(assignedLibrary,destinationSettings).Single(l => l.Id=="source:custom").Games.Contains(chosen.Id),"Explicit Custom games destination still includes the import");
+            SteamShortcutImport.PreserveLists(destinationSettings,assignedLibrary,new List<CustomGame>{chosen},new Dictionary<string,string>{{record.Key,"list:chosen"}});
+            Check(!destinationSettings.ListGameAdditions["source:custom"].Contains(chosen.Id) && !CustomGameLibrary.InCustomGamesList(destinationSettings,chosen),"Choosing another destination removes stale Custom games links");
             record.Artwork=Path.Combine(root,"broken.png"); File.WriteAllText(record.Artwork,"broken image"); Check(SteamShortcutImport.Prepare(record,false).Artwork==null,"Unreadable source artwork does not prevent game import");
             Console.WriteLine(checks+" Steam shortcut import checks passed");
         } finally {Directory.Delete(root,true);}
