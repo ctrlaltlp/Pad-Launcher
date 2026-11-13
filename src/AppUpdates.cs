@@ -24,7 +24,7 @@ namespace PadLauncher {
         public int ProcessId {get;set;}
     }
     public static class AppUpdates {
-        public const string LatestUrl="https://api.github.com/repos/lpsbn/Pad-Launcher/releases/latest";
+        public const string LatestUrl="https://api.github.com/repos/ctrlaltlp/Pad-Launcher/releases/latest";
         const long MaxDownload=100*1024*1024;
         public static Version CurrentVersion {get {return Assembly.GetExecutingAssembly().GetName().Version;}}
         public static string DisplayVersion {get {
@@ -43,7 +43,7 @@ namespace PadLauncher {
                 string url=Vdf.Str(asset,"browser_download_url"),digest=Vdf.Str(asset,"digest");
                 Uri uri; long size;
                 if(!Uri.TryCreate(url,UriKind.Absolute,out uri) || uri.Scheme!="https" || uri.Host!="github.com" ||
-                    !(uri.AbsolutePath.StartsWith("/lpsbn/Pad-Launcher/releases/download/",StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.StartsWith("/lpv11/Pad-Launcher/releases/download/",StringComparison.OrdinalIgnoreCase))) throw new InvalidDataException("Unexpected update download location.");
+                    !(uri.AbsolutePath.StartsWith("/ctrlaltlp/Pad-Launcher/releases/download/",StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.StartsWith("/lpsbn/Pad-Launcher/releases/download/",StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.StartsWith("/lpv11/Pad-Launcher/releases/download/",StringComparison.OrdinalIgnoreCase))) throw new InvalidDataException("Unexpected update download location.");
                 if(!digest.StartsWith("sha256:",StringComparison.OrdinalIgnoreCase) || digest.Length!=71 || !digest.Substring(7).All(Uri.IsHexDigit)) throw new InvalidDataException("The release has no valid SHA-256 checksum.");
                 if(!Int64.TryParse(Vdf.Str(asset,"size"),out size) || size<=0 || size>MaxDownload) throw new InvalidDataException("Invalid update size.");
                 return new AppRelease {Version=version,Url=url,Sha256=digest.Substring(7),Size=size};

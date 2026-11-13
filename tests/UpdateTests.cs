@@ -28,6 +28,8 @@ class UpdateTests {
             Check(AppUpdates.Parse(Storage.Json().Serialize(release)).Sha256==hash,"Stable release resolves the verified executable");
             asset["browser_download_url"]="https://github.com/lpsbn/Pad-Launcher/releases/download/v0.5.0/PadLauncher.exe";
             Check(AppUpdates.Parse(Storage.Json().Serialize(release)).Sha256==hash,"Updates accept the renamed GitHub account");
+            asset["browser_download_url"]="https://github.com/ctrlaltlp/Pad-Launcher/releases/download/v0.5.0/PadLauncher.exe";
+            Check(AppUpdates.Parse(Storage.Json().Serialize(release)).Sha256==hash,"Updates accept the ctrlaltlp GitHub account");
             Check(AppUpdates.IsNewer(new Version("0.5.0"),new Version("0.4.2.0")) && !AppUpdates.IsNewer(new Version("0.4.2"),new Version("0.4.2.0")) && !AppUpdates.IsNewer(new Version("0.4.1"),new Version("0.4.2")),"Version comparison ignores omitted zero components and prevents downgrades");
             release["prerelease"]=true; Reject(() => AppUpdates.Parse(Storage.Json().Serialize(release)),"Prereleases rejected"); release["prerelease"]=false;
             asset["digest"]=""; Reject(() => AppUpdates.Parse(Storage.Json().Serialize(release)),"Missing checksum rejected"); asset["digest"]="sha256:"+hash;
