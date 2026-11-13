@@ -18,11 +18,7 @@ Place `PadLauncher.exe` in its own writable folder before running it. The app cr
 
 The first launch puts the app in your notification area, so it's best if you have it on auto-start on windows, then bind a controller button to launch the .exe; that opens the carousel after the first launch.
 
-Launchers are detected automatically. If detection fails, set installation folder in Settings -> Launchers.
-
-## Tray and overlay
-
-The first launch starts quietly in the tray and prepares the library without displaying the overlay. **Double-click the tray icon to toggle the overlay on/off.** The app keeps the overlay, library and decoded artwork in memory when dismissed with Circle/B or after launching a game. Running the executable again signals the existing process to show the overlay.
+Launchers are detected automatically. If detection fails, set installation folder in Settings -> Launchers. Emulator and ROM paths need to be configured manually.
 
 ## Controls
 
