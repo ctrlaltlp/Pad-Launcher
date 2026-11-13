@@ -63,6 +63,7 @@ namespace PadLauncher {
                 var request=(HttpWebRequest)WebRequest.Create(uri);
                 request.UserAgent="PadLauncher/"+CurrentVersion; request.Accept="application/vnd.github+json";
                 request.AllowAutoRedirect=false; request.Timeout=20000; request.ReadWriteTimeout=20000;
+                request.CachePolicy=new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
                 HttpWebResponse response;
                 using(token.Register(request.Abort)) {
                     try {response=(HttpWebResponse)request.GetResponse();}
@@ -103,7 +104,8 @@ namespace PadLauncher {
             Directory.CreateDirectory(folder);
             string payload=Path.Combine(folder,"PadLauncher.new.exe");
             try {
-                using(var response=Open(release.Url,token)) using(var input=response.GetResponseStream()) using(var output=File.Create(payload)) Copy(input,output,release.Size,token);
+                string downloadUrl=release.Url+(release.Url.Contains("?") ? "&" : "?")+"sha256="+release.Sha256;
+                using(var response=Open(downloadUrl,token)) using(var input=response.GetResponseStream()) using(var output=File.Create(payload)) Copy(input,output,release.Size,token);
                 if(new FileInfo(payload).Length!=release.Size) throw new InvalidDataException("The update download is incomplete.");
                 Verify(payload,release.Sha256); return payload;
             } catch {try {File.Delete(payload); Directory.Delete(folder);} catch {} throw;}
