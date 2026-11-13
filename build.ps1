@@ -10,6 +10,7 @@ $librarySources += (Join-Path $PSScriptRoot 'src\BattleNetLibrary.cs')
 $appSources = @((Join-Path $PSScriptRoot 'src\App.cs'),(Join-Path $PSScriptRoot 'src\PlayStationInput.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSettings.cs'),(Join-Path $PSScriptRoot 'src\ListTransitions.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImportSettings.cs'))
 $appSources += (Join-Path $PSScriptRoot 'src\ListToolsSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\UpdateSettings.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\UpdateSession.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\AppUpdates.cs')
 $refs += '/resource:' + (Join-Path $PSScriptRoot 'src\SettingsTheme.xaml') + ',SettingsTheme.xaml'
 $artworkTest = $args -contains '-ArtworkTest'
@@ -24,6 +25,10 @@ $builtExecutable = Get-Item $stagedExecutable
 $newestSource = @($librarySources + $appSources + (Join-Path $PSScriptRoot 'src\App.manifest')) | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if ($builtExecutable.LastWriteTimeUtc -lt $newestSource.LastWriteTimeUtc) { throw 'The executable is older than the source. Close any running launcher and rebuild.' }
 if ($args -contains '-Test') {
+    & $compiler /nologo /target:exe /platform:x64 /main:UpdateSessionTests ('/out:' + (Join-Path $out 'UpdateSessionTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\UpdateSessionTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Update session test build failed.' }
+    & (Join-Path $out 'UpdateSessionTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Update session tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 /main:HiddenGamesTests ('/out:' + (Join-Path $out 'HiddenGamesTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\HiddenGamesTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Hidden game test build failed.' }
     & (Join-Path $out 'HiddenGamesTests.exe')

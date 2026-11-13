@@ -20,6 +20,7 @@ namespace PadLauncher {
         public string Payload {get;set;}
         public string Sha256 {get;set;}
         public string DataRoot {get;set;}
+        public string ResumeFile {get;set;}
         public int ProcessId {get;set;}
     }
     public static class AppUpdates {
@@ -106,12 +107,12 @@ namespace PadLauncher {
                 Verify(payload,release.Sha256); return payload;
             } catch {try {File.Delete(payload); Directory.Delete(folder);} catch {} throw;}
         }
-        public static void StartInstaller(string payload,string digest) {
+        public static void StartInstaller(string payload,string digest,string resumeFile=null) {
             string current=Assembly.GetExecutingAssembly().Location;
             string folder=Path.GetDirectoryName(payload),helper=Path.Combine(folder,"PadLauncher.Updater.exe"),job=Path.Combine(folder,"update.json");
             Verify(payload,digest);
             File.Copy(current,helper,true);
-            File.WriteAllText(job,Storage.Json().Serialize(new AppUpdateJob {Target=current,Payload=payload,Sha256=digest,DataRoot=Storage.Root,ProcessId=Process.GetCurrentProcess().Id}));
+            File.WriteAllText(job,Storage.Json().Serialize(new AppUpdateJob {Target=current,Payload=payload,Sha256=digest,DataRoot=Storage.Root,ResumeFile=resumeFile,ProcessId=Process.GetCurrentProcess().Id}));
             Process.Start(new ProcessStartInfo(helper,"--apply-update \""+job+"\"") {UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=folder});
         }
         public static string ReplaceExecutable(AppUpdateJob job) {
@@ -153,14 +154,16 @@ namespace PadLauncher {
                     Guid id;
                     if(!Guid.TryParseExact(Path.GetFileName(folder),"N",out id) || Directory.GetLastWriteTimeUtc(folder)>DateTime.UtcNow.AddDays(-1)) continue;
                     try {
-                        foreach(string name in new[]{"PadLauncher.new.exe","PadLauncher.Updater.exe","update.json"}) File.Delete(Path.Combine(folder,name));
+                        foreach(string name in new[]{"PadLauncher.new.exe","PadLauncher.Updater.exe","update.json","resume.dat"}) File.Delete(Path.Combine(folder,name));
                         Directory.Delete(folder);
                     } catch {}
                 }
             } catch {}
         }
         static void Restart(AppUpdateJob job) {
-            Process.Start(new ProcessStartInfo(job.Target,"--data \""+job.DataRoot+"\"") {UseShellExecute=true,WorkingDirectory=Path.GetDirectoryName(job.Target)});
+            string arguments="--data \""+job.DataRoot+"\"";
+            if(!String.IsNullOrEmpty(job.ResumeFile)) arguments+=" --resume-update \""+job.ResumeFile+"\"";
+            Process.Start(new ProcessStartInfo(job.Target,arguments) {UseShellExecute=true,WorkingDirectory=Path.GetDirectoryName(job.Target)});
         }
     }
 }

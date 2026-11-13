@@ -17,7 +17,7 @@ class UpdateTests {
             Console.WriteLine("Verified GitHub release "+live.Version+" and downloaded executable checksum.");
             File.Delete(download); Directory.Delete(Path.GetDirectoryName(download)); return;
         }
-        if(args.Length==2 && args[0]=="--data") {File.WriteAllText(Path.Combine(args[1],"restarted.txt"),"ok"); return;}
+        if(args.Length>=2 && args[0]=="--data") {File.WriteAllText(Path.Combine(args[1],"restarted.txt"),args.Length==4 && args[2]=="--resume-update" ? args[3] : "ok"); return;}
         if(args.Length==1 && args[0]=="--wait") {Thread.Sleep(750); return;}
         string root=Path.Combine(Path.GetTempPath(),"UpdateTests-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try {
@@ -48,7 +48,7 @@ class UpdateTests {
             payload=Path.Combine(staging,"PadLauncher.new.exe"); File.Copy(executable,payload);
             string helper=Path.Combine(staging,"PadLauncher.Updater.exe"); File.Copy(executable,helper);
             using(var parent=Process.Start(new ProcessStartInfo(executable,"--wait") {UseShellExecute=false,CreateNoWindow=true})) {
-                job=new AppUpdateJob {Target=target,Payload=payload,Sha256=hash,DataRoot=data,ProcessId=parent.Id};
+                job=new AppUpdateJob {Target=target,Payload=payload,Sha256=hash,DataRoot=data,ResumeFile=Path.Combine(staging,"resume.dat"),ProcessId=parent.Id};
                 string jobFile=Path.Combine(staging,"update.json"); File.WriteAllText(jobFile,Storage.Json().Serialize(job));
                 using(var updater=Process.Start(new ProcessStartInfo(helper,"--apply-update \""+jobFile+"\"") {UseShellExecute=false,CreateNoWindow=true})) {
                     if(!updater.WaitForExit(15000)) {updater.Kill(); throw new Exception("Update helper did not finish");}
@@ -57,6 +57,7 @@ class UpdateTests {
             }
             for(int retry=0;retry<100 && !File.Exists(Path.Combine(data,"restarted.txt"));retry++) Thread.Sleep(50);
             Check(File.Exists(Path.Combine(data,"restarted.txt")) && File.ReadAllText(Path.Combine(data,"settings.json"))=="preserve me","Update helper restarts with the original portable data folder");
+            Check(File.ReadAllText(Path.Combine(data,"restarted.txt"))==job.ResumeFile,"Update helper forwards the one-time session restore path");
             Console.WriteLine(checks+" update checks passed");
         } finally {try {Directory.Delete(root,true);} catch {}}
     }

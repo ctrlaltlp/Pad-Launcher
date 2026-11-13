@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.3.1")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.3.1")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.3.1")]
+[assembly: System.Reflection.AssemblyVersion("0.4.3.2")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.3.2")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.3.2")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -145,7 +145,8 @@ namespace PadLauncher {
                     BackColor=TrayMenuColors.Surface,ForeColor=System.Drawing.Color.FromArgb(236,243,242),
                     ShowImageMargin=false,Padding=new System.Windows.Forms.Padding(5)
                 };
-                menu.Items.Add("Show launcher",null,(s,e) => window.ShowOverlay());
+                var toggleLauncher=menu.Items.Add("Show launcher",null,(s,e) => window.ToggleOverlay());
+                menu.Opening+=(s,e) => toggleLauncher.Text=window.IsVisible ? "Hide launcher" : "Show launcher";
                 menu.Items.Add("Settings",null,(s,e) => window.ShowHelpWindow());
                 menu.Items.Add("Exit app",null,(s,e) => window.ExitApp());
                 foreach(System.Windows.Forms.ToolStripItem item in menu.Items)
@@ -163,6 +164,8 @@ namespace PadLauncher {
             } else {
                 app.MainWindow=window; app.ShutdownMode=ShutdownMode.OnMainWindowClose;
                 window.PrepareTray();
+                string resume=Argument(args,"--resume-update");
+                if(!String.IsNullOrEmpty(resume)) window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(() => window.ResumeAfterUpdate(resume)));
 #if ARTWORK_TEST
                 window.ShowOverlay();
 #endif
