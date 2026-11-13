@@ -14,7 +14,7 @@ namespace PadLauncher {
         string lastUpdateStatus="";
         void AddUpdateSettings(StackPanel panel) {
             var heading=Label("Updates",18,white); heading.Margin=new Thickness(0,24,0,8); panel.Children.Add(heading);
-            panel.Children.Add(Label("Installed version: "+AppUpdates.CurrentVersion.ToString(3),12,muted));
+            panel.Children.Add(Label("Installed version: "+AppUpdates.DisplayVersion,12,muted));
             var auto=new CheckBox {Content="Automatically download and install updates",IsChecked=settings.AutoUpdate,Margin=new Thickness(0,12,0,8)};
             auto.Click+=(s,e) => {settings.AutoUpdate=auto.IsChecked==true; QueueSave(); if(settings.AutoUpdate) StartAutomaticUpdates();}; panel.Children.Add(auto);
             var note=Label("Checks for newer stable releases after startup. Installing restarts the app, preserves your data and keeps an executable backup.",12,muted);

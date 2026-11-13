@@ -26,6 +26,10 @@ namespace PadLauncher {
         public const string LatestUrl="https://api.github.com/repos/lpv11/Pad-Launcher/releases/latest";
         const long MaxDownload=100*1024*1024;
         public static Version CurrentVersion {get {return Assembly.GetExecutingAssembly().GetName().Version;}}
+        public static string DisplayVersion {get {
+            var info=(AssemblyInformationalVersionAttribute)Attribute.GetCustomAttribute(Assembly.GetExecutingAssembly(),typeof(AssemblyInformationalVersionAttribute));
+            return info==null ? CurrentVersion.ToString() : info.InformationalVersion;
+        }}
         public static AppRelease Parse(string json) {
             var release=Vdf.Map(Storage.Json().DeserializeObject(json));
             if(Vdf.Str(release,"draft")=="True" || Vdf.Str(release,"prerelease")=="True") throw new InvalidDataException("Only stable releases are supported.");

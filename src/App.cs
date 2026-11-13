@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.3.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.3.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.3")]
+[assembly: System.Reflection.AssemblyVersion("0.4.3.1")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.3.1")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.3.1")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]

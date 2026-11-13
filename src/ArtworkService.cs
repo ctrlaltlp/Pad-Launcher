@@ -28,7 +28,7 @@ namespace PadLauncher {
             ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
             var request=(HttpWebRequest)WebRequest.Create(url);
             request.Timeout=12000; request.ReadWriteTimeout=12000; request.AllowAutoRedirect=false;
-            request.UserAgent="PadLauncher/0.4.3";
+            request.UserAgent="PadLauncher/0.4.3.1";
             if(!String.IsNullOrEmpty(key)) {
                 if(new Uri(url).Host!="www.steamgriddb.com") throw new InvalidOperationException("Invalid API host.");
                 request.Headers["Authorization"]="Bearer "+key;
