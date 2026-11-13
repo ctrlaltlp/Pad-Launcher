@@ -84,6 +84,19 @@ class SteamImportTests {
             Check(CombinedCollections.Options(assignedLibrary,destinationSettings).Single(l => l.Id=="source:custom").Games.Contains(chosen.Id),"Explicit Custom games destination still includes the import");
             SteamShortcutImport.PreserveLists(destinationSettings,assignedLibrary,new List<CustomGame>{chosen},new Dictionary<string,string>{{record.Key,"list:chosen"}});
             Check(!destinationSettings.ListGameAdditions["source:custom"].Contains(chosen.Id) && !CustomGameLibrary.InCustomGamesList(destinationSettings,chosen),"Choosing another destination removes stale Custom games links");
+            CustomLists.SetGameList(destinationSettings,assignedLibrary,chosen.Id,"source:custom");
+            CustomGameLibrary.Apply(assignedLibrary,destinationSettings);
+            Check(CustomGameLibrary.InCustomGamesList(destinationSettings,chosen) && CombinedCollections.Options(assignedLibrary,destinationSettings).Single(l => l.Id=="source:custom").Games.Contains(chosen.Id) && !destinationSettings.CustomLists[0].Games.Contains(chosen.Id),"Game editor can move an imported entry to the built-in Custom games list");
+            CustomLists.Save(destinationSettings,assignedLibrary,"source:custom","Custom games",new string[0]);
+            Check(!CustomGameLibrary.InCustomGamesList(destinationSettings,chosen),"Built-in Custom games membership can be edited and emptied");
+            CustomLists.Save(destinationSettings,assignedLibrary,"source:custom","Custom games",new[]{chosen.Id});
+            Check(CustomGameLibrary.InCustomGamesList(destinationSettings,chosen),"Built-in Custom games editor can restore a selected custom record");
+            CustomLists.SetMembership(destinationSettings,assignedLibrary,chosen.Id,"combined:pc",false);
+            Check(!CombinedCollections.Options(assignedLibrary,destinationSettings).Single(list => list.Id=="combined:pc").Games.Contains(chosen.Id) && destinationSettings.CustomGames.Any(game => game.Id==chosen.Id),"Membership editor can exclude an inherited entry from PC without deleting its game record");
+            CustomLists.SetMembership(destinationSettings,assignedLibrary,chosen.Id,"combined:pc",true);
+            Check(CombinedCollections.Options(assignedLibrary,destinationSettings).Single(list => list.Id=="combined:pc").Games.Contains(chosen.Id),"Membership editor restores an excluded combined-list entry");
+            CustomLists.SetMembership(destinationSettings,assignedLibrary,chosen.Id,"source:custom",false);
+            Check(!CustomGameLibrary.InCustomGamesList(destinationSettings,chosen) && destinationSettings.CustomLists[0].Games.Count==0,"Editing Custom games membership does not change other list definitions");
             record.Artwork=Path.Combine(root,"broken.png"); File.WriteAllText(record.Artwork,"broken image"); Check(SteamShortcutImport.Prepare(record,false).Artwork==null,"Unreadable source artwork does not prevent game import");
             Console.WriteLine(checks+" Steam shortcut import checks passed");
         } finally {Directory.Delete(root,true);}

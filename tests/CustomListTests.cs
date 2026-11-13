@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections.Generic;
 using PadLauncher;
@@ -37,6 +37,9 @@ class CustomListTests {
         Check(settings.CombinedCollections.Single().Sources.Contains("source:steam"),"Individual editing preserves combined source links");
         library.Games.Add(new Game {Id="new-steam",Source="steam"});
         Check(CombinedCollections.Options(library,settings).Single(c => c.Id==combined).Games.Contains("new-steam"),"Combined sources continue updating after individual editing");
+        var provenanceOptions=CombinedCollections.Options(library,settings);
+        Check(CustomLists.MembershipReason(settings,provenanceOptions,combined,"new-steam").Contains("From Steam"),"Combined game explanation identifies inherited source");
+        Check(CustomLists.MembershipReason(settings,provenanceOptions,combined,"epic:2").Contains("Added individually"),"Combined game explanation identifies individual additions");
         Console.WriteLine(checks+" custom list checks passed");
     }
 }

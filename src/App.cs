@@ -755,6 +755,8 @@ namespace PadLauncher {
             var availablePanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             var allCollections=new CheckBox {Content="Include all lists (including new ones)",Foreground=white,IsChecked=settings.EnabledCollectionIds==null,Margin=new Thickness(0,0,0,10)};
             availablePanel.Children.Add(allCollections);
+            var listSearchCaption=Label("Filter lists by name",12,muted); listSearchCaption.Margin=new Thickness(0,0,0,8); availablePanel.Children.Add(listSearchCaption);
+            var listSearch=new TextBox {Name="OverlayListSearch",Padding=new Thickness(8),Margin=new Thickness(0,0,0,10)}; availablePanel.Children.Add(listSearch);
             var collectionChecks=new StackPanel();
             var collectionBoxes=new Dictionary<string,CheckBox>();
             Action saveAvailability=() => {
@@ -848,6 +850,17 @@ namespace PadLauncher {
             };
             orderScroll=new ScrollViewer {Content=collectionChecks,MaxHeight=220,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             availablePanel.Children.Add(orderScroll);
+            var noListMatches=Label("No matching lists",12,muted); noListMatches.Visibility=Visibility.Collapsed; availablePanel.Children.Add(noListMatches);
+            listSearch.TextChanged+=(s,e) => {
+                string query=listSearch.Text.Trim(); int matches=0;
+                foreach(var entry in listOrderRows) {
+                    bool shown=Convert.ToString(collectionBoxes[entry.Key].Content).IndexOf(query,StringComparison.CurrentCultureIgnoreCase)>=0;
+                    entry.Value.Visibility=shown ? Visibility.Visible : Visibility.Collapsed;
+                    if(shown) matches++;
+                }
+                noListMatches.Visibility=matches==0 ? Visibility.Visible : Visibility.Collapsed;
+                orderScroll.ScrollToTop();
+            };
             var availableTip=Label("Changes save immediately. Only selected lists appear when switching lists. Select at least one. Hidden lists are also removed from Default list.",12,muted); availableTip.TextWrapping=TextWrapping.Wrap; availableTip.Margin=new Thickness(0,8,0,0); availablePanel.Children.Add(availableTip);
             availableSection.Content=availablePanel; listsLayout.Children.Add(availableSection);
             var listLayoutSection=new Expander {Header="Per-list layout",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listLayoutExpanded};
@@ -856,6 +869,7 @@ namespace PadLauncher {
             var customListSection=new Expander {Name="CustomListsSection",Header="Combine lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0)};
             var customListPanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             var customListOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new list")};
+            customListOptions.Add(new KeyValuePair<string,string>("source:custom","Custom games"));
             foreach(var item in settings.CustomLists ?? new List<CustomList>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
             foreach(var item in settings.CombinedCollections ?? new List<CombinedCollection>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
             var customListPicker=new SettingsComboBox {Name="CustomListPicker",ItemsSource=customListOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
@@ -868,6 +882,7 @@ namespace PadLauncher {
             customListPanel.Children.Add(Label("Filter games by name",12,muted)); customListPanel.Children.Add(gameSearch);
             var gameChoices=new StackPanel();
             var gameBoxes=new Dictionary<string,CheckBox>();
+            var gameChoiceRows=new Dictionary<string,FrameworkElement>();
             var unavailableGames=new List<string>();
             var selectionCount=Label("",12,muted); customListPanel.Children.Add(selectionCount);
             Action updateCount=() => selectionCount.Text=gameBoxes.Values.Count(b => b.IsChecked==true)+" games selected"+(unavailableGames.Count>0 ? " · "+unavailableGames.Count+" unavailable games retained" : "");
@@ -882,9 +897,11 @@ namespace PadLauncher {
             var saveCustomList=new Button {Name="SaveCustomList",Content="Create list",Padding=new Thickness(12,7,12,7)};
             var deleteCustomList=new Button {Content="Delete list",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
             Action loadCustomList=() => {
-                var item=CollectionOptions().FirstOrDefault(c => c.Id==customListPicker.SelectedValue as string);
+                var membershipOptions=CollectionOptions();
+                var item=membershipOptions.FirstOrDefault(c => c.Id==customListPicker.SelectedValue as string);
                 customListName.Text=item==null ? "" : item.Name; gameSearch.Text="";
-                gameBoxes.Clear(); gameChoices.Children.Clear();
+                customListName.IsEnabled=item==null || item.Id!="source:custom";
+                gameBoxes.Clear(); gameChoiceRows.Clear(); gameChoices.Children.Clear();
                 var selected=new HashSet<string>(item==null ? new List<string>() : item.Games ?? new List<string>());
                 unavailableGames=selected.Except(library.Games.Select(g => g.Id)).ToList();
                 foreach(var game in library.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).GroupBy(g => g.Id).Select(g => g.First())) {
@@ -897,18 +914,26 @@ namespace PadLauncher {
                         case "ubisoft": source="Ubisoft Connect"; break;
                         case "rockstar": source="Rockstar Games Launcher"; break;
                         case "battlenet": source="Battle.net"; break;
-                        case "custom": source="Custom games"; break;
+                        case "custom": source=CustomGameLibrary.EntrySourceLabel(settings,game); break;
                     }
                     if(source=="emulator") {
                         var preset=EmulatorLibrary.Presets.FirstOrDefault(candidate => candidate.Id==game.EmulatorId);
                         if(preset!=null) source=preset.Name;
                     }
                     var box=new CheckBox {Content=game.Name+" · "+source,Tag=game.Name,Foreground=white,IsChecked=selected.Contains(game.Id),Margin=new Thickness(0,4,0,4)};
-                    box.Checked+=(s,e) => updateCount(); box.Unchecked+=(s,e) => updateCount(); gameBoxes[game.Id]=box; gameChoices.Children.Add(box);
+                    var gameRow=new StackPanel {Margin=new Thickness(0,0,0,6)}; gameRow.Children.Add(box);
+                    var membershipHint=Label(CustomLists.MembershipReason(settings,membershipOptions,item==null ? null : item.Id,game.Id),12,muted);
+                    membershipHint.TextWrapping=TextWrapping.Wrap; membershipHint.Margin=new Thickness(28,0,0,4); gameRow.Children.Add(membershipHint);
+                    Action updateHint=() => {
+                        membershipHint.Visibility=box.IsChecked==true ? Visibility.Visible : Visibility.Collapsed;
+                        membershipHint.Text=CustomLists.MembershipReason(settings,membershipOptions,item==null ? null : item.Id,game.Id)+(box.IsChecked==true && !selected.Contains(game.Id) ? " · Not saved yet" : "");
+                    };
+                    box.Checked+=(s,e) => {updateCount(); updateHint();}; box.Unchecked+=(s,e) => {updateCount(); updateHint();};
+                    updateHint(); gameBoxes[game.Id]=box; gameChoiceRows[game.Id]=gameRow; gameChoices.Children.Add(gameRow);
                 }
-                saveCustomList.Content=item==null ? "Create list" : "Save changes"; deleteCustomList.Visibility=item==null ? Visibility.Collapsed : Visibility.Visible; updateCount();
+                saveCustomList.Content=item==null ? "Create list" : "Save changes"; deleteCustomList.Visibility=item==null || item.Id=="source:custom" ? Visibility.Collapsed : Visibility.Visible; updateCount();
             };
-            gameSearch.TextChanged+=(s,e) => {foreach(var box in gameBoxes.Values) box.Visibility=((string)box.Tag).IndexOf(gameSearch.Text.Trim(),StringComparison.CurrentCultureIgnoreCase)>=0 ? Visibility.Visible : Visibility.Collapsed;};
+            gameSearch.TextChanged+=(s,e) => {foreach(var pair in gameBoxes) {var visibility=((string)pair.Value.Tag).IndexOf(gameSearch.Text.Trim(),StringComparison.CurrentCultureIgnoreCase)>=0 ? Visibility.Visible : Visibility.Collapsed; pair.Value.Visibility=visibility; gameChoiceRows[pair.Key].Visibility=visibility;}};
             customListPicker.SelectionChanged+=(s,e) => loadCustomList(); loadCustomList();
             saveCustomList.Click+=(s,e) => {try {
                 var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
@@ -922,7 +947,7 @@ namespace PadLauncher {
             } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
             customListActions.Children.Add(saveCustomList); customListActions.Children.Add(deleteCustomList); customListPanel.Children.Add(customListActions);
             listsLayout.Children.Add(customListSection);
-            var editLists=new Expander {Header="Rename / Duplicate lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listEditorExpanded};
+            var editLists=new Expander {Header="Rename, Delete & Duplicate lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listEditorExpanded};
             editLists.Content=CreateListEditor(dialog,rebuild);
             editLists.Expanded+=(sender,args) => listEditorExpanded=true;
             editLists.Collapsed+=(sender,args) => listEditorExpanded=false;
@@ -975,7 +1000,7 @@ namespace PadLauncher {
             };
             combinedActions.Children.Add(saveCombined); combinedActions.Children.Add(deleteCombined); combinePanel.Children.Add(combinedActions);
             customListSection.Content=combinePanel;
-            var individualGamesSection=new Expander {Name="EditListGamesSection",Header="Edit list's games",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),Content=customListPanel};
+            var individualGamesSection=new Expander {Name="EditListGamesSection",Header="Edit games in lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),Content=customListPanel};
             listsLayout.Children.Add(individualGamesSection);
             listsLayout.Children.Add(editLists);
             layout.Children.Add(skipEmpty);
@@ -1682,7 +1707,9 @@ namespace PadLauncher {
                     string arguments=choice.Existing!=null ? choice.Existing.Arguments : choice.Incoming.Arguments;
                     string folder=choice.Existing!=null ? choice.Existing.WorkingDirectory : choice.Incoming.WorkingDirectory;
                     string action=choice.Existing!=null ? choice.Existing.ImportedActionInfo : choice.Incoming.PlayniteActionInfo;
-                    var detail=Label(target+(String.IsNullOrWhiteSpace(arguments) ? "" : "\n"+arguments)+(String.IsNullOrWhiteSpace(folder) ? "" : "\nFolder: "+folder)+(String.IsNullOrWhiteSpace(action) ? "" : "\nImported action:\n"+action),12,muted); detail.FontFamily=new FontFamily("Consolas"); detail.TextWrapping=TextWrapping.Wrap; detail.Margin=new Thickness(28,0,0,16); group.Children.Add(detail);
+                    var detail=Label(target+(String.IsNullOrWhiteSpace(arguments) ? "" : "\n"+arguments)+(String.IsNullOrWhiteSpace(folder) ? "" : "\nFolder: "+folder),12,muted);
+                    if(!String.IsNullOrWhiteSpace(action)) detail.Inlines.Add(new System.Windows.Documents.Run("\nImported action:\n"+action) {Foreground=new SolidColorBrush(Color.FromRgb(255,218,106))});
+                    detail.FontFamily=new FontFamily("Consolas"); detail.TextWrapping=TextWrapping.Wrap; detail.Margin=new Thickness(28,0,0,16); group.Children.Add(detail);
                 }
                 groups.Children.Add(new Border {Child=group,Background=new SolidColorBrush(Color.FromRgb(23,43,55)),CornerRadius=new CornerRadius(8),Margin=new Thickness(0,0,0,12)});
             }
@@ -1723,6 +1750,8 @@ namespace PadLauncher {
             } else {
                 var editNote=Label("Rename or duplicate a list, or delete a custom or combined list.",12,muted);
                 editNote.TextWrapping=TextWrapping.Wrap; editNote.Margin=new Thickness(0,0,0,8); panel.Children.Add(editNote);
+                var deleteNote=Label("Automatic emulator lists cannot be deleted. Hide them under Overlay lists instead. Delete list is available for custom and combined lists.",12,new SolidColorBrush(Color.FromRgb(255,218,106)));
+                deleteNote.TextWrapping=TextWrapping.Wrap; deleteNote.Margin=new Thickness(0,0,0,12); panel.Children.Add(deleteNote);
                 panel.Children.Add(Label("List",12,mint));
                 var picker=new SettingsComboBox {ItemsSource=lists,DisplayMemberPath="Name",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,6,0,12)};
                 panel.Children.Add(picker);
@@ -1836,6 +1865,7 @@ namespace PadLauncher {
             var destinations=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","None")};
             var editableIds=new HashSet<string>((settings.CustomLists ?? new List<CustomList>()).Select(list => list.Id)
                 .Concat((settings.CombinedCollections ?? new List<CombinedCollection>()).Select(list => list.Id)));
+            editableIds.Add("source:custom");
             destinations.AddRange(CollectionOptions().Where(list => editableIds.Contains(list.Id)).Select(list => new KeyValuePair<string,string>(list.Id,list.Name)));
             SettingsComboBox defaultListPicker=null;
             if(!editing) {

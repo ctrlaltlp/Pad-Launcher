@@ -171,6 +171,8 @@ class ExternalTests {
             Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="Xbox","Portable installations keep independent settings");
             Console.WriteLine("4 portable isolation checks passed");
             Console.WriteLine("4 Epic path checks included above");
+            ArtworkService.Fetch=(url,bearer,token) => Encoding.UTF8.GetBytes(url.Contains("autocomplete") ? "{\"success\":true,\"data\":[{\"id\":35404,\"name\":\"Crash Bandicoot 3: Warped\"}]}" : "{\"success\":true,\"data\":[{\"url\":\"https://cdn2.steamgriddb.com/grid/crash3.png\",\"width\":600,\"height\":900}]}");
+            Check(ArtworkService.FindGrid(new Game {Id="crash3",Source="emulator",Name="Crash Bandicoot 3"},"test",CancellationToken.None).EndsWith("crash3.png"),"Crash Bandicoot 3 matches SteamGridDB's numbered Warped title");
         } finally {Directory.Delete(root,true);}
     }
 }

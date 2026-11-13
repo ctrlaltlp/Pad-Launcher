@@ -79,11 +79,69 @@ namespace PadLauncher {
         public List<string> Games {get;set;}
     }
     public static class CustomLists {
+        public static string MembershipReason(Settings settings,IEnumerable<Collection> options,string listId,string gameId) {
+            var combined=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(list => list.Id==listId);
+            var reasons=new List<string>();
+            if(combined!=null) {
+                var sources=options.Where(list => (combined.Sources ?? new List<string>()).Contains(list.Id) && (list.Games ?? new List<string>()).Contains(gameId)).Select(list => list.Name).ToList();
+                if(sources.Count>0) reasons.Add("From "+String.Join(", ",sources));
+                if((combined.AddedGames ?? new List<string>()).Contains(gameId)) reasons.Add("Added individually");
+            }
+            List<string> additions;
+            if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(listId ?? "",out additions) && additions.Contains(gameId) && !reasons.Contains("Added individually")) reasons.Add("Added individually");
+            if(reasons.Count==0) reasons.Add(listId=="source:custom" ? "Included in Custom games" : "Added individually");
+            return String.Join(" · ",reasons);
+        }
+        public static void SetMembership(Settings settings,Library library,string gameId,string listId,bool included) {
+            if(!library.Games.Any(game => game.Id==gameId)) throw new ArgumentException("This game is no longer available.");
+            List<string> savedAdditions;
+            if(!included && settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(listId,out savedAdditions)) savedAdditions.RemoveAll(id => id==gameId);
+            var custom=(settings.CustomLists ?? new List<CustomList>()).FirstOrDefault(list => list.Id==listId);
+            if(custom!=null) {
+                custom.Games=(custom.Games ?? new List<string>()).Where(id => id!=gameId).ToList();
+                if(included) custom.Games.Add(gameId);
+                return;
+            }
+            var combined=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(list => list.Id==listId);
+            if(combined!=null) {
+                combined.AddedGames=(combined.AddedGames ?? new List<string>()).Where(id => id!=gameId).ToList();
+                combined.ExcludedGames=(combined.ExcludedGames ?? new List<string>()).Where(id => id!=gameId).ToList();
+                if(included) combined.AddedGames.Add(gameId); else combined.ExcludedGames.Add(gameId);
+                return;
+            }
+            if(listId=="source:custom") {
+                var entry=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(game => game.Id==gameId);
+                if(entry!=null) entry.IncludeInCustomGamesList=included;
+                if(settings.ListGameAdditions==null) settings.ListGameAdditions=new Dictionary<string,List<string>>();
+                List<string> additions;
+                if(!settings.ListGameAdditions.TryGetValue(listId,out additions)) additions=new List<string>();
+                settings.ListGameAdditions[listId]=additions.Where(id => id!=gameId).ToList();
+                if(entry==null && included) settings.ListGameAdditions[listId].Add(gameId);
+                return;
+            }
+            if(listId=="favourites") {
+                settings.FavouriteGameIds=(settings.FavouriteGameIds ?? new List<string>()).Where(id => id!=gameId).ToList();
+                if(included) settings.FavouriteGameIds.Add(gameId);
+                return;
+            }
+            throw new ArgumentException("This list follows its launcher or source and cannot be edited here.");
+        }
         public static string Save(Settings settings,Library library,string id,string name,IEnumerable<string> games) {
             name=(name ?? "").Trim();
             if(name.Length==0 || name.Length>80) throw new ArgumentException("Enter a list name of 1–80 characters.");
             if(CombinedCollections.Options(library,settings).Any(c => c.Id!=id && String.Equals(c.Name,name,StringComparison.CurrentCultureIgnoreCase))) throw new ArgumentException("A list with that name already exists.");
             var chosen=(games ?? Enumerable.Empty<string>()).Where(g => !String.IsNullOrWhiteSpace(g)).Distinct().ToList();
+            if(id=="source:custom") {
+                var current=CombinedCollections.Options(library,settings).First(list => list.Id==id);
+                var allowedCustomGames=new HashSet<string>(library.Games.Select(game => game.Id).Concat(current.Games ?? new List<string>()));
+                if(chosen.Any(game => !allowedCustomGames.Contains(game))) throw new ArgumentException("One of the selected games is no longer available.");
+                var selected=new HashSet<string>(chosen);
+                foreach(var game in settings.CustomGames ?? new List<CustomGame>()) game.IncludeInCustomGamesList=selected.Contains(game.Id);
+                var customIds=new HashSet<string>((settings.CustomGames ?? new List<CustomGame>()).Select(game => game.Id));
+                if(settings.ListGameAdditions==null) settings.ListGameAdditions=new Dictionary<string,List<string>>();
+                settings.ListGameAdditions[id]=chosen.Where(game => !customIds.Contains(game)).ToList();
+                return id;
+            }
             if(chosen.Count==0) throw new ArgumentException("Select at least one game.");
             var combined=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(list => list.Id==id);
             if(combined!=null) {
@@ -110,13 +168,13 @@ namespace PadLauncher {
             return existing.Id;
         }
         public static void SetGameList(Settings settings,Library library,string gameId,string listId) {
-            if(!String.IsNullOrEmpty(listId) &&
+            if(!String.IsNullOrEmpty(listId) && listId!="source:custom" &&
                 !(settings.CustomLists ?? new List<CustomList>()).Any(list => list.Id==listId) &&
                 !(settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => list.Id==listId))
                 throw new ArgumentException("The selected list no longer exists.");
             var customGame=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(game => game.Id==gameId);
-            if(customGame!=null && !String.IsNullOrEmpty(customGame.SteamShortcutKey)) {
-                customGame.IncludeInCustomGamesList=String.IsNullOrEmpty(listId);
+            if(customGame!=null && (!String.IsNullOrEmpty(customGame.SteamShortcutKey) || listId=="source:custom")) {
+                customGame.IncludeInCustomGamesList=String.IsNullOrEmpty(listId) || listId=="source:custom";
                 List<string> additions;
                 if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue("source:custom",out additions)) additions.RemoveAll(id => id==gameId);
             }
@@ -273,7 +331,7 @@ namespace PadLauncher {
         public string UbisoftLauncherPath {get;set;}
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { ShowListGameCount=true; RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=1; RightStickSpeed=3; VerticalListSwitch="off"; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fit"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { ShowListGameCount=true; RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=1; RightStickSpeed=3; VerticalListSwitch="off"; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -7,6 +7,63 @@ using System.Windows.Controls;
 
 namespace PadLauncher {
     public partial class Launcher {
+        void ShowListMemberships(Window owner,Action rebuild) {
+            var dialog=new Window {Title="Game list memberships",Owner=owner,Width=760,Height=720,MinWidth=560,MinHeight=460,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,Topmost=true}; dialog.Resources.MergedDictionaries.Add(owner.Resources);
+            var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
+            var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
+            header.Children.Add(Label("Game list memberships",24,white));
+            var explanation=Label("Each game entry can belong to several lists. Check the memberships to keep. Grey lists follow their source; combined lists can override inherited membership. Changes apply when saved.",13,muted); explanation.TextWrapping=TextWrapping.Wrap; explanation.Margin=new Thickness(0,10,0,14); header.Children.Add(explanation);
+            Func<Game,string> sourceLabel=game => game.Source=="custom" ? CustomGameLibrary.EntrySourceLabel(settings,game) : String.IsNullOrEmpty(game.Source) || game.Source=="steam" ? "Steam" : game.Source=="emulator" ? EmulatorLibrary.Preset(game.EmulatorId).Name : game.Source;
+            var games=library.Games.GroupBy(game => game.Id).Select(group => group.First()).OrderBy(game => game.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+            var picker=new SettingsComboBox {Name="MembershipGamePicker",DisplayMemberPath="Value",SelectedValuePath="Key",ItemsSource=games.Select(game => new KeyValuePair<string,string>(game.Id,game.Name+" · "+sourceLabel(game))).ToList(),SelectedValue=settings.SelectedId,Margin=new Thickness(0,0,0,10)};
+            if(picker.SelectedIndex<0 && games.Count>0) picker.SelectedIndex=0; header.Children.Add(picker);
+            var target=Label("",12,muted); target.TextWrapping=TextWrapping.Wrap; target.Margin=new Thickness(0,0,0,12); header.Children.Add(target);
+            var filter=new TextBox {Padding=new Thickness(8),Margin=new Thickness(0,0,0,12)}; header.Children.Add(Label("Filter lists by name",12,muted)); header.Children.Add(filter);
+            var footer=new StackPanel(); DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
+            var status=Label("",12,muted); status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,10,0,8); footer.Children.Add(status);
+            var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right}; footer.Children.Add(actions);
+            var save=new Button {Name="SaveMemberships",Content="Save changes",Padding=new Thickness(14,8,14,8),Background=mint,Foreground=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(13,25,34))}; actions.Children.Add(save);
+            var close=new Button {Content="Close",Padding=new Thickness(14,8,14,8),Margin=new Thickness(8,0,0,0),IsCancel=true}; close.Click+=(s,e) => dialog.Close(); actions.Children.Add(close);
+            var rows=new StackPanel(); root.Children.Add(new ScrollViewer {Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+            var boxes=new Dictionary<string,CheckBox>(); var original=new Dictionary<string,bool>(); var rowNames=new Dictionary<FrameworkElement,string>();
+            Action applyFilter=() => {foreach(var row in rowNames) row.Key.Visibility=row.Value.IndexOf(filter.Text.Trim(),StringComparison.CurrentCultureIgnoreCase)>=0 ? Visibility.Visible : Visibility.Collapsed;};
+            Action load=() => {
+                boxes.Clear(); original.Clear(); rowNames.Clear(); rows.Children.Clear(); status.Text="";
+                var game=games.FirstOrDefault(item => item.Id==(picker.SelectedValue as string)); save.IsEnabled=game!=null;
+                if(game==null) {target.Text="No games available."; return;}
+                try {target.Text=game.Source=="custom" && !String.IsNullOrEmpty(game.SteamLaunchId) ? "steam://rungameid/"+game.SteamLaunchId : String.IsNullOrEmpty(game.Source) || game.Source=="steam" ? GameLaunch.UriFor(game) : game.LaunchId;} catch {target.Text=game.LaunchId;}
+                var options=CollectionOptions();
+                foreach(var list in options) {
+                    bool selected=(list.Games ?? new List<string>()).Contains(game.Id);
+                    var custom=(settings.CustomLists ?? new List<CustomList>()).FirstOrDefault(item => item.Id==list.Id);
+                    var combined=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(item => item.Id==list.Id);
+                    bool editable=custom!=null || combined!=null || list.Id=="source:custom" || list.Id=="favourites";
+                    var row=new StackPanel {Margin=new Thickness(0,0,0,12)};
+                    var box=new CheckBox {Content=ListLabel(list),IsChecked=selected,IsEnabled=editable,Foreground=white}; row.Children.Add(box); boxes[list.Id]=box; original[list.Id]=selected;
+                    string detail="";
+                    if(combined!=null) {
+                        var sources=options.Where(item => (combined.Sources ?? new List<string>()).Contains(item.Id) && (item.Games ?? new List<string>()).Contains(game.Id)).Select(item => item.Name).ToList();
+                        if(sources.Count>0) detail="Inherited from: "+String.Join(", ",sources);
+                        if((combined.AddedGames ?? new List<string>()).Contains(game.Id)) detail+=(detail.Length>0 ? " · " : "")+"Added individually";
+                        if((combined.ExcludedGames ?? new List<string>()).Contains(game.Id)) detail+=(detail.Length>0 ? " · " : "")+"Excluded from this list";
+                    } else if(!editable) detail="Automatic membership from this source";
+                    if(!String.IsNullOrEmpty(detail)) {var note=Label(detail,12,muted); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(28,4,0,0); row.Children.Add(note);}
+                    rows.Children.Add(row); rowNames[row]=list.Name;
+                }
+                applyFilter();
+            };
+            picker.SelectionChanged+=(s,e) => load(); filter.TextChanged+=(s,e) => applyFilter();
+            save.Click+=(s,e) => {
+                try {
+                    if(scanning) throw new InvalidOperationException("Wait for the current library refresh to finish.");
+                    string id=picker.SelectedValue as string;
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    foreach(var pair in boxes.Where(pair => pair.Value.IsEnabled && (pair.Value.IsChecked==true)!=original[pair.Key])) CustomLists.SetMembership(next,library,id,pair.Key,pair.Value.IsChecked==true);
+                    Storage.Write("settings.json",next); settings=next; CustomGameLibrary.Apply(library,settings); ApplyLibrary(); rebuild(); load(); status.Text="Memberships saved.";
+                } catch(Exception error) {status.Text=error.Message;}
+            };
+            load(); dialog.Show();
+        }
         bool listLayoutExpanded;
         string editedListLayoutId;
         void ToggleFavourite() {

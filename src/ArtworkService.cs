@@ -150,7 +150,7 @@ namespace PadLauncher {
             switch(Normalize(title)) {
                 case "crashbandicoot1": return "Crash Bandicoot";
                 case "crashbandicoot2": return "Crash Bandicoot 2: Cortex Strikes Back";
-                case "crashbandicoot3": return "Crash Bandicoot: Warped";
+                case "crashbandicoot3": case "crashbandicootwarped": return "Crash Bandicoot 3: Warped";
                 case "reddeadredemptiongoty": return "Red Dead Redemption";
                 case "reddeadredemptiongotyundeadnightmareandonline": return "Red Dead Redemption: Undead Nightmare";
                 case "icoandshadowofthecolossuscolelction": return "Ico and Shadow of the Colossus Collection";
@@ -236,7 +236,7 @@ namespace PadLauncher {
             foreach(var game in games) {
                 token.ThrowIfCancellationRequested();
                 if(KeepArtwork(game)) continue;
-                string path=Cache(game),retry=path+(game.Source=="emulator" ? ".emulator-v2.retry" : ".retry");
+                string path=Cache(game),retry=path+(game.Source=="emulator" ? (Normalize(game.Name)=="crashbandicoot3" || Normalize(game.Name)=="crashbandicootwarped" ? ".crash3-v3.retry" : ".emulator-v2.retry") : ".retry");
                 if(File.Exists(retry) && File.GetLastWriteTimeUtc(retry)>DateTime.UtcNow.AddHours(-6)) continue;
                 try {
                     string url=game.ArtworkUrl;

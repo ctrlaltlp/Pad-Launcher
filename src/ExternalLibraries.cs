@@ -127,6 +127,12 @@ namespace PadLauncher {
         public string Artwork {get;set;}
     }
     public static class CustomGameLibrary {
+        public static string EntrySourceLabel(Settings settings,Game game) {
+            var entry=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==game.Id);
+            if(entry!=null && !String.IsNullOrEmpty(entry.SteamShortcutKey)) return entry.LaunchViaSteam ? "Steam import (through Steam)" : "Steam import (direct launch)";
+            if(entry!=null && !String.IsNullOrEmpty(entry.PlayniteId)) return "Playnite import";
+            return "Custom game";
+        }
         public static bool InCustomGamesList(Settings settings,CustomGame game) {
             if(game.IncludeInCustomGamesList.HasValue) return game.IncludeInCustomGamesList.Value;
             if(String.IsNullOrEmpty(game.SteamShortcutKey)) return true;

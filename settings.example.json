@@ -9,7 +9,7 @@
   "EnabledCollectionIds": null,
   "CarouselScale": 1.0,
   "CarouselLayout": "angled",
-  "AngledPanelSizing": "fit",
+  "AngledPanelSizing": "fixed",
   "GridColumns": 5,
   "GridRows": 2,
   "SteamPath": null,

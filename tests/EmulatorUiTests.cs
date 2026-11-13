@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -201,7 +201,7 @@ class EmulatorUiTests {
             };
             typeof(Launcher).GetField("settings",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).SetValue(launcher,customSaved);
             editEditor=(FrameworkElement)editorMethod.Invoke(launcher,new object[]{dialog,(Action)(() => {}),true}); Layout(editEditor);
-            Check((string)((ComboBox)Find(editEditor,"CustomGameList")).SelectedValue=="combined:inherited-ui","Game's list reflects membership inherited through a combined source");
+            Check((string)((ComboBox)Find(editEditor,"CustomGameList")).SelectedValue=="keep-memberships" && ((ComboBox)Find(editEditor,"CustomGameList")).Text.Contains("Custom games"),"Game's list reflects built-in Custom games and inherited combined memberships");
             ((Button)Find(editEditor,"SaveCustomGame")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check((Storage.Read<Settings>("settings.json").CombinedCollections.Single().AddedGames ?? new System.Collections.Generic.List<string>()).Count==0,"Saving unchanged inherited membership keeps the source-based relationship");
             string portableChoice=ArtworkService.SaveLocalChoice(localCover);
@@ -209,6 +209,11 @@ class EmulatorUiTests {
             var artworkGame=new Game {Id="emulator-cover",Source="emulator"};
             ArtworkService.ApplyCached(artworkGame,artworkSettings);
             Check(!Path.IsPathRooted(portableChoice) && artworkGame.Art==Path.Combine(Storage.Root,portableChoice),"Local emulator artwork is copied into portable data and accepted by the loader");
+            var membershipsMethod=typeof(Launcher).GetMethod("ShowListMemberships",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+            membershipsMethod.Invoke(launcher,new object[]{dialog,(Action)(() => {})});
+            var membershipsWindow=dialog.OwnedWindows.Cast<Window>().Single(window => window.Title=="Game list memberships"); Layout((FrameworkElement)membershipsWindow.Content);
+            Check(Find((FrameworkElement)membershipsWindow.Content,"MembershipGamePicker")!=null && Find((FrameworkElement)membershipsWindow.Content,"SaveMemberships")!=null,"Game list memberships opens a game picker and save control");
+            membershipsWindow.Close();
             dialog.Close(); Console.WriteLine(checks+" emulator UI checks passed");
         } finally {if(launcher!=null) launcher.ExitApp(); Directory.Delete(root,true);}
     }

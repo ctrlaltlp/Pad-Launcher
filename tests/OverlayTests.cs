@@ -240,7 +240,7 @@ public static class OverlayTests {
             Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
             var customSection=(Expander)FindElement(listsContents,"CustomListsSection");
             var individualSection=(Expander)FindElement(listsContents,"EditListGamesSection");
-            Check(customSection!=null && (string)customSection.Header=="Combine lists" && individualSection!=null && (string)individualSection.Header=="Edit list's games","Combine lists and individual game editor have separate dropdown sections");
+            Check(customSection!=null && (string)customSection.Header=="Combine lists" && individualSection!=null && (string)individualSection.Header=="Edit games in lists","Combine lists and individual game editor have separate dropdown sections");
             customSection.IsExpanded=true; individualSection.IsExpanded=true; helpTabs.SelectedIndex=2;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             Check(FindElement((FrameworkElement)individualSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)individualSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)individualSection.Content,"SaveCustomList")!=null,"Individual list editor keeps picker, name and save action");
@@ -306,7 +306,7 @@ public static class OverlayTests {
             using(var stream=File.Create(artworkPath)) artworkPng.Save(stream);
             string originalArtwork=Convert.ToBase64String(File.ReadAllBytes(artworkPath));
             var artworkLibrary=new Library(); artworkLibrary.Games.Add(new Game {Id="art-test",Name="Artwork test",Art=artworkPath,LaunchId="1"});
-            Storage.Write("settings.json",new Settings()); Storage.Write("library.json",artworkLibrary);
+            Storage.Write("settings.json",new Settings {AngledPanelSizing="fit"}); Storage.Write("library.json",artworkLibrary);
             var artworkWindow=new Launcher(false,true); var artworkContent=(FrameworkElement)artworkWindow.Content;
             artworkContent.Measure(new Size(1600,900)); artworkContent.Arrange(new Rect(0,0,1600,900)); artworkContent.UpdateLayout();
             var artworkImage=(Image)FindElement(artworkContent,"GameArtwork");
@@ -371,7 +371,7 @@ public static class OverlayTests {
             using(var drawing=colourDrawing.RenderOpen()) drawing.DrawRectangle(Brushes.Black,null,new Rect(0,0,100,100));
             var blackBitmap=new RenderTargetBitmap(100,100,96,96,PixelFormats.Pbgra32); blackBitmap.Render(colourDrawing); blackBitmap.Freeze();
             Check(ArtworkColours.Background(blackBitmap).GradientStops[0].Color==Colors.Black,"Genuinely black artwork remains black instead of receiving an invented tint");
-            Check(defaults.AngledPanelSizing=="fit","Older settings keep the current fit-artwork sizing");
+            Check(defaults.AngledPanelSizing=="fixed","New settings default to Fixed blurred-edge sizing");
             artworkWindow.SetAngledPanelSizing("fixed");
             artworkContent.Measure(new Size(1600,900)); artworkContent.Arrange(new Rect(0,0,1600,900)); artworkContent.UpdateLayout();
             artworkFrame=(FrameworkElement)FindElement(artworkContent,"ArtworkFrame"); artworkImage=(Image)FindElement(artworkContent,"GameArtwork");
