@@ -4,6 +4,8 @@ Research checked against upstream source on 2026-11-10. Pad Launcher supports ex
 
 ## Recommended methods
 
+Changing the saved emulator executable re-detects its library/configuration location using the adapters below. Saving an unchanged executable preserves a manually selected library location. ROM folders, imported games and saved import provenance are preserved; clearing the executable clears its library-location override.
+
 | Emulator | Preferred discovery | Important limits |
 | --- | --- | --- |
 | DuckStation | Read `GameList` search directories (`Paths`, `RecursivePaths`), then scan respecting recursion and exclusions. | Also saves a versioned binary game-list cache. Prefer configuration plus scanning over depending on that cache format. |

@@ -207,8 +207,12 @@ namespace PadLauncher {
     }
     public static class CombinedCollections {
         public static string Label(Collection list,Library library) {
+            return Label(list,library,null);
+        }
+        public static string Label(Collection list,Library library,IEnumerable<string> hiddenIds) {
             if(list.Id=="unavailable-collections") return list.Name;
-            var available=new HashSet<string>(library.Games.Select(g => g.Id));
+            var hidden=new HashSet<string>(hiddenIds ?? Enumerable.Empty<string>());
+            var available=new HashSet<string>(library.Games.Where(g => !hidden.Contains(g.Id)).Select(g => g.Id));
             int count=list.UnsupportedDynamic ? 0 : list.Id=="all" ? available.Count : (list.Games ?? new List<string>()).Distinct().Count(available.Contains);
             return list.Name+" ("+count+(count==1 ? " game)" : " games)");
         }
@@ -286,6 +290,8 @@ namespace PadLauncher {
         public string AngledSizing {get;set;}
     }
     public class Settings {
+        public List<string> HiddenGameIds {get;set;}
+        public bool AutoUpdate {get;set;}
         public Dictionary<string,ListLayout> ListLayouts {get;set;}
         public Dictionary<string,string> SelectedGamesByList {get;set;}
         public List<string> FavouriteGameIds {get;set;}

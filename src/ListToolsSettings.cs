@@ -7,6 +7,58 @@ using System.Windows.Controls;
 
 namespace PadLauncher {
     public partial class Launcher {
+        bool hiddenGamesExpanded;
+        public void SetHiddenGames(IEnumerable<string> ids) {
+            var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            next.HiddenGameIds=(ids ?? Enumerable.Empty<string>()).Where(id => !String.IsNullOrWhiteSpace(id)).Distinct().ToList();
+            Storage.Write("settings.json",next); settings=next; ApplyLibrary();
+        }
+        FrameworkElement CreateHiddenGamesSettings(Action rebuild) {
+            var section=new Expander {Name="HiddenGamesSection",Header="Hidden games",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=hiddenGamesExpanded};
+            section.Expanded+=(s,e) => hiddenGamesExpanded=true;
+            section.Collapsed+=(s,e) => hiddenGamesExpanded=false;
+            var panel=new StackPanel {Margin=new Thickness(12,8,12,12)}; section.Content=panel;
+            var note=Label("Check games to hide from every overlay list. They stay registered, keep their list memberships and remain editable. Uncheck to show them again.",12,muted);
+            note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
+            var searchCaption=Label("Filter games by name",12,mint); searchCaption.Margin=new Thickness(0,12,0,6); panel.Children.Add(searchCaption);
+            var search=new TextBox {Name="HiddenGamesSearch",Padding=new Thickness(8)}; panel.Children.Add(search);
+            var hiddenOnly=new CheckBox {Name="HiddenGamesOnly",Content="Show hidden games only",Margin=new Thickness(0,10,0,8)}; panel.Children.Add(hiddenOnly);
+            var selected=new HashSet<string>(settings.HiddenGameIds ?? new List<string>());
+            var choices=new StackPanel {Name="HiddenGamesChoices"};
+            panel.Children.Add(new ScrollViewer {Content=choices,MaxHeight=320,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Margin=new Thickness(0,4,0,8)});
+            var count=Label("",12,muted); panel.Children.Add(count);
+            var boxes=new List<CheckBox>();
+            Action filter=() => {
+                string query=search.Text.Trim();
+                foreach(var box in boxes) box.Visibility=(!hiddenOnly.IsChecked.GetValueOrDefault() || selected.Contains((string)box.Tag)) && ((string)box.Content).IndexOf(query,StringComparison.CurrentCultureIgnoreCase)>=0 ? Visibility.Visible : Visibility.Collapsed;
+                count.Text=selected.Count+" hidden";
+            };
+            foreach(var game in library.Games.GroupBy(g => g.Id).Select(group => group.First()).OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase)) {
+                string source=game.Source;
+                switch(source) {
+                    case null: case "": case "steam": source="Steam"; break;
+                    case "epic": source="Epic"; break;
+                    case "gog": source="GOG"; break;
+                    case "ea": source="EA"; break;
+                    case "ubisoft": source="Ubisoft Connect"; break;
+                    case "rockstar": source="Rockstar Games Launcher"; break;
+                    case "battlenet": source="Battle.net"; break;
+                    case "custom": source=CustomGameLibrary.EntrySourceLabel(settings,game); break;
+                    case "emulator": var preset=EmulatorLibrary.Presets.FirstOrDefault(p => p.Id==game.EmulatorId); source=preset==null ? "Emulator" : preset.Name; break;
+                }
+                var box=new CheckBox {Content=game.Name+" · "+source,Tag=game.Id,IsChecked=selected.Contains(game.Id),Margin=new Thickness(0,5,0,5)};
+                box.Click+=(s,e) => {if(box.IsChecked==true) selected.Add((string)box.Tag); else selected.Remove((string)box.Tag); filter();};
+                boxes.Add(box); choices.Children.Add(box);
+            }
+            search.TextChanged+=(s,e) => filter(); hiddenOnly.Click+=(s,e) => filter(); filter();
+            if(boxes.Count==0) choices.Children.Add(Label("No registered games yet.",12,muted));
+            var save=new Button {Name="SaveHiddenGames",Content="Save changes",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,10,0,0),Padding=new Thickness(12,7,12,7),Background=mint,Foreground=System.Windows.Media.Brushes.Black};
+            save.Click+=(s,e) => {
+                try {SetHiddenGames(selected); rebuild();}
+                catch(Exception error) {ThemedMessage.Show(error.Message,"Hidden games");}
+            };
+            panel.Children.Add(save); return section;
+        }
         void ShowListMemberships(Window owner,Action rebuild) {
             var dialog=new Window {Title="Game list memberships",Owner=owner,Width=760,Height=720,MinWidth=560,MinHeight=460,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,Topmost=true}; dialog.Resources.MergedDictionaries.Add(owner.Resources);
             var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;

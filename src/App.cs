@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.2.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.2.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.2")]
+[assembly: System.Reflection.AssemblyVersion("0.4.3.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.3.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.3")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -84,6 +84,7 @@ namespace PadLauncher {
         public const string AppName="Pad Launcher";
 #endif
         [STAThread] public static void Main(string[] args) {
+            if(AppUpdates.RunInstaller(args,message => ThemedMessage.Show(message,"Pad Launcher update"))) return;
             string dataPath = Argument(args,"--data");
             if (!String.IsNullOrEmpty(dataPath)) Storage.Root = System.IO.Path.GetFullPath(dataPath);
             else {
@@ -270,7 +271,7 @@ namespace PadLauncher {
                 ShowHelpWindow();
             };
             MouseWheel += (s,e) => { Move(e.Delta < 0 ? 1 : -1); };
-            Closed += (s,e) => { controllerTimer.Stop(); noticeTimer.Stop(); navigationSaveTimer.Stop(); Gamepad.StopNative(); Save(); };
+            Closed += (s,e) => { updateCancellation.Cancel(); controllerTimer.Stop(); noticeTimer.Stop(); navigationSaveTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
                 if (!exiting) {
                     e.Cancel=true; controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
@@ -293,11 +294,13 @@ namespace PadLauncher {
             }
         }
         public void PrepareTray() {
+            Task.Run(() => AppUpdates.CleanOldDownloads());
             controllerTimer.Stop();
             Gamepad.StopNative();
             var content=Content as FrameworkElement;
             if(content!=null) { content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout(); }
             if(!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
+            Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(StartAutomaticUpdates));
         }
         public void ToggleOverlay() {
             if(exiting) return;
@@ -791,7 +794,7 @@ namespace PadLauncher {
                 } catch(Exception error) {settings.OverlayListOrder=previous; ThemedMessage.Show(dialog,error.Message,"List order");}
             };
             foreach(var list in CollectionOptions()) {
-                var box=new CheckBox {Content=ListLabel(list),Foreground=white,IsChecked=CollectionEnabled(list.Id),Margin=new Thickness(0,0,0,8)};
+                var box=new CheckBox {Content=CombinedCollections.Label(list,library,settings.HiddenGameIds),Foreground=white,IsChecked=CollectionEnabled(list.Id),Margin=new Thickness(0,0,0,8)};
                 box.IsEnabled=settings.EnabledCollectionIds!=null;
                 box.Click+=(s,e) => saveAvailability();
                 collectionBoxes[list.Id]=box;
@@ -1004,6 +1007,7 @@ namespace PadLauncher {
             var individualGamesSection=new Expander {Name="EditListGamesSection",Header="Edit games in lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),Content=customListPanel};
             listsLayout.Children.Add(individualGamesSection);
             listsLayout.Children.Add(editLists);
+            listsLayout.Children.Add(CreateHiddenGamesSettings(rebuild));
             layout.Children.Add(skipEmpty);
             var removeMissing=new CheckBox {Content="Remove missing emulator and custom games on refresh",IsChecked=settings.RemoveMissingEmulatorGames,FontSize=14,Foreground=white,Margin=new Thickness(0,0,0,8)};
             removeMissing.Click+=(s,e) => {
@@ -1304,6 +1308,7 @@ namespace PadLauncher {
             getKey.Click+=(s,e) => Process.Start(new ProcessStartInfo("https://www.steamgriddb.com/profile/preferences/api") {UseShellExecute=true});
             apiButtons.Children.Add(saveKey); apiButtons.Children.Add(clearKey); apiButtons.Children.Add(getKey); systemLayout.Children.Add(apiButtons); systemLayout.Children.Add(apiStatus);
             systemLayout.Children.Add(repairPaths);
+            AddUpdateSettings(systemLayout);
             };
             rebuild();
             dialog.PreviewKeyDown+=(s,e) => { if(e.Key==System.Windows.Input.Key.Escape) { dialog.Close(); e.Handled=true; } };
@@ -2199,7 +2204,8 @@ namespace PadLauncher {
             if(!opening || previousFilter!=filters[collectionIndex].Id || visible.Count==0) FilterGames(true);
         }
         void SetFilters() {
-            var gameIds=new HashSet<string>(library.Games.Select(game => game.Id));
+            var hidden=new HashSet<string>(settings.HiddenGameIds ?? new List<string>());
+            var gameIds=new HashSet<string>(library.Games.Where(game => !hidden.Contains(game.Id)).Select(game => game.Id));
             filters=CollectionOptions().Where(c => CollectionEnabled(c.Id) &&
                 (!settings.SkipEmptyLists || (c.Id=="all" ? gameIds.Count>0 : !c.UnsupportedDynamic && c.Games!=null && c.Games.Any(gameIds.Contains)))).ToList();
             if(filters.Count==0) filters.Add(new Collection {Id="unavailable-collections",Name="No available lists"});
@@ -2212,7 +2218,8 @@ namespace PadLauncher {
             if(settings.SelectedGamesByList!=null && settings.SelectedGamesByList.TryGetValue(filter.Id,out remembered)) oldId=remembered;
             if(filter.Id=="recent") oldId=null;
             var membership=new HashSet<string>(filter.Games ?? new List<string>());
-            visible = library.Games.Where(g => filter.Id == "all" || (!filter.UnsupportedDynamic && membership.Contains(g.Id))).ToList();
+            var hidden=new HashSet<string>(settings.HiddenGameIds ?? new List<string>());
+            visible = library.Games.Where(g => !hidden.Contains(g.Id) && (filter.Id == "all" || (!filter.UnsupportedDynamic && membership.Contains(g.Id)))).ToList();
             if(filter.Id=="recent") visible=visible.OrderByDescending(g => CombinedCollections.RecentPlayed(settings,g)).ToList();
             selected = Math.Max(0, visible.FindIndex(g => g.Id == oldId));
             cards.Clear(); carousel.Children.Clear(); ApplyCarouselScale(); Render(false);
@@ -2250,7 +2257,7 @@ namespace PadLauncher {
             ConfigureViewport();
             RemoveGuideCards();
             if (filters.Count == 0) SetFilters();
-            collectionText.Text = settings.ShowListGameCount ? ListLabel(filters[collectionIndex]) : filters[collectionIndex].Name;
+            collectionText.Text = settings.ShowListGameCount ? CombinedCollections.Label(filters[collectionIndex],library,settings.HiddenGameIds) : filters[collectionIndex].Name;
             if (visible.Count == 0) {
                 carousel.Children.Clear(); cards.Clear();
                 if(!demo && library.Games.Count==0) AddGuideCards();

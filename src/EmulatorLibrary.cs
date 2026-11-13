@@ -84,7 +84,13 @@ namespace PadLauncher {
             if(!File.Exists(path) || !System.IO.Path.GetExtension(path).Equals(".exe",StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Choose an existing emulator .exe file."); return path;
         }
         public static void SavePath(Settings settings,string id,string path) {
-            Preset(id); string normalized=String.IsNullOrWhiteSpace(path) ? null : Executable(path); Ensure(settings,id).Path=normalized;
+            Preset(id); string normalized=String.IsNullOrWhiteSpace(path) ? null : Executable(path);
+            var config=Ensure(settings,id);
+            if(!String.Equals(config.Path,normalized,StringComparison.OrdinalIgnoreCase)) {
+                string location=normalized==null ? null : EmulatorImport.DetectLocation(id,normalized);
+                config.Path=normalized;
+                config.ImportPath=location;
+            }
         }
         public static string Core(string path) {
             if(String.IsNullOrWhiteSpace(path)) throw new ArgumentException("Choose a RetroArch core before adding or launching games.");
