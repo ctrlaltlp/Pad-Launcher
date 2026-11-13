@@ -226,6 +226,9 @@ namespace PadLauncher {
             try {
                 if(String.IsNullOrWhiteSpace(path)) return false;
                 path=Path.GetFullPath(path);
+                // Most games still exist. Avoid enumerating their parent folders on
+                // every refresh; the slower check below handles missing paths safely.
+                if(File.Exists(path) || Directory.Exists(path)) return false;
                 string candidate=path;
                 while(true) {
                     string parent=Path.GetDirectoryName(candidate);
@@ -245,30 +248,41 @@ namespace PadLauncher {
                 token.ThrowIfCancellationRequested();
                 var config=Config(settings,preset.Id);
                 if(config==null || config.Games==null) continue;
-                var importedIds=new HashSet<string>((settings.EmulatorImports ?? new List<EmulatorImportDefinition>())
-                    .Where(import => import.EmulatorId==preset.Id)
-                    .SelectMany(import => import.ImportedGames ?? new List<string>()));
-                HashSet<string> detected=null;
-                if(includeAbsent) try {
-                    string location=String.IsNullOrWhiteSpace(config.ImportPath) ? EmulatorImport.DetectLocation(preset.Id,config.Path) : config.ImportPath;
-                    if(String.IsNullOrWhiteSpace(location)) warnings.Add(preset.Name+": no emulator library is configured.");
-                    else {
+                var absentById=new Dictionary<string,bool>();
+                if(includeAbsent) foreach(var import in (settings.EmulatorImports ?? new List<EmulatorImportDefinition>()).Where(item => item.EmulatorId==preset.Id)) {
+                    token.ThrowIfCancellationRequested();
+                    var imported=new HashSet<string>(import.ImportedGames ?? new List<string>());
+                    if(imported.Count==0) continue;
+                    HashSet<string> detected=null;
+                    try {
+                        string location=import.Location;
+                        if(String.IsNullOrWhiteSpace(location)) throw new IOException("No emulator library location was saved for an import.");
                         var sources=EmulatorImport.Sources(preset.Id,config.Path,location);
-                        if(sources.Count==0) warnings.Add(preset.Name+": no library sources were found.");
-                        else {
-                            var batch=EmulatorImport.Read(preset.Id,config.Path,sources,config.CorePath,token);
-                            if(batch.Warnings.Count>0 || batch.Games.Any(game => !String.IsNullOrEmpty(game.Problem)))
-                                warnings.Add(preset.Name+": library detection was incomplete. Entries absent from its library were kept.");
-                            else detected=new HashSet<string>(batch.Games.Select(game => game.Path),StringComparer.OrdinalIgnoreCase);
+                        var savedSources=new HashSet<string>(import.Sources ?? new List<string>(),StringComparer.OrdinalIgnoreCase);
+                        if(savedSources.Count>0) {
+                            sources=sources.Where(source => savedSources.Contains(source.Id)).ToList();
+                            if(sources.Count!=savedSources.Count) throw new IOException("One or more imported library sources are unavailable.");
                         }
+                        if(sources.Count==0) throw new IOException("No library sources were found.");
+                        var batch=EmulatorImport.Read(preset.Id,config.Path,sources,config.CorePath,token);
+                        if(batch.Warnings.Count>0 || batch.Games.Any(game => !String.IsNullOrEmpty(game.Problem)))
+                            throw new IOException("Library detection was incomplete.");
+                        detected=new HashSet<string>(batch.Games.Select(game => game.Path),StringComparer.OrdinalIgnoreCase);
+                    } catch(OperationCanceledException) {throw;}
+                    catch(Exception error) {warnings.Add(preset.Name+": "+error.Message+" Entries absent from this library were kept.");}
+                    foreach(var game in config.Games.Where(item => imported.Contains(item.Id))) {
+                        bool absent=detected!=null && !detected.Contains(game.Path), previous;
+                        // A game imported from multiple libraries is safe to flag only
+                        // when every originating library was read and no longer has it.
+                        absentById[game.Id]=absentById.TryGetValue(game.Id,out previous) ? previous && absent : absent;
                     }
-                } catch(OperationCanceledException) {throw;}
-                catch(Exception error) {warnings.Add(preset.Name+": "+error.Message);}
+                }
                 foreach(var game in config.Games) {
                     token.ThrowIfCancellationRequested();
                     string reason=null;
                     if(ConfirmMissingRom(game.Path)) reason="ROM file is missing";
-                    else if(detected!=null && importedIds.Contains(game.Id) && !detected.Contains(game.Path)) {
+                    bool absent;
+                    if(reason==null && absentById.TryGetValue(game.Id,out absent) && absent) {
                         try {
                             string parent=System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(game.Path));
                             Directory.GetFileSystemEntries(parent);
@@ -407,8 +421,6 @@ namespace PadLauncher {
                 string extension=System.IO.Path.GetExtension(file).ToLowerInvariant();
                 if(!extensions.Contains(extension)) continue;
                 if((id=="rpcs3" || id=="vita3k" || id=="shadps4") && !System.IO.Path.GetFileName(file).Equals("eboot.bin",StringComparison.OrdinalIgnoreCase)) continue;
-                if(id=="eden" && !IsEdenScanCandidate(file,extension)) continue;
-                        if(id=="azahar" && extension==".app" && !IsAzaharApplication(file)) continue;
                 if(id=="xenia" && (extension=="" || extension==".live" || extension==".con" || extension==".pirs") && !IsXeniaGamePackage(file)) continue;
                 try {result.Paths.Add(GamePath(id,file));} catch(ArgumentException) {} catch(IOException) {} catch(UnauthorizedAccessException) {}
             }

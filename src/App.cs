@@ -231,6 +231,7 @@ namespace PadLauncher {
         double gridScrollOffset;
         double gridViewportHeight=490;
         bool scanning, launching, demo, preview;
+        bool pendingLibraryRefresh, pendingLibraryRefreshFeedback, libraryCacheNeedsWrite;
         ushort previousButtons;
         string previousInputSource;
         readonly HoldButton exitButton = new HoldButton();
@@ -1271,6 +1272,8 @@ namespace PadLauncher {
             var saveRockstar=new Button {Content="Save path",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,8)};
             saveRockstar.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.RockstarLauncherPath=RockstarLibrary.ValidateClient(rockstarPath.Text); Storage.Write("settings.json",next); settings=next; rockstarPath.Text=settings.RockstarLauncherPath ?? ""; updateRockstarStatus();} catch(Exception error) {rockstarStatus.Text=error.Message;}};
             browseRockstar.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Rockstar Games Launcher|Launcher.exe",CheckFileExists=true,FileName="Launcher.exe"}; if(file.ShowDialog(dialog)==true) {rockstarPath.Text=file.FileName; saveRockstar.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}}; rockstarIntegration.Children.Add(saveRockstar); rockstarIntegration.Children.Add(rockstarStatus);
+            foreach(var launcherToggle in new[]{gogToggle,epicToggle,eaToggle,ubisoftToggle,battleNetToggle,rockstarToggle})
+                launcherToggle.Margin=new Thickness(0,26,0,12);
             AddLauncherReimport(steamIntegration,"steam","Steam",() => true);
             AddLauncherReimport(gogIntegration,"gog","GOG Galaxy",() => settings.GogEnabled);
             AddLauncherReimport(epicIntegration,"epic","Epic Games Store",() => settings.EpicEnabled);
@@ -1475,24 +1478,29 @@ namespace PadLauncher {
         }
         void AddLauncherReimport(StackPanel panel,string source,string name,Func<bool> enabled) {
             var result=Label("",12,muted); result.TextWrapping=TextWrapping.Wrap;
-            var button=new Button {Content=source=="steam" ? "Reimport Steam collections" : "Reimport "+name+" games",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,14,0,8),Padding=new Thickness(12,7,12,7)};
-            panel.Children.Add(result); panel.Children.Add(button);
+            var button=new Button {Content=source=="steam" ? "Restore Steam collections" : "Restore "+name+" games",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,4,0,8),Padding=new Thickness(12,7,12,7)};
+            var restoreNote=Label(source=="steam" ? "Reloads Steam collections and restores detected Steam entries removed from Pad Launcher. Games removed in Steam stay removed." : "Restores installed games removed from Pad Launcher to this launcher's list. Uninstalled games stay removed.",12,muted);
+            restoreNote.TextWrapping=TextWrapping.Wrap;
+            restoreNote.Margin=new Thickness(0,6,0,4);
+            panel.Children.Add(restoreNote);
+            button.Margin=new Thickness(0,6,0,8);
+            panel.Children.Add(button); panel.Children.Add(result);
             button.Click+=async (sender,args) => {
                 if(scanning) {result.Text="Please wait for the current refresh to finish."; return;}
-                if(!enabled()) {result.Text="Enable "+name+" games above before reimporting."; return;}
-                scanning=true; button.IsEnabled=false; result.Text="Reimporting…";
+                if(!enabled()) {result.Text="Enable "+name+" games above before restoring."; return;}
+                scanning=true; button.IsEnabled=false; result.Text="Restoring…";
                 try {
                     var snapshot=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                     var fresh=await Task.Run(() => LauncherLibrary.ScanSource(snapshot,source));
                     var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                     var updated=Storage.Json().Deserialize<Library>(Storage.Json().Serialize(library));
-                    LauncherLibrary.MergeSource(updated,fresh,next,source);
+                    LauncherLibrary.RestoreSource(updated,fresh,next,source);
                     foreach(var game in updated.Games) ArtworkService.ApplyCached(game,next);
                     Storage.Write("settings.json",next); Storage.Write("library.json",updated);
                     settings=next; library=updated; ApplyLibrary(); DownloadArtwork(library);
-                    result.Text=source=="steam" ? "Steam collections updated." : name+" games updated.";
-                } catch(Exception error) {result.Text="Reimport failed. "+error.Message;}
-                finally {scanning=false; button.IsEnabled=true;}
+                    result.Text=source=="steam" ? "Steam collections restored." : name+" games restored.";
+                } catch(Exception error) {result.Text="Restore failed. "+error.Message;}
+                finally {button.IsEnabled=true; FinishLibraryScan();}
             };
         }
         void ShowSteamShortcutImport(Window owner,Action rebuild) {
@@ -2078,11 +2086,22 @@ namespace PadLauncher {
             ShowNotice(Prompts.Help(settings) + "\nPad Launcher");
         }
         void ShowNotice(string text,double seconds=5) { noticeText.Text = text; notice.Visibility = Visibility.Visible; noticeTimer.Stop(); noticeTimer.Interval=TimeSpan.FromSeconds(seconds); noticeTimer.Start(); }
+        void FinishLibraryScan() {
+            scanning=false;
+            if(!pendingLibraryRefresh) return;
+            bool feedback=pendingLibraryRefreshFeedback;
+            pendingLibraryRefresh=false;
+            pendingLibraryRefreshFeedback=false;
+            RefreshLibrary(feedback);
+        }
         async void RefreshLibrary(bool feedback = false) {
             if (demo) { if (feedback) ShowNotice("Preview library · refresh is available with your Steam library."); return; }
-            if (scanning) { if (feedback) ShowNotice("Refreshing games and lists…"); return; }
-            string path = settings.SteamPath;
-            if (String.IsNullOrWhiteSpace(path)) path = SteamLibrary.DetectSteam();
+            if (scanning) {
+                pendingLibraryRefresh=true;
+                pendingLibraryRefreshFeedback |= feedback;
+                if (feedback) ShowNotice("Refreshing games and lists…");
+                return;
+            }
             scanning = true;
             if (feedback) ShowNotice("Refreshing games and lists…");
             try {
@@ -2103,9 +2122,18 @@ namespace PadLauncher {
                     }
                     var result=LauncherLibrary.Scan(scanSettings);
                     bool changed=Storage.Json().Serialize(previous)!=Storage.Json().Serialize(result);
-                    if(changed) Storage.Write("library.json",result);
                     return Tuple.Create(result,changed);
                 });
+                // A newer request uses newer settings, so do not publish this snapshot.
+                if(pendingLibraryRefresh) return;
+                if(refreshed.Item2 || libraryCacheNeedsWrite) {
+                    libraryCacheNeedsWrite=true;
+                    await Task.Run(() => Storage.Write("library.json",refreshed.Item1));
+                    // A request can arrive while the cache is being written. The next
+                    // scan must rewrite it even if its result matches the live library.
+                    if(pendingLibraryRefresh) return;
+                    libraryCacheNeedsWrite=false;
+                }
                 var next=refreshed.Item1;
                 var removedNames=new List<string>();
                 if(settings.RemoveMissingEmulatorGames && missingCandidates.Count>0) {
@@ -2143,7 +2171,7 @@ namespace PadLauncher {
                 if(removedNames.Count>0) ShowNotice("Removed missing games: "+String.Join(", ",removedNames));
                 DownloadArtwork(next);
             } catch (Exception e) { ShowNotice(e.Message); }
-            finally { scanning = false; }
+            finally { FinishLibraryScan(); }
         }
         System.Threading.CancellationTokenSource artworkCancellation;
         async void DownloadArtwork(Library batch) {
@@ -2338,9 +2366,17 @@ namespace PadLauncher {
             helpWindow.Activate();
         }
         void SetAnimation(FrameworkElement element, DependencyProperty property, double value, bool animate) {
-            if (!animate || preview) { element.BeginAnimation(property,null); element.SetValue(property,value); return; }
-            var animation = new DoubleAnimation(value,TimeSpan.FromMilliseconds(230)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
-            element.BeginAnimation(property,animation);
+            AnimatePanelProperty(element,property,value,animate && !preview && SystemParameters.ClientAreaAnimation);
+        }
+        internal static void AnimatePanelProperty(FrameworkElement element,DependencyProperty property,double value,bool animate) {
+            double current=(double)element.GetValue(property);
+            if(Double.IsNaN(current) || Double.IsInfinity(current)) current=value;
+            element.SetValue(property,value);
+            if(!animate || Math.Abs(current-value)<0.001) {element.BeginAnimation(property,null); return;}
+            var animation=new DoubleAnimation(current,value,TimeSpan.FromMilliseconds(230)) {
+                EasingFunction=new SineEase {EasingMode=EasingMode.EaseOut},FillBehavior=FillBehavior.Stop
+            };
+            element.BeginAnimation(property,animation,HandoffBehavior.SnapshotAndReplace);
         }
         FrameworkElement Card(Game game, int index, double width, double height, bool active,int decodeWidth) {
             var grid = new Grid { Width = width, Height = height, Cursor = System.Windows.Input.Cursors.Hand, Background = Brushes.Transparent };

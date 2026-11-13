@@ -153,6 +153,9 @@ namespace PadLauncher {
                 var inherited=options.Where(list => sources.Contains(list.Id)).SelectMany(list => list.Games ?? new List<string>()).Distinct().ToList();
                 combined.AddedGames=chosen.Except(inherited).ToList();
                 combined.ExcludedGames=inherited.Except(chosen).Concat((combined.ExcludedGames ?? new List<string>()).Except(chosen)).Distinct().ToList();
+                List<string> savedAdditions;
+                if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(id,out savedAdditions))
+                    settings.ListGameAdditions[id]=(savedAdditions ?? new List<string>()).Intersect(chosen).ToList();
                 combined.Name=name;
                 return combined.Id;
             }
@@ -173,8 +176,8 @@ namespace PadLauncher {
                 !(settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => list.Id==listId))
                 throw new ArgumentException("The selected list no longer exists.");
             var customGame=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(game => game.Id==gameId);
-            if(customGame!=null && (!String.IsNullOrEmpty(customGame.SteamShortcutKey) || listId=="source:custom")) {
-                customGame.IncludeInCustomGamesList=String.IsNullOrEmpty(listId) || listId=="source:custom";
+            if(customGame!=null) {
+                customGame.IncludeInCustomGamesList=listId=="source:custom";
                 List<string> additions;
                 if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue("source:custom",out additions)) additions.RemoveAll(id => id==gameId);
             }
@@ -242,9 +245,10 @@ namespace PadLauncher {
             var originals=options.ToDictionary(c => c.Id);
             foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) {
                 if(combined==null || String.IsNullOrEmpty(combined.Id) || options.Any(c => c.Id==combined.Id)) continue;
-                var games=(combined.Sources ?? new List<string>()).Where(originals.ContainsKey).SelectMany(id => originals[id].Games).Concat(combined.AddedGames ?? new List<string>()).Except(combined.ExcludedGames ?? new List<string>()).Distinct().ToList();
+                var games=(combined.Sources ?? new List<string>()).Where(originals.ContainsKey).SelectMany(id => originals[id].Games).Concat(combined.AddedGames ?? new List<string>()).ToList();
                 List<string> additions;
-                if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(combined.Id,out additions)) games=games.Concat(additions ?? new List<string>()).Distinct().ToList();
+                if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(combined.Id,out additions)) games.AddRange(additions ?? new List<string>());
+                games=games.Except(combined.ExcludedGames ?? new List<string>()).ToList();
                 options.Add(new Collection {Id=combined.Id,Name=combined.Name,Games=games});
             }
             return options;
@@ -267,9 +271,10 @@ namespace PadLauncher {
             if(settings.CombinedCollections==null) settings.CombinedCollections=new List<CombinedCollection>();
             var existing=settings.CombinedCollections.FirstOrDefault(c => c.Id==id);
             if(id!=null && existing==null) throw new ArgumentException("This combined list no longer exists.");
-            if(existing==null) {existing=new CombinedCollection {Id="combined:"+Guid.NewGuid().ToString("N")}; settings.CombinedCollections.Add(existing);}
+            bool created=existing==null;
+            if(created) {existing=new CombinedCollection {Id="combined:"+Guid.NewGuid().ToString("N")}; settings.CombinedCollections.Add(existing);}
             existing.Name=name; existing.Sources=chosen;
-            if(settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(existing.Id)) settings.EnabledCollectionIds.Add(existing.Id);
+            if(created && settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(existing.Id)) settings.EnabledCollectionIds.Add(existing.Id);
             return existing.Id;
         }
     }

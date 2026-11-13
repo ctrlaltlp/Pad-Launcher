@@ -87,6 +87,13 @@ class SteamImportTests {
             CustomLists.SetGameList(destinationSettings,assignedLibrary,chosen.Id,"source:custom");
             CustomGameLibrary.Apply(assignedLibrary,destinationSettings);
             Check(CustomGameLibrary.InCustomGamesList(destinationSettings,chosen) && CombinedCollections.Options(assignedLibrary,destinationSettings).Single(l => l.Id=="source:custom").Games.Contains(chosen.Id) && !destinationSettings.CustomLists[0].Games.Contains(chosen.Id),"Game editor can move an imported entry to the built-in Custom games list");
+            CustomLists.SetGameList(destinationSettings,assignedLibrary,chosen.Id,"");
+            Check(!CustomGameLibrary.InCustomGamesList(destinationSettings,chosen),"Selecting None removes an imported game from Custom games");
+            var standalone=new CustomGame {Id="custom:standalone",Name="Standalone",IncludeInCustomGamesList=true};
+            destinationSettings.CustomGames.Add(standalone);
+            CustomLists.SetGameList(destinationSettings,assignedLibrary,standalone.Id,"list:chosen");
+            Check(!CustomGameLibrary.InCustomGamesList(destinationSettings,standalone) && destinationSettings.CustomLists[0].Games.Contains(standalone.Id),"Moving a custom game removes its previous Custom games membership");
+            destinationSettings.CustomLists[0].Games.Remove(standalone.Id);
             CustomLists.Save(destinationSettings,assignedLibrary,"source:custom","Custom games",new string[0]);
             Check(!CustomGameLibrary.InCustomGamesList(destinationSettings,chosen),"Built-in Custom games membership can be edited and emptied");
             CustomLists.Save(destinationSettings,assignedLibrary,"source:custom","Custom games",new[]{chosen.Id});

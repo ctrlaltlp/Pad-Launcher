@@ -29,6 +29,16 @@ class ListTransitionTests {
             window=new Launcher(true,true); window.SetAvailableCollections(new[]{"all","couch"}); window.ShowOverlay();
             var content=(FrameworkElement)window.Content; content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
             var carousel=(Canvas)Find(content,"GameCarousel"); var viewport=(Grid)Find(content,"CarouselViewport"); var live=(Grid)Find(content,"ListTransitionContent");
+            var motion=new Border {Width=100,Height=100}; carousel.Children.Add(motion); Canvas.SetLeft(motion,0);
+            content.UpdateLayout();
+            Launcher.AnimatePanelProperty(motion,Canvas.LeftProperty,100,true); Pump(70);
+            double beforeInterrupt=Canvas.GetLeft(motion);
+            Launcher.AnimatePanelProperty(motion,Canvas.LeftProperty,200,true);
+            double afterInterrupt=Canvas.GetLeft(motion);
+            Check(beforeInterrupt>0 && beforeInterrupt<100 && Math.Abs(afterInterrupt-beforeInterrupt)<1,"Repeated navigation continues from the current animated position: "+beforeInterrupt+" -> "+afterInterrupt);
+            Pump(300); Check(Math.Abs(Canvas.GetLeft(motion)-200)<.01,"Panel settles at its real destination after animation completes");
+            Launcher.AnimatePanelProperty(motion,Canvas.LeftProperty,25,false);
+            Check(Math.Abs(Canvas.GetLeft(motion)-25)<.01,"Disabled animations update panel position immediately"); carousel.Children.Remove(motion);
             var label=(TextBlock)Find(content,"SelectedCollection"); string before=label.Text;
             var original=carousel.Children[0] as FrameworkElement;
             Key(window,System.Windows.Input.Key.PageDown);

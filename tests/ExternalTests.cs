@@ -13,6 +13,16 @@ class ExternalTests {
         Storage.Root=root;
         try {
             var reimportSettings=new Settings();
+            foreach(string provider in new[]{"steam","epic","gog","ea","ubisoft","rockstar","battlenet"}) {
+                string restoredId=provider+":restore";
+                var restoreSettings=new Settings {ReplacedGameIds=new List<string>{restoredId,"other:keep"},EnabledCollectionIds=new List<string>{"all"},ArtworkOverrides=new Dictionary<string,string>{{restoredId,"chosen.png"}}};
+                var restoreLibrary=new Library {Games=new List<Game>{new Game {Id="custom:keep",Source="custom"}}};
+                var detectedLibrary=new Library {Games=new List<Game>{new Game {Id=restoredId,Source=provider}},Collections=new List<Collection>{new Collection {Id="source:"+provider,Source=provider,Games=new List<string>{restoredId}}}};
+                LauncherLibrary.RestoreSource(restoreLibrary,detectedLibrary,restoreSettings,provider);
+                LauncherLibrary.RestoreSource(restoreLibrary,detectedLibrary,restoreSettings,provider);
+                Check(restoreLibrary.Games.Count==2 && restoreLibrary.Games.Count(g => g.Id==restoredId)==1 && restoreLibrary.Collections.Count==1,"Repeated restore recovers "+provider+" games without duplicates");
+                Check(restoreSettings.ReplacedGameIds.SequenceEqual(new[]{"other:keep"}) && restoreSettings.EnabledCollectionIds.SequenceEqual(new[]{"all"}) && restoreSettings.ArtworkOverrides[restoredId]=="chosen.png","Restore preserves other exclusions, hidden lists and artwork for "+provider);
+            }
             var currentSource=new Library {Games=new List<Game>{new Game {Id="epic:old",Source="epic",Name="Old"},new Game {Id="custom:keep",Source="custom",Name="Keep"}},Collections=new List<Collection>{new Collection {Id="source:epic",Name="Epic",Source="epic"}}};
             var freshSource=new Library {Games=new List<Game>{new Game {Id="epic:new",Source="epic",Name="New"}},Collections=new List<Collection>{new Collection {Id="source:epic",Name="Epic",Source="epic",Games=new List<string>{"epic:new"}}}};
             LauncherLibrary.MergeSource(currentSource,freshSource,reimportSettings,"epic"); LauncherLibrary.MergeSource(currentSource,freshSource,reimportSettings,"epic");
@@ -66,6 +76,15 @@ class ExternalTests {
             Check(!CombinedCollections.Options(collectionLibrary,combinedSettings).Last().Games.Contains("1"),"Combined membership follows refreshed sources");
             CombinedCollections.Save(combinedSettings,collectionLibrary,combinedId,"Renamed",new[]{"a","all"});
             Check(combinedSettings.CombinedCollections.Count==1 && combinedSettings.CombinedCollections[0].Name=="Renamed","Editing keeps identity and replaces definition");
+            var hiddenSettings=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(combinedSettings));
+            hiddenSettings.EnabledCollectionIds.Remove(combinedId);
+            CombinedCollections.Save(hiddenSettings,collectionLibrary,combinedId,"Renamed",new[]{"a","all"});
+            Check(!hiddenSettings.EnabledCollectionIds.Contains(combinedId),"Editing a hidden combined list keeps it hidden");
+            hiddenSettings.ListGameAdditions=new Dictionary<string,List<string>>{{combinedId,new List<string>{"1","2"}}};
+            hiddenSettings.CombinedCollections[0].ExcludedGames=new List<string>{"2"};
+            Check(!CombinedCollections.Options(collectionLibrary,hiddenSettings).Single(c => c.Id==combinedId).Games.Contains("2"),"Combined list exclusions also apply to saved additions");
+            CustomLists.Save(hiddenSettings,collectionLibrary,combinedId,"Renamed",new[]{"3"});
+            Check(CombinedCollections.Options(collectionLibrary,hiddenSettings).Single(c => c.Id==combinedId).Games.SequenceEqual(new[]{"3"}),"Removing a saved addition from a combined list stays removed");
             var restored=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(combinedSettings));
             Check(CombinedCollections.Options(collectionLibrary,restored).Last().Games.Count==3,"Definition persists and supports All games");
             bool rejected=false; try {CombinedCollections.Save(combinedSettings,collectionLibrary,null,"Bad",new[]{"a"});} catch(ArgumentException) {rejected=true;} Check(rejected,"At least two sources required");

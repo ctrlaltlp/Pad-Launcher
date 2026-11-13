@@ -75,6 +75,10 @@ if ($args -contains '-Test') {
     if ($LASTEXITCODE -ne 0) { throw 'External test build failed.' }
     & (Join-Path $out 'ExternalTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'External integration tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'ArtworkBatchTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\ArtworkBatchTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Artwork test build failed.' }
+    & (Join-Path $out 'ArtworkBatchTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Artwork batch tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'LibraryTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\LibraryTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Test build failed.' }
     & (Join-Path $out 'LibraryTests.exe')

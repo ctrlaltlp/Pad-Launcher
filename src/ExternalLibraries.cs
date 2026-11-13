@@ -34,6 +34,11 @@ namespace PadLauncher {
             result.Collections.Add(new Collection {Id="source:"+source,Name=name,Source=source,Games=result.Games.Select(g => g.Id).Distinct().ToList()});
             return result;
         }
+        public static void RestoreSource(Library current,Library fresh,Settings settings,string source) {
+            var detected=new HashSet<string>(fresh.Games.Where(g => source=="steam" ? String.IsNullOrEmpty(g.Source) || g.Source=="steam" : g.Source==source).Select(g => g.Id));
+            if(settings.ReplacedGameIds!=null) settings.ReplacedGameIds.RemoveAll(detected.Contains);
+            MergeSource(current,fresh,settings,source);
+        }
         public static void MergeSource(Library current,Library fresh,Settings settings,string source) {
             Func<Game,bool> owns=g => source=="steam" ? String.IsNullOrEmpty(g.Source) || g.Source=="steam" : g.Source==source;
             if(source=="steam") {

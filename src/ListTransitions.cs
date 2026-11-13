@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -43,18 +43,18 @@ namespace PadLauncher {
             int generation=listTransitionGeneration; ListTransitionVertical=vertical;
             double distance=(vertical ? 105 : 140)*Math.Sign(delta);
             var axis=vertical ? TranslateTransform.YProperty : TranslateTransform.XProperty;
-            var duration=TimeSpan.FromMilliseconds(220);
-            Func<double,double,DoubleAnimation> animation=(from,to) => new DoubleAnimation(from,to,duration) {EasingFunction=new CubicEase {EasingMode=EasingMode.EaseOut},FillBehavior=FillBehavior.Stop};
+            var duration=TimeSpan.FromMilliseconds(240);
+            Func<double,double,DoubleAnimation> animation=(from,to) => new DoubleAnimation(from,to,duration) {EasingFunction=new SineEase {EasingMode=EasingMode.EaseOut},FillBehavior=FillBehavior.Stop};
             var outgoingTranslation=(TranslateTransform)oldList.RenderTransform;
             double start=vertical ? outgoingTranslation.Y : outgoingTranslation.X;
             outgoingTranslation.BeginAnimation(axis,animation(start,-distance));
             oldList.BeginAnimation(OpacityProperty,animation(oldList.Opacity,0));
             listTranslation.BeginAnimation(axis,animation(distance,0));
-            var incoming=animation(.25,1);
+            var incoming=animation(.5,1);
             incoming.Completed+=(s,e) => {if(generation==listTransitionGeneration) StopListTransition();};
             listContent.BeginAnimation(OpacityProperty,incoming);
-            collectionText.BeginAnimation(OpacityProperty,animation(.35,1));
-            title.BeginAnimation(OpacityProperty,animation(.35,1));
+            collectionText.BeginAnimation(OpacityProperty,animation(.5,1));
+            title.BeginAnimation(OpacityProperty,animation(.5,1));
         }
     }
 }

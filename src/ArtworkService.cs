@@ -255,9 +255,12 @@ namespace PadLauncher {
         static bool Download(string url,string path,CancellationToken token) {
             if(!ArtworkNetwork.AllowedImageUrl(url)) return false;
             byte[] data=Fetch(url,null,token);
-            using(var stream=new MemoryStream(data)) using(var image=System.Drawing.Image.FromStream(stream)) {
-                if(!EpicLibrary.SuitablePortrait(image.Width,image.Height)) return false;
-            }
+            try {
+                using(var stream=new MemoryStream(data)) using(var image=System.Drawing.Image.FromStream(stream)) {
+                    if(!EpicLibrary.SuitablePortrait(image.Width,image.Height)) return false;
+                }
+            } catch(ArgumentException) {return false;}
+              catch(OutOfMemoryException) {return false;} // GDI+ also reports invalid image data this way.
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllBytes(path,data); return true;
         }

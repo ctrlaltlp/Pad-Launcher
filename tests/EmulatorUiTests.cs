@@ -196,6 +196,7 @@ class EmulatorUiTests {
             var customPanel=(FrameworkElement)panelMethod.Invoke(launcher,new object[]{dialog,(Action)(() => {})}); Layout(customPanel);
             Check(((TabControl)Find(customPanel,"CustomGamesTabs")).SelectedIndex==1,"Saving an existing custom game keeps Added Games selected");
             customSaved.CustomLists.First(list => list.Id==allList.Id).Games.Remove(customId);
+            customSaved.CustomGames.First(entry => entry.Id==customId).IncludeInCustomGamesList=true;
             customSaved.CombinedCollections=new System.Collections.Generic.List<CombinedCollection> {
                 new CombinedCollection {Id="combined:inherited-ui",Name="Inherited custom games",Sources=new System.Collections.Generic.List<string>{"source:custom","source:steam"}}
             };
