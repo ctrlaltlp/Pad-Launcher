@@ -23,7 +23,7 @@ Both let you review detected games, rename new entries and choose a destination 
 
 Place `PadLauncher.exe` in its own writable folder before running it. The app creates `PadLauncher.Data` and `PadLauncher.Update` folders beside the executable for settings, artwork and temporary update files.
 
-With a fresh data folder, an optional setup wizard helps configure launchers, emulators, artwork, controls and the overlay layout. Every page can be skipped; reopen it from **Settings → System → Restart setup**. Existing installations keep starting quietly in the notification area. Running the executable again opens the overlay.
+With a fresh data folder, an optional setup wizard helps configure launchers, emulators, artwork, controls and the overlay layout. Every page can be skipped; reopen it from **Settings → System → Restart setup**. Existing installations keep starting quietly in the notification area. Running the executable again toggles the overlay: opens it when hidden, or hides it when visible.
 
 Launchers are detected automatically. If detection fails, set the installation folder in **Settings → Launchers**. Use **Emulators → Settings → Detect installed emulators** to review emulator paths found through Windows registrations, Start-menu shortcuts and standard installation folders, or browse manually. Emulator games can then be imported from libraries, scanned from ROM folders or added manually.
 

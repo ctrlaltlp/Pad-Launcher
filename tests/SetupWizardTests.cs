@@ -50,6 +50,17 @@ class SetupWizardTests {
             foreach(string file in new[]{oldExe,newExe}) {Directory.CreateDirectory(Path.GetDirectoryName(file)); File.WriteAllText(file,"");}
             var initial=new Settings {GogEnabled=false,LeftStickSpeed=2,HiddenGameIds=new List<string>{"hidden-sentinel"},CustomLists=new List<CustomList>{new CustomList {Id="list:sentinel",Name="Keep",Games=new List<string>{"keep-game"}}},Emulators=new List<EmulatorConfig>{new EmulatorConfig {Id="pcsx2",Path=oldExe,RomFolder="keep-rom-folder",Arguments="--existing {game}",Games=new List<EmulatorGame>()}}};
             Storage.Write("settings.json",initial); ArtworkKey.Save("existing-key"); launcher=new Launcher(true,true);
+            var pathStatus=new TextBlock();
+            typeof(Launcher).GetMethod("SetLauncherDetectionNote",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(launcher,new object[]{pathStatus,"Steam",oldExe});
+            var pathCheck=typeof(Launcher).GetMethod("ShowLauncherPathCheck",BindingFlags.NonPublic|BindingFlags.Instance);
+            pathCheck.Invoke(launcher,new object[]{pathStatus,"Steam",oldExe.ToLowerInvariant().Replace('\\','/')});
+            Check(pathStatus.Text=="Steam already detected.","Saving the same detected path recognizes casing and separator differences");
+            pathCheck.Invoke(launcher,new object[]{pathStatus,"Steam",newExe});
+            Check(pathStatus.Text=="Steam successfully detected","A new valid launcher path shows successful detection");
+            pathCheck.Invoke(launcher,new object[]{pathStatus,"Steam",Path.Combine(root,"missing.exe")});
+            Check(pathStatus.Text=="Steam not found at the given path.","A missing launcher path reports the requested error");
+            pathCheck.Invoke(launcher,new object[]{pathStatus,"Steam",newExe});
+            Check(pathStatus.Text=="Steam already detected.","A failed path check retains the last successfully detected path");
             launcher.ShowSetupWizard(true,new Dictionary<string,string>()); var wizard=Wizard(launcher);
             if(args.Length==2 && (args[0]=="--render" || args[0]=="--render-emulators" || args[0]=="--render-layouts")) {
                 if(args[0]=="--render-emulators") Click(wizard,"SetupSkip");
