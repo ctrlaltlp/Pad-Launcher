@@ -16,7 +16,7 @@ Supports **DuckStation, PCSX2, RPCS3, Xenia, Dolphin, Eden, melonDS, Vita3K, Ret
 
 Place `PadLauncher.exe` in its own writable folder before running it. The app creates `PadLauncher.Data` and `PadLauncher.Update` folders beside the executable for settings, artwork and temporary update files.
 
-The first launch puts the app in your notification area, so it's best if you have it on auto-start on windows, then bind a controller button to launch the .exe; that opens the carousel after the first launch.
+The first launch puts the app in your notification area, so it's best if you have it on auto-start on windows, then bind a controller button to launch the .exe; that opens the overlay after the first launch.
 
 Launchers are detected automatically. If detection fails, set installation folder in Settings -> Launchers. Emulator and ROM paths need to be configured manually.
 
