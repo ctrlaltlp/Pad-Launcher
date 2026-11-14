@@ -37,9 +37,9 @@ Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**.
 | Toggle favourite | R3 / right stick click | F |
 | Jump to a chosen list (optional) | L3 / left stick click | — |
 | Brief control hints and game title | Options / Start / Nintendo + | F1 |
-| Open Settings | — | Right-click the overlay or use the tray menu |
+| Open Settings | — | Tray menu → Settings |
 
-Left and right stick speeds are adjustable in Controls (defaults: 1× and 3×). You can also enable up/down list switching for Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 always toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
+Left and right stick speeds are adjustable in Controls (both default to 5×). You can also enable up/down list switching for Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 always toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
 
 ## Inspiration
 
