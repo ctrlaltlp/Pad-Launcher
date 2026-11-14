@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -50,7 +50,7 @@ class ListTransitionTests {
             Pump(260);
             var translation=(TranslateTransform)live.RenderTransform;
             Check(!window.ListTransitionActive && viewport.Children.Count==1 && live.Opacity==1 && translation.X==0 && translation.Y==0,"Completion removes outgoing panels and restores exact opacity and position");
-            window.SetVerticalListSwitch("both"); window.NavigateController(new PadState()); window.NavigateController(new PadState {Buttons=1});
+            window.NavigateController(new PadState()); window.NavigateController(new PadState {Buttons=1});
             Check(label.Text==before && (!SystemParameters.ClientAreaAnimation || window.ListTransitionVertical),"Up/down list changes use a vertical transition");
             Key(window,System.Windows.Input.Key.Right);
             Check(!window.ListTransitionActive && live.Opacity==1,"Game browsing can interrupt a transition immediately");

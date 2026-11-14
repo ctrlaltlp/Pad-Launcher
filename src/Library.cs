@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -45,6 +45,9 @@ namespace PadLauncher {
         public bool ArtworkTestUninstalled { get; set; }
 #endif
         public string ShortcutTarget { get; set; }
+        public bool DirectLaunchShortcut {get;set;}
+        public bool ShortcutDirectSupported {get;set;}
+        public string ShortcutDirectWarning {get;set;}
         public string SteamLaunchId {get;set;}
         public string Art { get; set; }
         public string Hero { get; set; }
@@ -235,7 +238,7 @@ namespace PadLauncher {
             options.AddRange((library.Collections ?? new List<Collection>()).Select(c => new Collection {
                 Id=c.Id,Name=SteamListName(c),Source=c.Source,Games=c.Games,Dynamic=c.Dynamic,UnsupportedDynamic=c.UnsupportedDynamic,UnsupportedReason=c.UnsupportedReason
             }));
-            string[][] sources={new[]{"steam","Steam"},new[]{"epic","Epic Games Store"},new[]{"gog","GOG Galaxy"},new[]{"ea","EA App"},new[]{"ubisoft","Ubisoft Connect"},new[]{"rockstar","Rockstar Games Launcher"},new[]{"custom","Custom games"}};
+            string[][] sources={new[]{"steam","Steam"},new[]{"epic","Epic Games Store"},new[]{"gog","GOG Galaxy"},new[]{"ea","EA App"},new[]{"ubisoft","Ubisoft Connect"},new[]{"rockstar","Rockstar Games Launcher"},new[]{"xbox","Xbox app"},new[]{"custom","Custom games"}};
             foreach(var source in sources) {
                 string id="source:"+source[0]; if(options.Any(c => c.Id==id)) continue;
                 string provider=source[0];
@@ -299,6 +302,9 @@ namespace PadLauncher {
         public string AngledSizing {get;set;}
     }
     public class Settings {
+        public bool SteamEnabled {get;set;}
+        public bool IncludeSteamShortcuts {get;set;}
+        public string SteamShortcutLaunchMode {get;set;}
         public bool SetupWizardShown {get;set;}
         public bool SetupWizardCompleted {get;set;}
         public int SetupWizardPage {get;set;}
@@ -312,7 +318,6 @@ namespace PadLauncher {
         public string PlayniteLibraryPath {get;set;}
         public double RightStickSpeed {get;set;}
         public double LeftStickSpeed {get;set;}
-        public string VerticalListSwitch {get;set;}
         public Dictionary<string,long> LaunchHistory {get;set;}
         public Dictionary<string,string> ArtworkOverrides {get;set;}
         public Dictionary<string,List<string>> ListGameAdditions {get;set;}
@@ -340,6 +345,8 @@ namespace PadLauncher {
         public bool EpicEnabled { get; set; }
         public string EpicLauncherPath {get;set;}
         public bool GogEnabled {get;set;}
+        public string GogLauncherPath {get;set;}
+        public string BattleNetLauncherPath {get;set;}
         public bool EaEnabled {get;set;}
         public bool RockstarEnabled {get;set;}
         public bool SkipEmptyLists {get;set;}
@@ -349,12 +356,13 @@ namespace PadLauncher {
         public string JumpListId {get;set;}
         public bool RemoveMissingEmulatorGames {get;set;}
         public bool BattleNetEnabled {get;set;}
+        public bool XboxEnabled {get;set;}
         public string RockstarLauncherPath {get;set;}
         public bool UbisoftEnabled {get;set;}
         public string UbisoftLauncherPath {get;set;}
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { ShowListGameCount=true; RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; VerticalListSwitch="off"; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=true; RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -579,6 +587,8 @@ namespace PadLauncher {
                             var game = new Game { Id = id.ToString(), LaunchId = ShortcutLaunchId(id), Name = name, Shortcut = true, LastPlayed = lastPlayed, HasPlayHistory = Vdf.Get(shortcut,"LastPlayTime") != null };
                             game.ShortcutTarget=ShortcutTargetPath(Vdf.Str(shortcut,"exe"),Vdf.Str(shortcut,"StartDir"));
                             game.ShortcutInstalled=!String.IsNullOrEmpty(game.ShortcutTarget) && File.Exists(game.ShortcutTarget);
+                            var direct=SteamShortcutImport.Parse(shortcut,user);
+                            if(direct!=null) {game.Arguments=direct.Arguments; game.WorkingDirectory=direct.WorkingDirectory; game.ShortcutDirectSupported=direct.CanLaunchDirect; game.ShortcutDirectWarning=direct.DirectWarning;}
                             game.Tags = Vdf.Map(Vdf.Get(shortcut, "tags")).Values.Select(Convert.ToString).Where(s => !String.IsNullOrWhiteSpace(s)).ToList();
                             result.Games.Add(game);
                         }

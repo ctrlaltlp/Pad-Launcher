@@ -4,7 +4,7 @@
 
 A transparent, controller-friendly Windows game launcher with angled, rectangular and grid layouts. Browse games from multiple launchers, emulators and custom entries, with optional game titles and list names. Organise your games into individual or combined lists and use existing launcher artwork, local images or SteamGridDB covers.
 
-Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, manual **Playnite** imports, and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
+Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, **Xbox app** (installed Xbox / Game Pass titles), manual **Playnite** imports, and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
 
 ## Emulators
 
@@ -17,7 +17,7 @@ Both let you review detected games, rename new entries and choose a destination 
 
 ## Usage
 
-**[Download the latest PadLauncher.exe](https://github.com/lpv11/Pad-Launcher/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit).
+**[Download the latest PadLauncher.exe](https://github.com/ctrlaltlp/Pad-Launcher/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit).
 
 Place `PadLauncher.exe` in its own writable folder before running it. The app creates `PadLauncher.Data` and `PadLauncher.Update` folders beside the executable for settings, artwork and temporary update files.
 
@@ -44,7 +44,7 @@ Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**.
 | Brief control hints and game title | Options / Start / Nintendo + | F1 |
 | Open Settings | — | Tray menu → Settings |
 
-Left and right stick speeds are adjustable in Controls (both default to 5×). You can also enable up/down list switching for Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 always toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
+Left and right stick speeds are adjustable in Controls (both default to 5×). D-pad and left stick up/down switch lists in Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 always toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
 
 ## Inspiration
 

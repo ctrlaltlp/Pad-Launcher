@@ -7,6 +7,24 @@ using System.Threading;
 
 namespace PadLauncher {
     public static class EmulatorSqlite {
+        public static List<string> ReadXboxProducts(string path) {
+            IntPtr db=IntPtr.Zero,statement=IntPtr.Zero;
+            try {
+                if(sqlite3_open_v2(Encoding.UTF8.GetBytes(path+"\0"),out db,1,IntPtr.Zero)!=0) throw new IOException("Cannot read the Xbox app catalog.");
+                byte[] query=Encoding.UTF8.GetBytes("SELECT value FROM AsyncCache WHERE scope='product_summary';\0");
+                if(sqlite3_prepare_v2(db,query,-1,out statement,IntPtr.Zero)!=0) throw new IOException("The Xbox app catalog format is not supported.");
+                var rows=new List<string>(); int code;
+                while((code=sqlite3_step(statement))==100) {
+                    int length=sqlite3_column_bytes(statement,0);
+                    if(length<1 || length>2000000) continue;
+                    var bytes=new byte[length]; Marshal.Copy(sqlite3_column_text(statement,0),bytes,0,length); rows.Add(Encoding.UTF8.GetString(bytes));
+                    if(rows.Count>=20000) throw new IOException("The Xbox app catalog exceeds the detection limit.");
+                }
+                if(code!=101) throw new IOException("The Xbox app catalog is busy. Try refreshing again.");
+                return rows;
+            } catch(DllNotFoundException) {throw new IOException("The Windows SQLite reader is unavailable for Xbox catalog detection.");}
+            finally {if(statement!=IntPtr.Zero) sqlite3_finalize(statement); if(db!=IntPtr.Zero) sqlite3_close(db);}
+        }
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [DllImport("winsqlite3.dll",CallingConvention=CallingConvention.Cdecl)] static extern int sqlite3_open_v2(byte[] name,out IntPtr db,int flags,IntPtr vfs);
         [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections;
@@ -8,11 +8,19 @@ using System.Text.RegularExpressions;
 
 namespace PadLauncher {
     public static class LauncherLibrary {
+        public static void ApplySteamPreferences(Library library,Settings settings) {
+            var removed=new HashSet<string>(library.Games.Where(game => game.Shortcut && !settings.IncludeSteamShortcuts).Select(game => game.Id));
+            library.Games.RemoveAll(game => removed.Contains(game.Id));
+            foreach(var list in library.Collections) if(list.Games!=null) list.Games.RemoveAll(removed.Contains);
+            foreach(var game in library.Games.Where(game => game.Shortcut)) game.DirectLaunchShortcut=settings.SteamShortcutLaunchMode=="direct";
+        }
         public static Library ScanSource(Settings settings,string source) {
             if(source=="steam") {
+                if(!settings.SteamEnabled) throw new IOException("Enable Steam games before restoring Steam collections.");
                 string root=String.IsNullOrWhiteSpace(settings.SteamPath) ? SteamLibrary.DetectSteam() : settings.SteamPath;
                 if(String.IsNullOrWhiteSpace(root)) throw new IOException("Configure the Steam path first.");
                 var steam=SteamLibrary.Scan(root,settings.UserId);
+                ApplySteamPreferences(steam,settings);
                 if(String.IsNullOrEmpty(steam.UserId) || steam.Warnings.Count>0) throw new IOException(String.Join("\n",steam.Warnings.Concat(new[]{"Check the Steam path and user before reimporting."})));
                 steam.Collections.Add(new Collection {Id="source:steam",Name="Steam",Source="steam",Games=steam.Games.Select(g => g.Id).ToList()});
                 return steam;
@@ -27,10 +35,11 @@ namespace PadLauncher {
                 case "ubisoft": result.Games=UbisoftLibrary.Scan(); break;
                 case "rockstar": result.Games=RockstarLibrary.Scan(); break;
                 case "battlenet": result.Games=BattleNetLibrary.Scan(); break;
+                case "xbox": result.Games=XboxLibrary.Scan(result.Warnings); break;
                 default: throw new ArgumentException("Unknown launcher.");
             }
             if(result.Warnings.Count>0) throw new IOException(String.Join("\n",result.Warnings));
-            string name=source=="epic" ? "Epic Games Store" : source=="gog" ? "GOG Galaxy" : source=="ea" ? "EA App" : source=="ubisoft" ? "Ubisoft Connect" : source=="rockstar" ? "Rockstar Games Launcher" : "Battle.net";
+            string name=source=="epic" ? "Epic Games Store" : source=="gog" ? "GOG Galaxy" : source=="ea" ? "EA App" : source=="ubisoft" ? "Ubisoft Connect" : source=="rockstar" ? "Rockstar Games Launcher" : source=="xbox" ? "Xbox app" : "Battle.net";
             result.Collections.Add(new Collection {Id="source:"+source,Name=name,Source=source,Games=result.Games.Select(g => g.Id).Distinct().ToList()});
             return result;
         }
@@ -73,10 +82,10 @@ namespace PadLauncher {
                 return isolated;
             }
             string steam=settings.SteamPath;
-            if(String.IsNullOrWhiteSpace(steam)) steam=SteamLibrary.DetectSteam();
+            if(settings.SteamEnabled && String.IsNullOrWhiteSpace(steam)) steam=SteamLibrary.DetectSteam();
             var result=new Library {SteamPath=steam,UserId=settings.UserId};
-            if(!String.IsNullOrWhiteSpace(steam)) {
-                try { result=SteamLibrary.Scan(steam,settings.UserId); }
+            if(settings.SteamEnabled && !String.IsNullOrWhiteSpace(steam)) {
+                try { result=SteamLibrary.Scan(steam,settings.UserId); ApplySteamPreferences(result,settings); }
                 catch(Exception e) { result.Warnings.Add("Steam library: "+e.Message); }
             }
             if(result.Games.Count>0) result.Collections.Add(new Collection {Id="source:steam",Name="Steam",Games=result.Games.Select(g => g.Id).ToList()});
@@ -107,6 +116,10 @@ namespace PadLauncher {
             if(settings.BattleNetEnabled) {
                 try {var games=BattleNetLibrary.Scan(); result.Games.AddRange(games); if(games.Count>0) result.Collections.Add(new Collection {Id="source:battlenet",Name="Battle.net",Games=games.Select(g => g.Id).ToList()});}
                 catch(Exception error) {result.Warnings.Add("Battle.net library: "+error.Message);}
+            }
+            if(settings.XboxEnabled) {
+                try {var games=XboxLibrary.Scan(result.Warnings); result.Games.AddRange(games); if(games.Count>0) result.Collections.Add(new Collection {Id="source:xbox",Name="Xbox app",Source="xbox",Games=games.Select(game => game.Id).ToList()});}
+                catch(Exception error) {result.Warnings.Add("Xbox library: "+error.Message);}
             }
             CustomGameLibrary.Apply(result,settings);
             EmulatorLibrary.Apply(result,settings);
@@ -287,9 +300,17 @@ namespace PadLauncher {
             } else throw new ArgumentException("Repair is available for custom and emulator games.");
         }
         public static System.Diagnostics.ProcessStartInfo StartInfo(Game game,Settings settings=null) {
+            if(game.Source=="xbox") return XboxLibrary.StartInfo(game);
+            if(game.Shortcut && (settings==null ? game.DirectLaunchShortcut : settings.SteamShortcutLaunchMode=="direct")) {
+                if(!game.ShortcutDirectSupported) throw new InvalidOperationException(game.ShortcutDirectWarning ?? "Refresh this shortcut before using direct launch, or choose Through Steam.");
+                if(!File.Exists(game.ShortcutTarget)) throw new FileNotFoundException("The non-Steam shortcut's executable could not be found.",game.ShortcutTarget);
+                string directory=String.IsNullOrWhiteSpace(game.WorkingDirectory) ? Path.GetDirectoryName(game.ShortcutTarget) : game.WorkingDirectory;
+                if(!Directory.Exists(directory)) throw new DirectoryNotFoundException("The non-Steam shortcut's working folder could not be found.");
+                return new System.Diagnostics.ProcessStartInfo(game.ShortcutTarget,game.Arguments ?? "") {UseShellExecute=true,WorkingDirectory=directory};
+            }
             if(game.Source=="emulator") return EmulatorLibrary.StartInfo(game,settings);
             if(game.Source=="rockstar") return RockstarLibrary.StartInfo(game,settings==null ? null : settings.RockstarLauncherPath);
-            if(game.Source=="battlenet") return BattleNetLibrary.StartInfo(game);
+            if(game.Source=="battlenet") return BattleNetLibrary.StartInfo(game,settings==null ? null : settings.BattleNetLauncherPath);
             if(game.Source=="ubisoft") return UbisoftLibrary.StartInfo(game,settings==null ? null : settings.UbisoftLauncherPath);
             if(game.Source=="ea") return EaLibrary.StartInfo(game,settings==null ? null : settings.EaLauncherPath);
             if(game.Source=="epic") {
@@ -297,7 +318,7 @@ namespace PadLauncher {
                 if(!String.IsNullOrEmpty(path)) return new System.Diagnostics.ProcessStartInfo(path,"\""+uri+"\"") {UseShellExecute=true,WorkingDirectory=Path.GetDirectoryName(path)};
                 return new System.Diagnostics.ProcessStartInfo(uri) {UseShellExecute=true};
             }
-            if(game.Source=="gog") return GogLibrary.StartInfo(game);
+            if(game.Source=="gog") return GogLibrary.StartInfo(game,settings==null ? null : settings.GogLauncherPath);
             if(game.Source!="custom") return new System.Diagnostics.ProcessStartInfo(UriFor(game)) {UseShellExecute=true};
             if(!String.IsNullOrEmpty(game.SteamLaunchId)) {
                 ulong steamId; if(!UInt64.TryParse(game.SteamLaunchId,out steamId) || steamId==0) throw new InvalidOperationException("Invalid Steam launch ID.");

@@ -49,14 +49,9 @@ public static class ControllerTests {
             var savedSpeeds=Storage.Json().Deserialize<Settings>("{\"LeftStickSpeed\":2,\"RightStickSpeed\":3}");
             Check(savedSpeeds.LeftStickSpeed==2 && savedSpeeds.RightStickSpeed==3,"Explicitly saved stick speeds survive the default change");
             var listSettings=new Settings();
-            Check(!ControllerNavigation.ListSwitchEnabled(listSettings) && ControllerNavigation.ListDirection(new PadState {Buttons=1},listSettings)==0,"Up/down list switching is opt-in for existing settings");
-            listSettings.VerticalListSwitch="dpad";
+            Check(ControllerNavigation.ListSwitchEnabled(listSettings),"Vertical list switching is always enabled outside Grid");
             Check(ControllerNavigation.ListDirection(new PadState {Buttons=1},listSettings)==-1 && ControllerNavigation.ListDirection(new PadState {Buttons=2},listSettings)==1,"D-pad up selects previous list and down selects next");
-            Check(ControllerNavigation.ListDirection(new PadState {LY=25000},listSettings)==0,"D-pad-only mode excludes left stick");
-            listSettings.VerticalListSwitch="stick";
             Check(ControllerNavigation.ListDirection(new PadState {LY=25000},listSettings)==-1 && ControllerNavigation.ListDirection(new PadState {LY=-25000},listSettings)==1,"Left stick up/down selects lists");
-            Check(ControllerNavigation.ListDirection(new PadState {Buttons=1},listSettings)==0,"Stick-only mode excludes D-pad");
-            listSettings.VerticalListSwitch="both";
             Check(ControllerNavigation.ListDirection(new PadState {Buttons=1},listSettings)==-1 && ControllerNavigation.ListDirection(new PadState {LY=-25000},listSettings)==1,"Both mode accepts either input");
             Check(ControllerNavigation.ListDirection(new PadState {Buttons=3},listSettings)==0 && ControllerNavigation.ListDirection(new PadState {LY=16000},listSettings)==0,"Opposed buttons and stick dead zone cannot change lists");
             bool listFast;

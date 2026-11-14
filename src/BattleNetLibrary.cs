@@ -59,10 +59,10 @@ namespace PadLauncher {
             } catch(System.Security.SecurityException) {} catch(UnauthorizedAccessException) {} catch(IOException) {}
             return games.GroupBy(game => game.Id).Select(group => group.First()).OrderBy(game => game.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
         }
-        public static ProcessStartInfo StartInfo(Game game) {
+        public static ProcessStartInfo StartInfo(Game game,string client=null) {
             if(game.Source!="battlenet" || !Products.Values.Contains(game.LaunchId)) throw new InvalidOperationException("Unsupported Battle.net game ID.");
             if(!Directory.Exists(game.WorkingDirectory)) throw new DirectoryNotFoundException("The Battle.net game folder is missing.");
-            string client=DetectClient();
+            client=client ?? DetectClient();
             if(String.IsNullOrEmpty(client)) throw new FileNotFoundException("Battle.net.exe could not be found.");
             return new ProcessStartInfo(client,"--exec=\"launch "+game.LaunchId+"\"") {UseShellExecute=true,WorkingDirectory=Path.GetDirectoryName(client)};
         }

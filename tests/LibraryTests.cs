@@ -57,6 +57,17 @@ public static class LibraryTests {
             File.WriteAllBytes(Path.Combine(hashed,"library_hero_blur.jpg"),new byte[]{1});
             Library library=SteamLibrary.Scan(root,"123");
             Check(library.Games.Count==4,"Installed games from multiple libraries plus non-Steam shortcuts");
+            var preferences=new Settings();
+            Check(preferences.SteamEnabled && preferences.IncludeSteamShortcuts && preferences.SteamShortcutLaunchMode=="direct","New profiles default to direct shortcut launching");
+            var filtered=Storage.Json().Deserialize<Library>(Storage.Json().Serialize(library));
+            preferences.IncludeSteamShortcuts=false; LauncherLibrary.ApplySteamPreferences(filtered,preferences);
+            Check(filtered.Games.Count==2 && !filtered.Collections.Any(list => list.Games.Contains("3000000000")),"Excluded shortcuts are removed from games and Steam collections");
+            var directGame=library.Games.Single(game => game.Id=="3000000000");
+            preferences.IncludeSteamShortcuts=true; preferences.SteamShortcutLaunchMode="direct";
+            LauncherLibrary.ApplySteamPreferences(library,preferences);
+            Check(GameLaunch.StartInfo(directGame,preferences).FileName==shortcutTarget,"Direct shortcut mode launches the executable");
+            preferences.SteamShortcutLaunchMode="steam";
+            Check(GameLaunch.StartInfo(directGame,preferences).FileName.StartsWith("steam://"),"Through Steam shortcut mode launches Steam");
             Check(!library.Games.Any(g => g.Id=="30"),"Uninstalled manifests excluded");
             Check(!library.Games.Any(g => g.Id=="40"),"Compatibility runtimes excluded");
             Check(library.Games.Single(g => g.Id=="3000000000").Name=="Shortcut Ω","Binary VDF Unicode and unsigned shortcut IDs");

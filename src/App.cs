@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.4.1")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.4.1")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.4.1")]
+[assembly: System.Reflection.AssemblyVersion("0.4.4.5")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.4.5")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.4.5")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -507,16 +507,8 @@ namespace PadLauncher {
             collectionText.Visibility=show ? Visibility.Visible : Visibility.Collapsed;
             if(ActiveLayout=="grid") Render(false);
         }
-        public void SetVerticalListSwitch(string mode) {
-            if(!new[]{"off","dpad","stick","both"}.Contains(mode)) throw new ArgumentException("Choose Off, D-pad, Left stick, or Both.");
-            string previous=settings.VerticalListSwitch;
-            try {settings.VerticalListSwitch=mode; Storage.Write("settings.json",settings); navigation.Reset();}
-            catch {settings.VerticalListSwitch=previous; throw;}
-        }
         string BrowseGuide(bool stick) {
-            string mode=settings.VerticalListSwitch;
-            bool switches=mode=="both" || mode==(stick ? "stick" : "dpad");
-            return (stick ? "Browse games at "+settings.LeftStickSpeed.ToString("0.#")+"× speed" : "Browse games")+(switches ? " · Up/down switches lists outside Grid" : "");
+            return (stick ? "Browse games at "+settings.LeftStickSpeed.ToString("0.#")+"× speed" : "Browse games")+" · Up/down switches lists outside Grid";
         }
         public void SetShowGameTitle(bool show) {
             bool previous=settings.ShowGameTitle;
@@ -643,11 +635,6 @@ namespace PadLauncher {
             }
             var keyboard=Label("Keyboard: ← / → browse · ↑ / ↓ grid rows\nEnter play · Esc dismiss · Page Up / Down lists\nM next monitor · F5 refresh · F1 hints",12,muted);
             keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); helpLayout.Children.Add(keyboard);
-            var listNavigationCaption=Label("Up/down switches lists",14,mint); listNavigationCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(listNavigationCaption);
-            var listNavigation=new SettingsComboBox {Name="VerticalListSwitchSetting",ItemsSource=new[]{new KeyValuePair<string,string>("off","Off"),new KeyValuePair<string,string>("dpad","D-pad"),new KeyValuePair<string,string>("stick","Left stick"),new KeyValuePair<string,string>("both","D-pad and left stick")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=new[]{"dpad","stick","both"}.Contains(settings.VerticalListSwitch) ? settings.VerticalListSwitch : "off",Padding=new Thickness(8)};
-            helpLayout.Children.Add(listNavigation);
-            var listNavigationNote=Label("Angled and Rectangular layouts only. Up selects the previous list; down selects the next. Grid keeps row navigation. Shoulder buttons always switch lists.",12,muted); listNavigationNote.TextWrapping=TextWrapping.Wrap; listNavigationNote.Margin=new Thickness(0,8,0,0); helpLayout.Children.Add(listNavigationNote);
-            listNavigation.SelectionChanged+=(s,e) => {try {SetVerticalListSwitch((string)listNavigation.SelectedValue); rebuild();} catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Controls");}};
             var leftSpeedCaption=Label("Left stick speed",14,mint); leftSpeedCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(leftSpeedCaption);
             var leftSpeedValue=Label(settings.LeftStickSpeed.ToString("0.#")+"×",13,white); helpLayout.Children.Add(leftSpeedValue);
             var leftSpeedPicker=new Slider {Name="LeftStickSpeedSetting",Minimum=1,Maximum=10,Value=settings.LeftStickSpeed,TickFrequency=.5,IsSnapToTickEnabled=true,SmallChange=.5,LargeChange=1,Margin=new Thickness(0,4,0,10)};
@@ -896,6 +883,7 @@ namespace PadLauncher {
                         case "ubisoft": source="Ubisoft Connect"; break;
                         case "rockstar": source="Rockstar Games Launcher"; break;
                         case "battlenet": source="Battle.net"; break;
+                    case "xbox": source="Xbox app"; break;
                         case "custom": source=CustomGameLibrary.EntrySourceLabel(settings,game); break;
                     }
                     if(source=="emulator") {
@@ -1128,12 +1116,15 @@ namespace PadLauncher {
                 return body;
             };
             var steamIntegration=addIntegration("Steam","SteamIntegrationSection");
+            var steamEnabled=new CheckBox {Name="SteamEnabledSetting",Content="Include Steam games",IsChecked=settings.SteamEnabled,Margin=new Thickness(0,26,0,12)}; steamIntegration.Children.Add(steamEnabled);
             var steamCaption=Label("Steam path",14,mint); steamCaption.Margin=new Thickness(0,14,0,10); steamIntegration.Children.Add(steamCaption);
-            var steamPath=new TextBox {Name="SteamPathSetting",Text=settings.SteamPath ?? SteamLibrary.DetectSteam() ?? "",FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"}; steamIntegration.Children.Add(steamPath);
+            var steamPath=new TextBox {Name="SteamPathSetting",Text=DisplayLauncherPath(settings.SteamPath ?? SteamLibrary.DetectSteam()),FontSize=14,Padding=new Thickness(9,7,9,7),ToolTip="Steam installation folder containing steam.exe and steamapps"};
+            var steamPathRow=new DockPanel(); steamIntegration.Children.Add(steamPathRow);
             Action reloadUsers=null;
             var steamActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
-            var browseSteam=new Button {Content="Browse…",FontSize=13,Padding=new Thickness(14,7,14,7),Margin=new Thickness(0,0,8,0)};
-            var saveSteam=new Button {Content="Save & refresh",FontSize=13,Padding=new Thickness(14,7,14,7)};
+            var browseSteam=new Button {Content="Browse…",FontSize=13,Padding=new Thickness(14,7,14,7),Margin=new Thickness(8,0,0,0)};
+            DockPanel.SetDock(browseSteam,Dock.Right); steamPathRow.Children.Add(browseSteam); steamPathRow.Children.Add(steamPath);
+            var saveSteam=new Button {Content="Save path",FontSize=13,Padding=new Thickness(14,7,14,7)};
             var steamStatus=Label("Select the Steam installation, not an individual library drive.",12,muted); steamStatus.TextWrapping=TextWrapping.Wrap; steamStatus.Margin=new Thickness(0,7,0,0);
             browseSteam.Click+=(s,e) => {
                 using(var picker=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the Steam installation folder",SelectedPath=steamPath.Text}) {
@@ -1141,10 +1132,10 @@ namespace PadLauncher {
                 }
             };
             saveSteam.Click+=(s,e) => {
-                try { steamPath.Text=SetSteamFolder(steamPath.Text); reloadUsers(); steamStatus.Text="Steam folder saved."; steamStatus.Foreground=mint; RefreshLibrary(true); }
+                try { steamPath.Text=DisplayLauncherPath(SetSteamFolder(steamPath.Text)); reloadUsers(); steamStatus.Text="Steam folder saved."; steamStatus.Foreground=mint; RefreshLibrary(true); }
                 catch(Exception error) { steamStatus.Text=error.Message; steamStatus.Foreground=new SolidColorBrush(Color.FromRgb(255,172,153)); }
             };
-            steamActions.Children.Add(browseSteam); steamActions.Children.Add(saveSteam); steamIntegration.Children.Add(steamActions); steamIntegration.Children.Add(steamStatus);
+            steamActions.Children.Add(saveSteam); steamIntegration.Children.Add(steamActions); steamIntegration.Children.Add(steamStatus);
             var userCaption=Label("Steam user ID",14,mint); userCaption.Margin=new Thickness(0,14,0,10); steamIntegration.Children.Add(userCaption);
             var userPicker=new SettingsComboBox {DisplayMemberPath="Value",SelectedValuePath="Key",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white,Background=new SolidColorBrush(Color.FromRgb(28,48,61))};
             bool restoringUser=false;
@@ -1172,18 +1163,30 @@ namespace PadLauncher {
             };
             userPicker.Margin=new Thickness(0,0,0,24);
             steamIntegration.Children.Add(userPicker);
+            var steamShortcuts=new CheckBox {Name="SteamShortcutsSetting",Content="Include non-Steam games",IsChecked=settings.IncludeSteamShortcuts,Margin=new Thickness(0,0,0,8)}; steamIntegration.Children.Add(steamShortcuts);
+            var steamShortcutMode=new SettingsComboBox {Name="SteamShortcutModeSetting",ItemsSource=new[]{new KeyValuePair<string,string>("steam","Through Steam"),new KeyValuePair<string,string>("direct","Direct launch")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.SteamShortcutLaunchMode=="direct" ? "direct" : "steam",Padding=new Thickness(8),Margin=new Thickness(0,0,0,12)}; steamIntegration.Children.Add(steamShortcutMode);
+            Action updateSteamChoices=() => {steamShortcuts.IsEnabled=steamEnabled.IsChecked==true; steamShortcutMode.IsEnabled=steamShortcuts.IsEnabled && steamShortcuts.IsChecked==true; steamShortcutMode.Visibility=steamShortcuts.IsChecked==true ? Visibility.Visible : Visibility.Collapsed;};
+            bool savingSteamChoices=false;
+            Action saveSteamChoices=() => {
+                if(savingSteamChoices) return; savingSteamChoices=true;
+                try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.SteamEnabled=steamEnabled.IsChecked==true; next.IncludeSteamShortcuts=steamShortcuts.IsChecked==true; next.SteamShortcutLaunchMode=steamShortcutMode.SelectedValue as string ?? "steam"; Storage.Write("settings.json",next); settings=next; RefreshLibrary(true);}
+                catch(Exception error) {steamEnabled.IsChecked=settings.SteamEnabled; steamShortcuts.IsChecked=settings.IncludeSteamShortcuts; steamShortcutMode.SelectedValue=settings.SteamShortcutLaunchMode ?? "steam"; ThemedMessage.Show(dialog,error.Message,"Steam settings");}
+                finally {savingSteamChoices=false; updateSteamChoices();}
+            };
+            steamEnabled.Click+=(s,e) => saveSteamChoices(); steamShortcuts.Click+=(s,e) => saveSteamChoices(); steamShortcutMode.SelectionChanged+=(s,e) => saveSteamChoices(); updateSteamChoices();
             var gogIntegration=addIntegration("GOG Galaxy","GogIntegrationSection");
             var gogToggle=new CheckBox {Content="Include GOG Galaxy games",IsChecked=settings.GogEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
             gogToggle.Click+=(s,e) => {settings.GogEnabled=gogToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; gogIntegration.Children.Add(gogToggle);
+            AddLauncherPathField(gogIntegration,dialog,"GOG Galaxy","GogPathSetting",s => s.GogLauncherPath,(s,path) => s.GogLauncherPath=path,GogLibrary.DetectClient,new[]{"GalaxyClient.exe"});
             var epicIntegration=addIntegration("Epic Games Store","EpicIntegrationSection");
             var epicToggle=new CheckBox {Content="Include Epic Games Store games",IsChecked=settings.EpicEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
             epicToggle.Click+=(s,e) => {settings.EpicEnabled=epicToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; epicIntegration.Children.Add(epicToggle);
             var epicPathCaption=Label("Epic Games Launcher path",14,mint); epicPathCaption.Margin=new Thickness(0,10,0,8); epicIntegration.Children.Add(epicPathCaption);
             var epicPathRow=new DockPanel();
             var browseEpic=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseEpic,Dock.Right); epicPathRow.Children.Add(browseEpic);
-            var epicPathField=new TextBox {Text=settings.EpicLauncherPath ?? "",Padding=new Thickness(8)};
+            var epicPathField=new TextBox {Text=DisplayLauncherPath(settings.EpicLauncherPath),Padding=new Thickness(8)};
             var epicPathBox=new Grid(); epicPathBox.Children.Add(epicPathField);
-            string epicDetectedPath=EpicLibrary.DetectLauncher();
+            string epicDetectedPath=DisplayLauncherPath(EpicLibrary.DetectLauncher());
             var epicPlaceholder=Label(String.IsNullOrEmpty(epicDetectedPath) ? "Automatic detection" : epicDetectedPath,12,muted); epicPlaceholder.Margin=new Thickness(19,0,9,0); epicPlaceholder.IsHitTestVisible=false; epicPathBox.Children.Add(epicPlaceholder);
             epicPathField.TextChanged+=(s,e) => epicPlaceholder.Visibility=String.IsNullOrEmpty(epicPathField.Text) ? Visibility.Visible : Visibility.Collapsed;
             epicPlaceholder.Visibility=String.IsNullOrEmpty(epicPathField.Text) ? Visibility.Visible : Visibility.Collapsed; epicPathRow.Children.Add(epicPathBox); epicIntegration.Children.Add(epicPathRow);
@@ -1191,7 +1194,7 @@ namespace PadLauncher {
             string detectedEpic=EpicLibrary.DetectLauncher(); epicPathStatus.Text=String.IsNullOrEmpty(settings.EpicLauncherPath) ? String.IsNullOrEmpty(detectedEpic) ? "Automatic: uses Epic's registered launch link." : "" : "Custom launcher path saved.";
             var saveEpic=new Button {Content="Save path",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,8)};
             saveEpic.Click+=(s,e) => {
-                try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.EpicLauncherPath=EpicLibrary.ValidateLauncher(epicPathField.Text); Storage.Write("settings.json",next); settings=next; epicPathField.Text=settings.EpicLauncherPath ?? ""; epicPathStatus.Text=String.IsNullOrEmpty(settings.EpicLauncherPath) ? "Automatic detection enabled." : "Custom launcher path saved.";}
+                try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.EpicLauncherPath=EpicLibrary.ValidateLauncher(epicPathField.Text); Storage.Write("settings.json",next); settings=next; epicPathField.Text=DisplayLauncherPath(settings.EpicLauncherPath); epicPathStatus.Text=String.IsNullOrEmpty(settings.EpicLauncherPath) ? "Automatic detection enabled." : "Custom launcher path saved."; RefreshLibrary(true);}
                 catch(Exception error) {epicPathStatus.Text=error.Message;}
             };
             browseEpic.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Epic Games Launcher|EpicGamesLauncher.exe",CheckFileExists=true,FileName="EpicGamesLauncher.exe"}; if(file.ShowDialog(dialog)==true) {epicPathField.Text=file.FileName; saveEpic.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}};
@@ -1201,8 +1204,8 @@ namespace PadLauncher {
             eaToggle.Click+=(s,e) => {settings.EaEnabled=eaToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; eaIntegration.Children.Add(eaToggle);
             var eaCaption=Label("EA App path",14,mint); eaCaption.Margin=new Thickness(0,10,0,8); eaIntegration.Children.Add(eaCaption);
             var eaRow=new DockPanel(); var browseEa=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseEa,Dock.Right); eaRow.Children.Add(browseEa);
-            var eaPath=new TextBox {Text=settings.EaLauncherPath ?? "",Padding=new Thickness(8),ToolTip="Leave empty for automatic detection; choose EALauncher.exe to override."};
-            var eaField=new Grid(); eaField.Children.Add(eaPath); string eaDetectedPath=EaLibrary.DetectClient(); var eaHint=Label(String.IsNullOrEmpty(eaDetectedPath) ? "Automatic detection" : eaDetectedPath,12,muted); eaHint.Margin=new Thickness(19,0,9,0); eaHint.IsHitTestVisible=false; eaField.Children.Add(eaHint);
+            var eaPath=new TextBox {Text=DisplayLauncherPath(settings.EaLauncherPath),Padding=new Thickness(8),ToolTip="Leave empty for automatic detection; choose EALauncher.exe to override."};
+            var eaField=new Grid(); eaField.Children.Add(eaPath); string eaDetectedPath=DisplayLauncherPath(EaLibrary.DetectClient()); var eaHint=Label(String.IsNullOrEmpty(eaDetectedPath) ? "Automatic detection" : eaDetectedPath,12,muted); eaHint.Margin=new Thickness(19,0,9,0); eaHint.IsHitTestVisible=false; eaField.Children.Add(eaHint);
             eaPath.TextChanged+=(s,e) => eaHint.Visibility=String.IsNullOrEmpty(eaPath.Text) ? Visibility.Visible : Visibility.Collapsed; eaHint.Visibility=String.IsNullOrEmpty(eaPath.Text) ? Visibility.Visible : Visibility.Collapsed;
             eaRow.Children.Add(eaField); eaIntegration.Children.Add(eaRow);
             var eaStatus=Label("",12,muted); eaStatus.TextWrapping=TextWrapping.Wrap;
@@ -1211,36 +1214,33 @@ namespace PadLauncher {
                 eaStatus.Text=String.IsNullOrEmpty(settings.EaLauncherPath) ? String.IsNullOrEmpty(detected) ? "Automatic: uses EA's registered launch link." : "" : "Custom launcher path saved.";
             }; updateEaStatus();
             var saveEa=new Button {Content="Save path",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,8)};
-            saveEa.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.EaLauncherPath=EaLibrary.ValidateClient(eaPath.Text); Storage.Write("settings.json",next); settings=next; eaPath.Text=settings.EaLauncherPath ?? ""; updateEaStatus();} catch(Exception error) {eaStatus.Text=error.Message;}};
+            saveEa.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.EaLauncherPath=EaLibrary.ValidateClient(eaPath.Text); Storage.Write("settings.json",next); settings=next; eaPath.Text=DisplayLauncherPath(settings.EaLauncherPath); updateEaStatus(); RefreshLibrary(true);} catch(Exception error) {eaStatus.Text=error.Message;}};
             browseEa.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="EA App launcher|EALauncher.exe",CheckFileExists=true,FileName="EALauncher.exe"}; if(file.ShowDialog(dialog)==true) {eaPath.Text=file.FileName; saveEa.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}}; eaIntegration.Children.Add(saveEa); eaIntegration.Children.Add(eaStatus);
             var ubisoftIntegration=addIntegration("Ubisoft Connect","UbisoftIntegrationSection");
             var ubisoftToggle=new CheckBox {Content="Include Ubisoft Connect games",IsChecked=settings.UbisoftEnabled,Margin=new Thickness(0,12,0,12)};
             ubisoftToggle.Click+=(s,e) => {settings.UbisoftEnabled=ubisoftToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; ubisoftIntegration.Children.Add(ubisoftToggle);
             var ubisoftCaption=Label("Ubisoft Connect path",14,mint); ubisoftCaption.Margin=new Thickness(0,10,0,8); ubisoftIntegration.Children.Add(ubisoftCaption);
             var ubisoftRow=new DockPanel(); var browseUbisoft=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseUbisoft,Dock.Right); ubisoftRow.Children.Add(browseUbisoft);
-            var ubisoftPath=new TextBox {Text=settings.UbisoftLauncherPath ?? "",Padding=new Thickness(8)};
-            var ubisoftField=new Grid(); ubisoftField.Children.Add(ubisoftPath); string ubisoftDetectedPath=UbisoftLibrary.DetectClient(); var ubisoftHint=Label(String.IsNullOrEmpty(ubisoftDetectedPath) ? "Automatic detection" : ubisoftDetectedPath,12,muted); ubisoftHint.Margin=new Thickness(19,0,9,0); ubisoftHint.IsHitTestVisible=false; ubisoftField.Children.Add(ubisoftHint);
+            var ubisoftPath=new TextBox {Text=DisplayLauncherPath(settings.UbisoftLauncherPath),Padding=new Thickness(8)};
+            var ubisoftField=new Grid(); ubisoftField.Children.Add(ubisoftPath); string ubisoftDetectedPath=DisplayLauncherPath(UbisoftLibrary.DetectClient()); var ubisoftHint=Label(String.IsNullOrEmpty(ubisoftDetectedPath) ? "Automatic detection" : ubisoftDetectedPath,12,muted); ubisoftHint.Margin=new Thickness(19,0,9,0); ubisoftHint.IsHitTestVisible=false; ubisoftField.Children.Add(ubisoftHint);
             ubisoftPath.TextChanged+=(s,e) => ubisoftHint.Visibility=String.IsNullOrEmpty(ubisoftPath.Text) ? Visibility.Visible : Visibility.Collapsed; ubisoftHint.Visibility=String.IsNullOrEmpty(ubisoftPath.Text) ? Visibility.Visible : Visibility.Collapsed; ubisoftRow.Children.Add(ubisoftField); ubisoftIntegration.Children.Add(ubisoftRow);
             var ubisoftStatus=Label("",12,muted); ubisoftStatus.TextWrapping=TextWrapping.Wrap;
             Action updateUbisoftStatus=() => {string detected=UbisoftLibrary.DetectClient(); ubisoftStatus.Text=String.IsNullOrEmpty(settings.UbisoftLauncherPath) ? String.IsNullOrEmpty(detected) ? "Automatic: uses Ubisoft's registered launch link." : "" : "Custom launcher path saved.";}; updateUbisoftStatus();
             var saveUbisoft=new Button {Content="Save path",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,8)};
-            saveUbisoft.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.UbisoftLauncherPath=UbisoftLibrary.ValidateClient(ubisoftPath.Text); Storage.Write("settings.json",next); settings=next; ubisoftPath.Text=settings.UbisoftLauncherPath ?? ""; updateUbisoftStatus();} catch(Exception error) {ubisoftStatus.Text=error.Message;}};
+            saveUbisoft.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.UbisoftLauncherPath=UbisoftLibrary.ValidateClient(ubisoftPath.Text); Storage.Write("settings.json",next); settings=next; ubisoftPath.Text=DisplayLauncherPath(settings.UbisoftLauncherPath); updateUbisoftStatus(); RefreshLibrary(true);} catch(Exception error) {ubisoftStatus.Text=error.Message;}};
             browseUbisoft.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Ubisoft Connect|UbisoftConnect.exe;upc.exe;UbisoftGameLauncher.exe;UbisoftGameLauncher64.exe",CheckFileExists=true,FileName="UbisoftConnect.exe"}; if(file.ShowDialog(dialog)==true) {ubisoftPath.Text=file.FileName; saveUbisoft.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}}; ubisoftIntegration.Children.Add(saveUbisoft); ubisoftIntegration.Children.Add(ubisoftStatus);
             var battleNetIntegration=addIntegration("Battle.net","BattleNetIntegrationSection");
             var battleNetToggle=new CheckBox {Content="Include Battle.net games",IsChecked=settings.BattleNetEnabled,Margin=new Thickness(0,12,0,12)};
             battleNetToggle.Click+=(s,e) => {settings.BattleNetEnabled=battleNetToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);};
             battleNetIntegration.Children.Add(battleNetToggle);
-            string battleNetClient=BattleNetLibrary.DetectClient();
-            var battleNetStatus=Label(battleNetClient==null ? "Battle.net was not detected." : "Detected: "+battleNetClient,12,muted);
-            battleNetStatus.TextWrapping=TextWrapping.Wrap;
-            battleNetIntegration.Children.Add(battleNetStatus);
+            AddLauncherPathField(battleNetIntegration,dialog,"Battle.net","BattleNetPathSetting",s => s.BattleNetLauncherPath,(s,path) => s.BattleNetLauncherPath=path,BattleNetLibrary.DetectClient,new[]{"Battle.net.exe","Battle.net Launcher.exe"});
             var rockstarIntegration=addIntegration("Rockstar Games Launcher","RockstarIntegrationSection");
             var rockstarToggle=new CheckBox {Content="Include Rockstar Games Launcher games",IsChecked=settings.RockstarEnabled,Margin=new Thickness(0,12,0,12)};
             rockstarToggle.Click+=(s,e) => {settings.RockstarEnabled=rockstarToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; rockstarIntegration.Children.Add(rockstarToggle);
             var rockstarCaption=Label("Rockstar Games Launcher path",14,mint); rockstarCaption.Margin=new Thickness(0,10,0,8); rockstarIntegration.Children.Add(rockstarCaption);
             var rockstarRow=new DockPanel(); var browseRockstar=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(browseRockstar,Dock.Right); rockstarRow.Children.Add(browseRockstar);
-            var rockstarPath=new TextBox {Text=settings.RockstarLauncherPath ?? "",Padding=new Thickness(8)};
-            var rockstarField=new Grid(); rockstarField.Children.Add(rockstarPath); string rockstarDetectedPath=RockstarLibrary.DetectClient(); var rockstarHint=Label(String.IsNullOrEmpty(rockstarDetectedPath) ? "Automatic detection" : rockstarDetectedPath,12,muted); rockstarHint.Margin=new Thickness(19,0,9,0); rockstarHint.IsHitTestVisible=false; rockstarField.Children.Add(rockstarHint);
+            var rockstarPath=new TextBox {Text=DisplayLauncherPath(settings.RockstarLauncherPath),Padding=new Thickness(8)};
+            var rockstarField=new Grid(); rockstarField.Children.Add(rockstarPath); string rockstarDetectedPath=DisplayLauncherPath(RockstarLibrary.DetectClient()); var rockstarHint=Label(String.IsNullOrEmpty(rockstarDetectedPath) ? "Automatic detection" : rockstarDetectedPath,12,muted); rockstarHint.Margin=new Thickness(19,0,9,0); rockstarHint.IsHitTestVisible=false; rockstarField.Children.Add(rockstarHint);
             foreach(var hint in new[]{epicPlaceholder,eaHint,ubisoftHint,rockstarHint}) {
                 hint.TextTrimming=TextTrimming.CharacterEllipsis;
                 hint.HorizontalAlignment=HorizontalAlignment.Stretch;
@@ -1253,17 +1253,26 @@ namespace PadLauncher {
             var rockstarStatus=Label("",12,muted); rockstarStatus.TextWrapping=TextWrapping.Wrap;
             Action updateRockstarStatus=() => {string detected=RockstarLibrary.DetectClient(); rockstarStatus.Text=String.IsNullOrEmpty(settings.RockstarLauncherPath) ? String.IsNullOrEmpty(detected) ? "Rockstar Games Launcher not detected. Choose its path above." : "" : "Custom launcher path saved.";}; updateRockstarStatus();
             var saveRockstar=new Button {Content="Save path",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,8)};
-            saveRockstar.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.RockstarLauncherPath=RockstarLibrary.ValidateClient(rockstarPath.Text); Storage.Write("settings.json",next); settings=next; rockstarPath.Text=settings.RockstarLauncherPath ?? ""; updateRockstarStatus();} catch(Exception error) {rockstarStatus.Text=error.Message;}};
+            saveRockstar.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); next.RockstarLauncherPath=RockstarLibrary.ValidateClient(rockstarPath.Text); Storage.Write("settings.json",next); settings=next; rockstarPath.Text=DisplayLauncherPath(settings.RockstarLauncherPath); updateRockstarStatus(); RefreshLibrary(true);} catch(Exception error) {rockstarStatus.Text=error.Message;}};
             browseRockstar.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Rockstar Games Launcher|Launcher.exe",CheckFileExists=true,FileName="Launcher.exe"}; if(file.ShowDialog(dialog)==true) {rockstarPath.Text=file.FileName; saveRockstar.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}}; rockstarIntegration.Children.Add(saveRockstar); rockstarIntegration.Children.Add(rockstarStatus);
             foreach(var launcherToggle in new[]{gogToggle,epicToggle,eaToggle,ubisoftToggle,battleNetToggle,rockstarToggle})
                 launcherToggle.Margin=new Thickness(0,26,0,12);
-            AddLauncherReimport(steamIntegration,"steam","Steam",() => true);
+            AddLauncherReimport(steamIntegration,"steam","Steam",() => settings.SteamEnabled);
+            var importSteam=new Button {Name="ImportSteamShortcuts",Content="Import Steam shortcuts",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,12,0,0)};
+            importSteam.Click+=(s,e) => ShowSteamShortcutImport(dialog,rebuild); steamIntegration.Children.Add(importSteam);
             AddLauncherReimport(gogIntegration,"gog","GOG Galaxy",() => settings.GogEnabled);
             AddLauncherReimport(epicIntegration,"epic","Epic Games Store",() => settings.EpicEnabled);
             AddLauncherReimport(eaIntegration,"ea","EA App",() => settings.EaEnabled);
             AddLauncherReimport(ubisoftIntegration,"ubisoft","Ubisoft Connect",() => settings.UbisoftEnabled);
             AddLauncherReimport(battleNetIntegration,"battlenet","Battle.net",() => settings.BattleNetEnabled);
             AddLauncherReimport(rockstarIntegration,"rockstar","Rockstar Games Launcher",() => settings.RockstarEnabled);
+            var xboxIntegration=addIntegration("Xbox app","XboxIntegrationSection");
+            var xboxPathCaption=Label("Xbox app path",14,mint); xboxPathCaption.Margin=new Thickness(0,10,0,8); xboxIntegration.Children.Add(xboxPathCaption);
+            var xboxPath=Label(DisplayLauncherPath(XboxLibrary.DetectClient()),12,muted); xboxPath.Name="XboxPathSetting"; if(String.IsNullOrEmpty(xboxPath.Text)) xboxPath.Text="Not detected"; xboxPath.TextWrapping=TextWrapping.Wrap; xboxIntegration.Children.Add(xboxPath);
+            var xboxToggle=new CheckBox {Name="XboxEnabledSetting",Content="Include Xbox app games",IsChecked=settings.XboxEnabled,Margin=new Thickness(0,26,0,12)};
+            xboxToggle.Click+=(s,e) => {settings.XboxEnabled=xboxToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; xboxIntegration.Children.Add(xboxToggle);
+            var xboxNote=Label("Finds installed Xbox / Game Pass games registered for your Windows account. Launching is managed by Windows; no executable path is needed. EA Play and Battle.net games use their own integrations.",12,muted); xboxNote.TextWrapping=TextWrapping.Wrap; xboxIntegration.Children.Add(xboxNote);
+            AddLauncherReimport(xboxIntegration,"xbox","Xbox app",() => settings.XboxEnabled);
             var sgdbToggle=new CheckBox {Name="SteamGridDbSetting",Content="SteamGridDB artwork API key",IsChecked=settings.SteamGridDbEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
             var repairPaths=new Button {Content="Repair missing game paths…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,12,0,8)};
             repairPaths.Click+=(s,e) => ShowMissingFileRepair(dialog,rebuild);
@@ -1717,8 +1726,6 @@ namespace PadLauncher {
             var importPanel=new StackPanel {Margin=new Thickness(0,16,0,0)};
             var importPlaynite=new Button {Content="Import from Playnite…",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,16)};
             importPlaynite.Click+=(s,e) => ShowPlayniteImport(dialog,rebuild); importPanel.Children.Add(importPlaynite);
-            var importSteam=new Button {Content="Import from Steam shortcuts…",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,16)};
-            importSteam.Click+=(s,e) => ShowSteamShortcutImport(dialog,rebuild); importPanel.Children.Add(importSteam);
             var tabs=new TabControl {Name="CustomGamesTabs",Background=dialog.Background,BorderThickness=new Thickness(0),Foreground=white};
             StyleSettingsSubtabs(tabs);
             tabs.Items.Add(new TabItem {Header="Add New",Content=CreateCustomGameEditor(dialog,rebuild,false)});
@@ -2636,13 +2643,12 @@ namespace PadLauncher {
     }
     public static class ControllerNavigation {
         public const int ListStep=1000000;
-        public static bool ListSwitchEnabled(Settings settings,string layout=null) {return (layout ?? settings.CarouselLayout)!="grid" && new[]{"dpad","stick","both"}.Contains(settings.VerticalListSwitch);}
+        public static bool ListSwitchEnabled(Settings settings,string layout=null) {return (layout ?? settings.CarouselLayout)!="grid";}
         public static int ListDirection(PadState pad,Settings settings,string layout=null) {
             if(!ListSwitchEnabled(settings,layout)) return 0;
-            string mode=settings.VerticalListSwitch;
-            if((mode=="dpad" || mode=="both") && (pad.Buttons&0x0003)!=0) return (pad.Buttons&0x0003)==0x0001 ? -1 : (pad.Buttons&0x0003)==0x0002 ? 1 : 0;
-            if(mode=="stick" || mode=="both") return pad.LY>16000 ? -1 : pad.LY < -16000 ? 1 : 0;
-            return 0;
+
+            if((pad.Buttons&0x0003)!=0) return (pad.Buttons&0x0003)==0x0001 ? -1 : (pad.Buttons&0x0003)==0x0002 ? 1 : 0;
+            return pad.LY>16000 ? -1 : pad.LY < -16000 ? 1 : 0;
         }
         public static int InputDirection(PadState pad,Settings settings,int columns,out bool fast,string layout=null) {
             int direction=Direction(pad,(layout ?? settings.CarouselLayout)=="grid",columns,out fast);

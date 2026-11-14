@@ -43,6 +43,9 @@ class SetupWizardTests {
         Launcher launcher=null;
         try {
             CheckStartupProfiles(root);
+            string mixedCase=Path.Combine(root,"MixedCase","Launcher.EXE"); Directory.CreateDirectory(Path.GetDirectoryName(mixedCase)); File.WriteAllText(mixedCase,"");
+            string displayedPath=Launcher.DisplayLauncherPath(mixedCase.ToLowerInvariant().Replace('\\','/'));
+            Check(displayedPath.EndsWith(@"\MixedCase\Launcher.EXE",StringComparison.Ordinal) && !displayedPath.Contains('/') && Char.IsUpper(displayedPath[0]),"Launcher paths use actual filesystem casing and Windows separators");
             string oldExe=Path.Combine(root,"old","pcsx2.exe"),newExe=Path.Combine(root,"new","pcsx2-qt.exe");
             foreach(string file in new[]{oldExe,newExe}) {Directory.CreateDirectory(Path.GetDirectoryName(file)); File.WriteAllText(file,"");}
             var initial=new Settings {GogEnabled=false,LeftStickSpeed=2,HiddenGameIds=new List<string>{"hidden-sentinel"},CustomLists=new List<CustomList>{new CustomList {Id="list:sentinel",Name="Keep",Games=new List<string>{"keep-game"}}},Emulators=new List<EmulatorConfig>{new EmulatorConfig {Id="pcsx2",Path=oldExe,RomFolder="keep-rom-folder",Arguments="--existing {game}",Games=new List<EmulatorGame>()}}};
@@ -62,7 +65,19 @@ class SetupWizardTests {
                 return;
             }
             Check(wizard!=null && Find<TextBlock>(wizard,"SetupProgress").Text=="Step 1 of 5" && !Find<Button>(wizard,"SetupBack").IsEnabled,"Setup starts on its first optional page");
-            Find<TextBox>(wizard,"SetupSteamPath").Text="invalid Steam path"; Click(wizard,"SetupNext");
+            Check(!Descendants(wizard).OfType<TextBox>().Any(),"Launcher paths are displayed as plain text");
+            Check(Descendants(wizard).OfType<Button>().Count(button => button.Name.StartsWith("SetupChangePath_"))==7,"Every launcher has a Change path action");
+            Check((string)Find<ComboBox>(wizard,"SetupSteamShortcutMode").SelectedValue=="direct","New setups default non-Steam games to direct launch");
+            Check(Find<CheckBox>(wizard,"SetupIncludeSteamShortcuts").IsChecked==true,"Non-Steam games are included by default");
+            Find<TextBlock>(wizard,"SetupSteamPath").Text="invalid Steam path";
+            Find<CheckBox>(wizard,"SetupLauncher_steam").IsChecked=false;
+            Check(!Find<CheckBox>(wizard,"SetupIncludeSteamShortcuts").IsEnabled && !Find<ComboBox>(wizard,"SetupSteamShortcutMode").IsEnabled,"Disabling Steam disables its shortcut choices");
+            Find<CheckBox>(wizard,"SetupLauncher_steam").IsChecked=true;
+            Find<CheckBox>(wizard,"SetupIncludeSteamShortcuts").IsChecked=false;
+            Check(Find<ComboBox>(wizard,"SetupSteamShortcutMode").Visibility==Visibility.Collapsed,"Launch mode is hidden when non-Steam games are excluded");
+            Find<CheckBox>(wizard,"SetupIncludeSteamShortcuts").IsChecked=true;
+            Find<ComboBox>(wizard,"SetupSteamShortcutMode").SelectedValue="direct";
+            Click(wizard,"SetupNext");
             Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 1 of 5" && Find<TextBlock>(wizard,"SetupStatus").Text.Contains("Could not save"),"Invalid optional input is reported without changing the saved page");
             Click(wizard,"SetupSkip"); Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 2 of 5","Skip bypasses invalid optional input");
             Find<TextBox>(wizard,"SetupEmulatorPath_pcsx2").Text="invalid emulator path"; Click(wizard,"SetupSkip");
@@ -80,7 +95,14 @@ class SetupWizardTests {
             Check(Descendants(launcher.HelpWindow).OfType<Button>().Any(button => button.Name=="RestartSetupWizard"),"System provides a Restart setup action in the regular app");
             launcher.ShowSetupWizard(true,new Dictionary<string,string>()); wizard=Wizard(launcher);
             Check(!Find<CheckBox>(wizard,"SetupLauncher_gog").IsChecked.GetValueOrDefault(),"Rerunning setup reflects saved launcher choices");
-            Find<TextBox>(wizard,"SetupSteamPath").Clear(); Find<CheckBox>(wizard,"SetupLauncher_gog").IsChecked=true; Click(wizard,"SetupNext");
+            Find<TextBlock>(wizard,"SetupSteamPath").Text=""; Find<CheckBox>(wizard,"SetupLauncher_gog").IsChecked=true;
+            Find<CheckBox>(wizard,"SetupLauncher_steam").IsChecked=false;
+            Find<ComboBox>(wizard,"SetupSteamShortcutMode").SelectedValue="direct";
+            Find<TextBlock>(wizard,"SetupLauncherPath_gog").Text=newExe;
+            Find<TextBlock>(wizard,"SetupLauncherPath_battlenet").Text=newExe;
+            Click(wizard,"SetupNext");
+            Check(!Storage.Read<Settings>("settings.json").SteamEnabled && Storage.Read<Settings>("settings.json").IncludeSteamShortcuts && Storage.Read<Settings>("settings.json").SteamShortcutLaunchMode=="direct","Wizard persists Steam inclusion and launch mode without clearing the shortcut preference");
+            Check(Storage.Read<Settings>("settings.json").GogLauncherPath==newExe && Storage.Read<Settings>("settings.json").BattleNetLauncherPath==newExe,"Wizard saves changed launcher paths");
             Check(Storage.Read<Settings>("settings.json").GogEnabled && Storage.Read<Settings>("settings.json").SetupWizardPage==1,"Next saves launcher choices and progress without requiring Steam");
             Check(Find<Button>(wizard,"SetupDetectEmulators")!=null,"Emulator detection is accessible directly from the wizard");
             Find<TextBox>(wizard,"SetupEmulatorPath_pcsx2").Text=newExe;
@@ -103,6 +125,24 @@ class SetupWizardTests {
             Check(Storage.Read<Settings>("settings.json").SetupWizardCompleted,"Setup can finish after restarting and skipping every page");
             launcher.ShowSetupWizard(true,new Dictionary<string,string>()); wizard=Wizard(launcher); Click(wizard,"SetupSkip"); wizard.Close();
             Check(Wizard(launcher)==null && Storage.Read<Settings>("settings.json").SetupWizardShown && Storage.Read<Settings>("settings.json").SetupWizardPage==1,"Closing early leaves saved progress and keeps setup optional");
+            ArtworkKey.Save(""); launcher.ShowSetupWizard(true,new Dictionary<string,string>()); wizard=Wizard(launcher);
+            Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip");
+            Check((string)Find<CheckBox>(wizard,"SetupArtworkEnabled").Content=="Use SteamGridDB artwork (recommended)","Artwork optional label appears on its checkbox");
+            wizard.Dispatcher.BeginInvoke(new Action(() => {
+                var warning=wizard.OwnedWindows.Cast<Window>().Single(window => window.Name=="SetupArtworkKeyWarning");
+                Check((string)Find<Button>(warning,"SetupProvideArtworkKey").Content=="Provide API key","Missing-key warning offers the recommended key action");
+                Click(warning,"SetupProvideArtworkKey");
+            }));
+            Click(wizard,"SetupNext");
+            Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 3 of 5" && Storage.Read<Settings>("settings.json").SetupWizardPage==2,"Provide API key keeps the artwork page without advancing saved progress");
+            wizard.Dispatcher.BeginInvoke(new Action(() => {
+                var warning=wizard.OwnedWindows.Cast<Window>().Single(window => window.Name=="SetupArtworkKeyWarning"); Click(warning,"SetupContinueWithoutArtworkKey");
+            }));
+            Click(wizard,"SetupNext");
+            Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 4 of 5","Continue allows setup without an API key");
+            Click(wizard,"SetupSkip");
+            Check(Find<Button>(wizard,"SetupBack").Parent==Find<Button>(wizard,"SetupFinish").Parent && Find<Button>(wizard,"SetupRestart").Parent is Grid && Grid.GetColumn((UIElement)Find<Button>(wizard,"SetupBack").Parent)==1,"Last page places Back and Finish on the right and Restart setup on the left");
+            Click(wizard,"SetupFinish");
             Console.WriteLine(checks+" setup wizard checks passed");
         } finally {if(launcher!=null) {var wizard=Wizard(launcher); if(wizard!=null) wizard.Close(); launcher.ExitApp();} if(Directory.Exists(root)) Directory.Delete(root,true);}
     }

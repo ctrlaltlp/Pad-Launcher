@@ -4,9 +4,10 @@ $compiler = Join-Path $framework 'csc.exe'
 if (!(Test-Path $compiler)) { throw 'The Windows .NET Framework 4 compiler is required.' }
 $out = Join-Path $PSScriptRoot 'bin'
 New-Item -ItemType Directory -Force $out | Out-Null
-$refs = @('System.dll','System.Core.dll','System.Security.dll','System.Web.Extensions.dll','System.Windows.Forms.dll','System.Drawing.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
+$refs = @('System.dll','System.Core.dll','System.Security.dll','System.Web.Extensions.dll','System.Windows.Forms.dll','System.Drawing.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll','System.Xml.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
 $librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'),(Join-Path $PSScriptRoot 'src\ExternalLibraries.cs'),(Join-Path $PSScriptRoot 'src\ArtworkService.cs'),(Join-Path $PSScriptRoot 'src\StartupSetting.cs'),(Join-Path $PSScriptRoot 'src\PlayniteImport.cs'),(Join-Path $PSScriptRoot 'src\GogLibrary.cs'),(Join-Path $PSScriptRoot 'src\EaLibrary.cs'),(Join-Path $PSScriptRoot 'src\SteamShortcutImport.cs'),(Join-Path $PSScriptRoot 'src\UbisoftLibrary.cs'),(Join-Path $PSScriptRoot 'src\RockstarLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImport.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSqlite.cs'))
 $librarySources += (Join-Path $PSScriptRoot 'src\BattleNetLibrary.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\XboxLibrary.cs')
 $appSources = @((Join-Path $PSScriptRoot 'src\App.cs'),(Join-Path $PSScriptRoot 'src\PlayStationInput.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSettings.cs'),(Join-Path $PSScriptRoot 'src\ListTransitions.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImportSettings.cs'))
 $appSources += (Join-Path $PSScriptRoot 'src\ListToolsSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\UpdateSettings.cs')
@@ -84,6 +85,10 @@ if ($args -contains '-Test') {
     & (Join-Path $out 'RockstarTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Rockstar tests failed.' }
 
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'XboxTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\XboxTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Xbox test build failed.' }
+    & (Join-Path $out 'XboxTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Xbox integration tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'UbisoftTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\UbisoftTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Ubisoft test build failed.' }
     & (Join-Path $out 'UbisoftTests.exe')

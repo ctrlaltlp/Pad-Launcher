@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -43,6 +43,7 @@ namespace PadLauncher {
                     case "ubisoft": source="Ubisoft Connect"; break;
                     case "rockstar": source="Rockstar Games Launcher"; break;
                     case "battlenet": source="Battle.net"; break;
+                    case "xbox": source="Xbox app"; break;
                     case "custom": source=CustomGameLibrary.EntrySourceLabel(settings,game); break;
                     case "emulator": var preset=EmulatorLibrary.Presets.FirstOrDefault(p => p.Id==game.EmulatorId); source=preset==null ? "Emulator" : preset.Name; break;
                 }

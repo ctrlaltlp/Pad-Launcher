@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -157,7 +157,7 @@ public static class OverlayTests {
             Check(!window.TryControllerNavigationKey(System.Windows.Input.Key.Right,new PadState()),"An idle controller does not intercept keyboard navigation");
             window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.Right) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
             Check(((TextBlock)gameTitle).Text!=afterPolling,"Normal keyboard arrow navigation continues to work");
-            window.SetVerticalListSwitch("dpad"); window.NavigateController(new PadState());
+            window.NavigateController(new PadState());
             var selectedList=(TextBlock)FindElement(content,"SelectedCollection"); string beforeList=selectedList.Text;
             var dpadDown=new PadState {Buttons=2};
             Check(window.TryControllerNavigationKey(System.Windows.Input.Key.Down,dpadDown) && selectedList.Text!=beforeList,"Mapped D-pad down changes the list");
@@ -166,16 +166,11 @@ public static class OverlayTests {
             window.NavigateController(new PadState()); window.NavigateController(new PadState {Buttons=1});
             string afterListUp=selectedList.Text;
             Check(afterListUp==beforeList && window.TryControllerNavigationKey(System.Windows.Input.Key.Up,new PadState {Buttons=1}) && selectedList.Text==afterListUp,"Mapped up after polling does not switch a second list");
-            window.SetVerticalListSwitch("stick"); window.NavigateController(dpadDown);
-            Check(selectedList.Text==beforeList && !window.TryControllerNavigationKey(System.Windows.Input.Key.Down,dpadDown),"Left-stick-only mode ignores D-pad list changes and mapped D-pad arrows");
             window.NavigateController(new PadState()); window.NavigateController(new PadState {LY=-25000});
             Check(selectedList.Text!=beforeList,"Left-stick mode changes lists directly");
             window.SetCarouselLayout("grid"); string gridList=selectedList.Text; window.NavigateController(new PadState()); window.NavigateController(new PadState {LY=25000});
             Check(selectedList.Text==gridList,"Grid vertical input moves within the current list");
-            window.SetCarouselLayout("angled"); window.SetVerticalListSwitch("off");
-            Check(Storage.Read<Settings>("settings.json").VerticalListSwitch=="off","List switching preference persists");
-            bool invalidListSwitch=false; try {window.SetVerticalListSwitch("invalid");} catch(ArgumentException) {invalidListSwitch=true;}
-            Check(invalidListSwitch && Storage.Read<Settings>("settings.json").VerticalListSwitch=="off","Invalid list switching modes preserve saved settings");
+            window.SetCarouselLayout("angled");
             Check(defaults.EnabledCollectionIds==null,"Older settings include every collection by default");
             window.SetDefaultCollection("all");
             window.SetAvailableCollections(new[]{"couch"});
@@ -248,7 +243,12 @@ public static class OverlayTests {
             Check(FindElement(systemContents,"StartWithWindowsSetting")!=null && FindElement(systemContents,"SteamGridDbSetting")!=null,"System contains startup and SteamGridDB settings");
             var steamSection=(Expander)FindElement(integrationsContents,"SteamIntegrationSection");
             Check(FindElement(systemContents,"SteamPathSetting")==null && FindElement((FrameworkElement)steamSection.Content,"SteamPathSetting")!=null,"Launcher path settings live in the Steam integration dropdown");
-            Check(((StackPanel)integrationsContents).Children.OfType<Expander>().Count()==7 && ((StackPanel)integrationsContents).Children.OfType<Expander>().All(section => !section.IsExpanded),"Each launcher has its own initially collapsed integration section");
+            var steamBody=(StackPanel)steamSection.Content;
+            Check(steamBody.Children.OfType<Button>().Last().Name=="ImportSteamShortcuts" && (string)steamBody.Children.OfType<Button>().Last().Content=="Import Steam shortcuts","Steam shortcut import appears at the bottom of the Steam launcher section");
+            Check(FindElement((FrameworkElement)((Expander)FindElement(integrationsContents,"GogIntegrationSection")).Content,"GogPathSetting") is TextBox && FindElement((FrameworkElement)((Expander)FindElement(integrationsContents,"BattleNetIntegrationSection")).Content,"BattleNetPathSetting") is TextBox,"GOG and Battle.net provide launcher path fields");
+            Check(((StackPanel)integrationsContents).Children.OfType<Expander>().Count()==8 && ((StackPanel)integrationsContents).Children.OfType<Expander>().All(section => !section.IsExpanded),"Each launcher has its own initially collapsed integration section");
+            var xboxSection=(Expander)FindElement(integrationsContents,"XboxIntegrationSection");
+            Check(xboxSection!=null && FindElement((FrameworkElement)xboxSection.Content,"XboxEnabledSetting") is CheckBox,"Xbox app has its own integration and inclusion checkbox");
             var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[2]).Content).Content;
             Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
             var customSection=(Expander)FindElement(listsContents,"CustomListsSection");
