@@ -19,7 +19,6 @@ class UbisoftTests {
             bool rejected=false; try {UbisoftLibrary.UriFor(new Game {Source="ubisoft",LaunchId="16382/other"});} catch(InvalidOperationException) {rejected=true;} Check(rejected,"Malformed Ubisoft game IDs rejected");
             Check(UbisoftLibrary.ValidateClient("")==null && Storage.Json().Deserialize<Settings>("{}").UbisoftEnabled,"Automatic client detection and native integration enabled by default");
             Check(Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)).UbisoftLauncherPath==client,"Custom Ubisoft path persists");
-            Check(PlayniteImport.NativeDuplicate(new PlayniteGame {PluginId="c2f038e5-8b92-4877-91f1-da9094155fc5",NativeId="16382"},new Library {Games=games}),"Playnite identifies existing native Ubisoft entries");
             rejected=false; try {UbisoftLibrary.ValidateClient(Path.Combine(root,"Other.exe"));} catch(ArgumentException) {rejected=true;} Check(rejected,"Unrelated launcher executable rejected");
             Console.WriteLine(checks+" Ubisoft integration checks passed");
         } finally {Directory.Delete(root,true);}

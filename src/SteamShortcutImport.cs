@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -67,7 +67,7 @@ namespace PadLauncher {
             if(mode!="direct") result.Add(Prepare(record,true));
             return result;
         }
-        public static void SelectLaunchModes(Settings settings,List<PlayniteImport.Conflict> conflicts) {
+        public static void SelectLaunchModes(Settings settings,List<GameImport.Conflict> conflicts) {
             foreach(var conflict in conflicts) foreach(var shortcuts in conflict.Alternatives.Where(a => a.Incoming!=null).GroupBy(a => a.Incoming.SteamShortcutKey)) {
                 bool keepSteam=shortcuts.Any(a => a.Incoming.LaunchViaSteam);
                 string launchId=shortcuts.First().Incoming.SteamLaunchId;
@@ -113,7 +113,7 @@ namespace PadLauncher {
             var custom=settings.CustomGames ?? new List<CustomGame>();
             bool imported=custom.Any(g => g.LaunchViaSteam==throughSteam && (throughSteam
                 ? g.SteamLaunchId==record.SteamLaunchId
-                : PlayniteImport.ActionKey(g.Target,g.Arguments,g.WorkingDirectory)==PlayniteImport.ActionKey(record.Target,record.Arguments,record.WorkingDirectory)));
+                : GameImport.ActionKey(g.Target,g.Arguments,g.WorkingDirectory)==GameImport.ActionKey(record.Target,record.Arguments,record.WorkingDirectory)));
             if(imported) return throughSteam ? "already added through Steam" : "already added for direct launch";
             bool steam=library.Games.Any(g => g.Shortcut && g.LaunchId==record.SteamLaunchId);
             if(throughSteam && steam) return "already available through Steam";

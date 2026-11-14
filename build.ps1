@@ -5,7 +5,7 @@ if (!(Test-Path $compiler)) { throw 'The Windows .NET Framework 4 compiler is re
 $out = Join-Path $PSScriptRoot 'bin'
 New-Item -ItemType Directory -Force $out | Out-Null
 $refs = @('System.dll','System.Core.dll','System.Security.dll','System.Web.Extensions.dll','System.Windows.Forms.dll','System.Drawing.dll','WPF\WindowsBase.dll','WPF\PresentationCore.dll','WPF\PresentationFramework.dll','System.Xaml.dll','System.Xml.dll') | ForEach-Object { '/reference:' + (Join-Path $framework $_) }
-$librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'),(Join-Path $PSScriptRoot 'src\ExternalLibraries.cs'),(Join-Path $PSScriptRoot 'src\ArtworkService.cs'),(Join-Path $PSScriptRoot 'src\StartupSetting.cs'),(Join-Path $PSScriptRoot 'src\PlayniteImport.cs'),(Join-Path $PSScriptRoot 'src\GogLibrary.cs'),(Join-Path $PSScriptRoot 'src\EaLibrary.cs'),(Join-Path $PSScriptRoot 'src\SteamShortcutImport.cs'),(Join-Path $PSScriptRoot 'src\UbisoftLibrary.cs'),(Join-Path $PSScriptRoot 'src\RockstarLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImport.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSqlite.cs'))
+$librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'),(Join-Path $PSScriptRoot 'src\ExternalLibraries.cs'),(Join-Path $PSScriptRoot 'src\ArtworkService.cs'),(Join-Path $PSScriptRoot 'src\StartupSetting.cs'),(Join-Path $PSScriptRoot 'src\GameImport.cs'),(Join-Path $PSScriptRoot 'src\GogLibrary.cs'),(Join-Path $PSScriptRoot 'src\EaLibrary.cs'),(Join-Path $PSScriptRoot 'src\SteamShortcutImport.cs'),(Join-Path $PSScriptRoot 'src\UbisoftLibrary.cs'),(Join-Path $PSScriptRoot 'src\RockstarLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImport.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSqlite.cs'))
 $librarySources += (Join-Path $PSScriptRoot 'src\BattleNetLibrary.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\XboxLibrary.cs')
 $appSources = @((Join-Path $PSScriptRoot 'src\App.cs'),(Join-Path $PSScriptRoot 'src\PlayStationInput.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSettings.cs'),(Join-Path $PSScriptRoot 'src\ListTransitions.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImportSettings.cs'))
@@ -105,10 +105,6 @@ if ($args -contains '-Test') {
     if ($LASTEXITCODE -ne 0) { throw 'GOG test build failed.' }
     & (Join-Path $out 'GogTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'GOG adapter tests failed.' }
-    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'PlayniteTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\PlayniteTests.cs')
-    if ($LASTEXITCODE -ne 0) { throw 'Playnite test build failed.' }
-    & (Join-Path $out 'PlayniteTests.exe')
-    if ($LASTEXITCODE -ne 0) { throw 'Playnite import tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'ExternalTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\ExternalTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'External test build failed.' }
     & (Join-Path $out 'ExternalTests.exe')

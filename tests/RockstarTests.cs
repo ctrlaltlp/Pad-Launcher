@@ -21,7 +21,6 @@ class RockstarTests {
             Check(start.FileName==client && start.Arguments=="-launchTitleInFolder \""+folder+"\"" && start.UseShellExecute,"Native launcher routing quotes install directory");
             Check(new Settings().RockstarEnabled && RockstarLibrary.ValidateClient(" ")==null,"Enabled and auto-detected by default");
             Check(Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)).RockstarLauncherPath==client,"Launcher preference persists");
-            Check(PlayniteImport.NativeDuplicate(new PlayniteGame {PluginId="88409022-088a-4de8-805a-fdbac291f00a",NativeId="gta5_gen9"},new Library {Games=games}),"Playnite native duplicate identified");
             File.Delete(Path.Combine(folder,"GTA5_Enhanced.exe"));
             Check(RockstarLibrary.Scan(new[]{record}).Count==0,"Stale completed registration excluded");
             Console.WriteLine(checks+" Rockstar checks passed");

@@ -4,7 +4,7 @@
 
 A transparent, controller-friendly Windows game launcher with angled, rectangular and grid layouts. Browse games from multiple launchers, emulators and custom entries, with optional game titles and list names. Organise your games into individual or combined lists and use existing launcher artwork, local images or SteamGridDB covers.
 
-Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, **Xbox app** (installed Xbox / Game Pass titles), manual **Playnite** imports, and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
+Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, **Xbox app** (installed Xbox / Game Pass titles), and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
 
 Enable **Settings → Launchers → Xbox app → Include Xbox app games** to detect installed Xbox, Game Pass and supported Microsoft Store games for your Windows account. Games launch through Windows; no launcher path is needed. Cloud-only games are not imported.
 

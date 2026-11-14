@@ -218,6 +218,8 @@ class EmulatorUiTests {
             var panelMethod=typeof(Launcher).GetMethod("CreateCustomGamesPanel",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
             var customPanel=(FrameworkElement)panelMethod.Invoke(launcher,new object[]{dialog,(Action)(() => {})}); Layout(customPanel);
             Check(((TabControl)Find(customPanel,"CustomGamesTabs")).SelectedIndex==1,"Saving an existing custom game keeps Added Games selected");
+            var customTabs=(TabControl)Find(customPanel,"CustomGamesTabs");
+            Check(customTabs.Items.Count==2 && (string)((TabItem)customTabs.Items[0]).Header=="Add New" && (string)((TabItem)customTabs.Items[1]).Header=="Added Games","Custom games contains only Add New and Added Games, without an Import tab");
             customSaved.CustomLists.First(list => list.Id==allList.Id).Games.Remove(customId);
             customSaved.CustomGames.First(entry => entry.Id==customId).IncludeInCustomGamesList=true;
             customSaved.CombinedCollections=new System.Collections.Generic.List<CombinedCollection> {

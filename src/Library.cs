@@ -314,8 +314,6 @@ namespace PadLauncher {
         public Dictionary<string,string> SelectedGamesByList {get;set;}
         public List<string> FavouriteGameIds {get;set;}
         public List<string> ReplacedGameIds {get;set;}
-        public string PlaynitePath {get;set;}
-        public string PlayniteLibraryPath {get;set;}
         public double RightStickSpeed {get;set;}
         public double LeftStickSpeed {get;set;}
         public Dictionary<string,long> LaunchHistory {get;set;}
@@ -379,7 +377,7 @@ namespace PadLauncher {
         }
         public static string Help(Settings settings) {
             var names=Buttons(settings);
-            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Lists     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Right stick  "+settings.RightStickSpeed.ToString("0.#")+"× speed"+"     R3  Toggle favourite";
+            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Lists     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Left Stick  Cycle games & lists     Right stick  Cycle games "+settings.RightStickSpeed.ToString("0.#")+"× speed"+"     R3  Toggle favourite";
         }
     }
     public enum ButtonGesture { None, Tap, Hold }

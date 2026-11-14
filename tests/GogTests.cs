@@ -17,8 +17,6 @@ class GogTests {
             Check(start.Arguments.Contains("/gameId=123") && start.Arguments.Contains("/path=\""+game+"\"") && start.UseShellExecute,"Galaxy command has native ID and quoted installation path");
             Check(Storage.Json().Deserialize<Settings>("{}").GogEnabled,"Older settings enable native GOG integration by default");
             Check(!Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(new Settings {GogEnabled=false})).GogEnabled,"GOG integration can be disabled persistently");
-            var playniteDuplicate=new PlayniteGame {PluginId="aebe8b7c-6dc3-4a66-af31-e7375c6b5e9e",NativeId="123"};
-            Check(PlayniteImport.NativeDuplicate(playniteDuplicate,new Library {Games=scanned}),"Playnite import recognises GOG games already detected natively");
             File.WriteAllText(manifest,"{\"gameId\":\"123\",\"rootGameId\":\"999\",\"name\":\"DLC\",\"playTasks\":[]}"); Check(GogLibrary.Scan(new[]{record}).Count==0,"DLC entries excluded");
             File.WriteAllText(manifest,"{\"gameId\":\"123\",\"name\":\"Bad path\",\"playTasks\":[{\"type\":\"FileTask\",\"isPrimary\":true,\"path\":\"../GalaxyClient.exe\"}]}"); Check(GogLibrary.Scan(new[]{record}).Count==0,"Primary launch target cannot escape install folder");
             File.WriteAllText(manifest,"not json"); Check(GogLibrary.Scan(new[]{record}).Count==0,"Malformed manifest isolated");

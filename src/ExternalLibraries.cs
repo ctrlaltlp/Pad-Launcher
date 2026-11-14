@@ -135,7 +135,7 @@ namespace PadLauncher {
         public string SteamLaunchId {get;set;}
         public bool LaunchViaSteam {get;set;}
         public bool? IncludeInCustomGamesList {get;set;}
-        public string PlayniteId {get;set;}
+        // Legacy serialized name for action details, also used by existing Steam shortcut imports.
         public string PlayniteActionInfo {get;set;}
         public string Id {get;set;}
         public string Name {get;set;}
@@ -148,7 +148,6 @@ namespace PadLauncher {
         public static string EntrySourceLabel(Settings settings,Game game) {
             var entry=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==game.Id);
             if(entry!=null && !String.IsNullOrEmpty(entry.SteamShortcutKey)) return entry.LaunchViaSteam ? "Steam import (through Steam)" : "Steam import (direct launch)";
-            if(entry!=null && !String.IsNullOrEmpty(entry.PlayniteId)) return "Playnite import";
             return "Custom game";
         }
         public static bool InCustomGamesList(Settings settings,CustomGame game) {
@@ -199,7 +198,6 @@ namespace PadLauncher {
             if(previous!=null && !game.IncludeInCustomGamesList.HasValue) game.IncludeInCustomGamesList=previous.IncludeInCustomGamesList;
             if(previous!=null && String.IsNullOrEmpty(game.SteamShortcutKey)) game.SteamShortcutKey=previous.SteamShortcutKey;
             if(previous!=null && String.IsNullOrEmpty(game.SteamLaunchId)) game.SteamLaunchId=previous.SteamLaunchId;
-            if(previous!=null && String.IsNullOrEmpty(game.PlayniteId)) game.PlayniteId=previous.PlayniteId;
             if(previous!=null && String.IsNullOrEmpty(game.PlayniteActionInfo)) game.PlayniteActionInfo=previous.PlayniteActionInfo;
             if(!String.IsNullOrEmpty(game.Id) && !settings.CustomGames.Any(g => g.Id==game.Id)) throw new ArgumentException("This custom game no longer exists.");
             if(String.IsNullOrEmpty(game.Id)) game.Id="custom:"+Guid.NewGuid().ToString("N");
