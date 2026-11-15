@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.4.7")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.4.7")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.4.7")]
+[assembly: System.Reflection.AssemblyVersion("0.4.4.8")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.4.8")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.4.8")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -471,7 +471,6 @@ namespace PadLauncher {
             int index=Array.FindIndex(monitors,s => s.DeviceName==current);
             var next=monitors[(index+1)%monitors.Length];
             PlaceOnMonitor(next); if(IsVisible) { Activate(); Focus(); }
-            ShowNotice("Monitor "+(Array.IndexOf(monitors,next)+1)+" of "+monitors.Length);
         }
         public void ExitApp() { StopListTransition(); exiting=true; if(helpWindow!=null) helpWindow.Close(); Close(); }
         public void ShowHelpWindow() {
