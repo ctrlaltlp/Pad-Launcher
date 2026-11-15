@@ -326,6 +326,7 @@ namespace PadLauncher {
         public List<EmulatorImportDefinition> EmulatorImports {get;set;}
         public string ButtonPrompts { get; set; }
         public bool ShowGameTitle { get; set; }
+        public bool ShowPanelOutlines {get;set;}
         public bool ShowCollectionName { get; set; }
         public bool ShowListGameCount {get;set;}
         public string OpenMonitor { get; set; }
@@ -360,7 +361,7 @@ namespace PadLauncher {
         public string UbisoftLauncherPath {get;set;}
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=true; RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { ShowPanelOutlines=true; SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=true; RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {

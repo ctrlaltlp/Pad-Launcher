@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.4.8")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.4.8")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.4.8")]
+[assembly: System.Reflection.AssemblyVersion("0.4.4.9")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.4.9")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.4.9")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -669,6 +669,8 @@ namespace PadLauncher {
                 catch(Exception error) { titleToggle.IsChecked=settings.ShowGameTitle; ThemedMessage.Show(dialog,"Could not save title preference: "+error.Message,"Settings"); }
             };
             layout.Children.Add(titleToggle);
+            var outlinesToggle=new CheckBox {Name="ShowPanelOutlinesSetting",Content="Show panel outlines",IsChecked=settings.ShowPanelOutlines,FontSize=14,Foreground=white,Margin=new Thickness(0,0,0,12)};
+            outlinesToggle.Click+=(s,e) => {settings.ShowPanelOutlines=outlinesToggle.IsChecked==true; QueueSave(); cards.Clear(); carousel.Children.Clear(); Render(false);}; layout.Children.Add(outlinesToggle);
             var defaultCaption=Label("Default list",14,mint); defaultCaption.Margin=new Thickness(0,14,0,10); listsLayout.Children.Add(defaultCaption);
             var collectionOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last list")};
             foreach(var list in CollectionOptions().Where(c => CollectionEnabled(c.Id))) collectionOptions.Add(new KeyValuePair<string,string>(list.Id,ListLabel(list)));
@@ -2241,7 +2243,7 @@ namespace PadLauncher {
                 if(missingBadge!=null) missingBadge.Visibility=missing ? Visibility.Visible : Visibility.Collapsed;
                 card.ToolTip=missing ? game.Source=="emulator" ? "Emulator or game file missing. Update its path in Emulators." : "Game file missing. Update its path in Custom games." : game.Name;
                 var outline = border.Children[border.Children.Count-1] as System.Windows.Shapes.Path;
-                if (outline != null) { outline.Stroke = missing ? new SolidColorBrush(Color.FromRgb(255,172,153)) : active ? mint : new SolidColorBrush(Color.FromArgb(70,180,206,213)); outline.StrokeThickness = active ? 2 : 1; }
+                if (outline != null) { outline.Stroke = missing ? new SolidColorBrush(Color.FromRgb(255,172,153)) : active ? mint : new SolidColorBrush(Color.FromArgb(70,180,206,213)); outline.StrokeThickness = settings.ShowPanelOutlines ? (active ? 2 : 1) : 0; }
             }
             foreach (string id in cards.Keys.Where(k => !keep.Contains(k)).ToArray()) { carousel.Children.Remove(cards[id]); cards.Remove(id); }
         }
@@ -2269,7 +2271,7 @@ namespace PadLauncher {
                     var hintLabel=Label(hints[i],14,muted); hintLabel.TextWrapping=TextWrapping.Wrap; hintLabel.Margin=new Thickness(0,12,0,0);
                     text.Children.Add(titleLabel); text.Children.Add(hintLabel);
                     body.Children.Add(text);
-                    grid.Children.Add(new Border {BorderBrush=mint,BorderThickness=new Thickness(2),Background=Brushes.Transparent,CornerRadius=new CornerRadius(8)});
+                    grid.Children.Add(new Border {BorderBrush=mint,BorderThickness=new Thickness(settings.ShowPanelOutlines ? 2 : 0),Background=Brushes.Transparent,CornerRadius=new CornerRadius(8)});
                     grid.MouseLeftButtonUp+=(s,e) => OpenSettingsTab(tab);
                     guideCards.Add(grid);
                     Canvas.SetLeft(grid,800-150+offsets[i]*320); Canvas.SetTop(grid,(490-390)/2);
@@ -2325,7 +2327,7 @@ namespace PadLauncher {
             }
             body.Children.Add(new System.Windows.Shapes.Rectangle { Fill = new LinearGradientBrush(Color.FromArgb(0,0,0,0),Color.FromArgb(210,5,13,20),90) });
             grid.Children.Add(new Border {Name="MissingGameBadge",Background=new SolidColorBrush(Color.FromRgb(54,30,28)),CornerRadius=new CornerRadius(5),Padding=new Thickness(8,5,8,5),Margin=new Thickness(0,14,0,0),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top,Visibility=Visibility.Collapsed,IsHitTestVisible=false,Child=Label("File missing",11,new SolidColorBrush(Color.FromRgb(255,172,153)))});
-            var outline = new System.Windows.Shapes.Path { Fill=Brushes.Transparent,IsHitTestVisible=false,Stroke=mint,StrokeThickness=2 }; grid.Children.Add(outline);
+            var outline = new System.Windows.Shapes.Path { Fill=Brushes.Transparent,IsHitTestVisible=false,Stroke=mint,StrokeThickness=settings.ShowPanelOutlines ? 2 : 0 }; grid.Children.Add(outline);
             Action geometry = () => {
                 double w=grid.ActualWidth,h=grid.ActualHeight;
                 double slant=ActiveLayout=="rectangular" || ActiveLayout=="grid" ? 0 : 73;
