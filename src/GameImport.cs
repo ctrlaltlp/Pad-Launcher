@@ -40,7 +40,6 @@ namespace PadLauncher {
             var conflicts=new List<Conflict>();
             foreach(var names in incoming.GroupBy(g => new {Name=ArtworkService.Normalize(g.Name),Emulator=EmulatorForTarget(settings,g.Target)})) {
                 var group=new Conflict {Name=names.First().Name};
-                bool matchedManual=false;
                 group.Alternatives.AddRange(library.Games.Where(g => ArtworkService.Normalize(g.Name)==names.Key.Name &&
                     EmulatorForGame(settings,g)==names.Key.Emulator).Select(g => new Alternative {Existing=g,Keep=true}));
                 foreach(var game in names) {
@@ -50,11 +49,10 @@ namespace PadLauncher {
                     if(previous==null && identity!=null && !game.LaunchViaSteam) {previous=SteamShortcutImport.FindDirectMatch(settings,game); manualMatch=previous!=null;}
                     var identical=previous==null ? null : group.Alternatives.FirstOrDefault(a => a.Existing!=null && a.Existing.Id==previous.Id && ActionKey(a.Existing.LaunchId,a.Existing.Arguments,a.Existing.WorkingDirectory,a.Existing.ImportedActionInfo)==ActionKey(game.Target,game.Arguments,game.WorkingDirectory,game.PlayniteActionInfo));
                     if(manualMatch) identical=group.Alternatives.FirstOrDefault(a => a.Existing!=null && a.Existing.Id==previous.Id);
-                    matchedManual|=manualMatch;
                     if(identical!=null) identical.Incoming=game;
                     else group.Alternatives.Add(new Alternative {Incoming=game,Keep=group.Alternatives.Count==0});
                 }
-                if((matchedManual || group.Alternatives.Any(a => a.Existing==null)) && group.Alternatives.Select(a => a.Existing!=null ? ActionKey(a.Existing.LaunchId,a.Existing.Arguments,a.Existing.WorkingDirectory,a.Existing.ImportedActionInfo) : ActionKey(a.Incoming.Target,a.Incoming.Arguments,a.Incoming.WorkingDirectory,a.Incoming.PlayniteActionInfo)).Distinct().Count()>1) conflicts.Add(group);
+                if(group.Alternatives.Select(a => a.Existing!=null ? ActionKey(a.Existing.LaunchId,a.Existing.Arguments,a.Existing.WorkingDirectory,a.Existing.ImportedActionInfo) : ActionKey(a.Incoming.Target,a.Incoming.Arguments,a.Incoming.WorkingDirectory,a.Incoming.PlayniteActionInfo)).Distinct().Count()>1) conflicts.Add(group);
             }
             return conflicts;
         }

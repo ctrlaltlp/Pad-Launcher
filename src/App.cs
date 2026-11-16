@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.6")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.6")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.6")]
+[assembly: System.Reflection.AssemblyVersion("0.4.7")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.7")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.7")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -1454,7 +1454,7 @@ namespace PadLauncher {
             var heading=Label("Import Steam shortcuts",24,white); heading.FontWeight=FontWeights.SemiBold; heading.Margin=new Thickness(0,0,0,12); header.Children.Add(heading);
             var note=Label("",13,muted); note.TextWrapping=TextWrapping.Wrap;
             note.Inlines.Add(new System.Windows.Documents.Run("Uses the Steam folder and user selected in Launchers. "));
-            note.Inlines.Add(new System.Windows.Documents.Run("Previously imported shortcuts are not duplicated unless you add both launch modes.") {Foreground=new SolidColorBrush(Color.FromRgb(255,218,106))});
+            note.Inlines.Add(new System.Windows.Documents.Run("Reimporting updates existing entries. Choosing Both keeps separate Steam and direct-launch entries.") {Foreground=new SolidColorBrush(Color.FromRgb(255,218,106))});
             note.Inlines.Add(new System.Windows.Documents.Run(" Matching names with different launch targets or actions are reviewed before import, so you can choose which entries to keep. Direct launch bypasses Steam; choose Steam for Steam Input or special launch behaviour. Both keeps separate direct-launch and Steam entries. Original shortcuts stay untouched."));
             note.Margin=new Thickness(0,0,0,14); header.Children.Add(note);
             var controls=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,12)};
@@ -1550,11 +1550,7 @@ namespace PadLauncher {
                         var mode=new SettingsComboBox {ItemsSource=options,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=!record.CanLaunchDirect ? "steam" : ((settings.CustomGames ?? new List<CustomGame>()).Where(g => g.SteamShortcutKey==record.Key).Select(g => g.LaunchViaSteam).Distinct().Count()==2 ? "both" : (previous!=null && previous.LaunchViaSteam ? "steam" : "direct")),VerticalAlignment=VerticalAlignment.Top}; Grid.SetColumn(mode,2); line.Children.Add(mode); list.Children.Add(line);
                         Action updateStatus=() => {
                             string selectedMode=mode.SelectedValue as string;
-                            string state=SteamShortcutImport.ExistingStatus(settings,library,record,selectedMode=="steam");
-                            if(selectedMode=="both") {
-                                string direct=SteamShortcutImport.ExistingStatus(settings,library,record,false),steam=SteamShortcutImport.ExistingStatus(settings,library,record,true);
-                                state=direct=="already added for direct launch" && !String.IsNullOrEmpty(steam) ? "available both through steam & direct launch" : "both selected; direct launch "+(direct=="already added for direct launch" ? "already added" : "not added");
-                            }
+                            string state=SteamShortcutImport.ImportStatus(settings,library,record,selectedMode);
                             shortcutCaption.Inlines.Clear();
                             shortcutCaption.Inlines.Add(new System.Windows.Documents.Run(record.Name));
                             if(!String.IsNullOrEmpty(state)) shortcutCaption.Inlines.Add(new System.Windows.Documents.Run(" · "+state) {
@@ -1657,7 +1653,7 @@ namespace PadLauncher {
                 var heading=Label(conflict.Name,17,mint); heading.TextWrapping=TextWrapping.Wrap; heading.Margin=new Thickness(0,0,0,12); group.Children.Add(heading);
                 foreach(var alternative in conflict.Alternatives) {
                     var choice=alternative;
-                    string source=choice.Existing!=null ? "Existing entry" : "Import from "+importSource;
+                    string source=(choice.Existing!=null ? "Existing" : "New")+" · "+(steamEntry(choice) ? "Through Steam" : "Direct launch");
                     var box=new CheckBox {Content=source,IsChecked=choice.Keep,Margin=new Thickness(0,0,0,6)}; box.Click+=(s,e) => choice.Keep=box.IsChecked==true; reviewBoxes[choice]=box; group.Children.Add(box);
                     string target=choice.Existing!=null ? choice.Existing.LaunchId : choice.Incoming.Target;
                     if(choice.Existing!=null && choice.Existing.Source!="custom") {try {target=GameLaunch.UriFor(choice.Existing);} catch {}}

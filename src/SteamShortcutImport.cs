@@ -120,6 +120,17 @@ namespace PadLauncher {
             return !throughSteam && (steam || custom.Any(g => g.SteamLaunchId==record.SteamLaunchId && g.LaunchViaSteam))
                 ? "available through Steam; direct launch not added" : "";
         }
+        public static string ImportStatus(Settings settings,Library library,SteamShortcutRecord record,string mode) {
+            var imported=(settings.CustomGames ?? new List<CustomGame>()).Where(g => g.SteamShortcutKey==record.Key).ToList();
+            bool direct=imported.Any(g => !g.LaunchViaSteam) || ExistingStatus(settings,library,record,false)=="already added for direct launch";
+            bool steam=imported.Any(g => g.LaunchViaSteam) || !String.IsNullOrEmpty(ExistingStatus(settings,library,record,true));
+            if(mode=="both" && direct && steam) return "Both launch modes already available";
+            string directAction=direct ? "Will update existing direct launch" : "Will add direct launch";
+            string steamAction=steam ? "Will use existing Steam launch" : "Will add Steam launch";
+            if(mode=="both") return directAction+"; "+steamAction;
+            if(mode=="steam") return steamAction+(direct ? "; direct launch also exists" : "");
+            return directAction+(steam ? "; Steam launch also exists" : "");
+        }
         public static CustomGame Prepare(SteamShortcutRecord record,bool throughSteam) {
             if(!Regex.IsMatch(record.Key ?? "",@"^\d+:\d+$")) throw new ArgumentException("Invalid Steam shortcut import identity.");
             if(!throughSteam && !record.CanLaunchDirect) throw new ArgumentException(record.Name+": "+record.DirectWarning);
