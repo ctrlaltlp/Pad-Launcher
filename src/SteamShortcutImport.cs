@@ -141,7 +141,12 @@ namespace PadLauncher {
         public static void Merge(Settings settings,CustomGame game) {
             if(!Regex.IsMatch(game.SteamShortcutKey ?? "",@"^\d+:\d+$")) throw new ArgumentException("Invalid Steam shortcut import identity.");
             var existing=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.SteamShortcutKey==game.SteamShortcutKey && g.LaunchViaSteam==game.LaunchViaSteam);
+            if(existing==null && !game.LaunchViaSteam) existing=FindDirectMatch(settings,game);
             game.Id=existing==null ? null : existing.Id; CustomGameLibrary.Save(settings,game);
+        }
+        public static CustomGame FindDirectMatch(Settings settings,CustomGame game) {
+            return (settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => !g.LaunchViaSteam &&
+                GameImport.ActionKey(g.Target,g.Arguments,g.WorkingDirectory)==GameImport.ActionKey(game.Target,game.Arguments,game.WorkingDirectory));
         }
     }
 }

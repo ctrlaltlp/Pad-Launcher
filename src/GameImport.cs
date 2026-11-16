@@ -18,22 +18,31 @@ namespace PadLauncher {
             return null;
         }
         public static string ActionKey(string target,string arguments,string folder,string details=null) {
+            // Direct launches default to the executable's directory when no folder was saved.
+            if(String.IsNullOrWhiteSpace(folder) && !String.IsNullOrWhiteSpace(target) && System.IO.Path.IsPathRooted(target)) {
+                try {folder=System.IO.Path.GetDirectoryName(target);} catch(ArgumentException) { }
+            }
             // Windows file paths are case-insensitive; arguments remain case-sensitive.
-            return (target ?? "").Trim().ToUpperInvariant()+"\n"+(arguments ?? "").Trim()+"\n"+(folder ?? "").Trim().ToUpperInvariant()+"\n"+(details ?? "");
+            return (target ?? "").Trim().ToUpperInvariant()+"\n"+(arguments ?? "").Trim()+"\n"+(folder ?? "").Trim().TrimEnd('\\','/').ToUpperInvariant()+"\n"+(details ?? "");
         }
         public static List<Conflict> Conflicts(Settings settings,Library library,List<CustomGame> incoming) {
             var conflicts=new List<Conflict>();
             foreach(var names in incoming.GroupBy(g => ArtworkService.Normalize(g.Name))) {
                 var group=new Conflict {Name=names.First().Name};
+                bool matchedManual=false;
                 group.Alternatives.AddRange(library.Games.Where(g => ArtworkService.Normalize(g.Name)==names.Key).Select(g => new Alternative {Existing=g,Keep=true}));
                 foreach(var game in names) {
                     string identity=ImportIdentity(game);
                     var previous=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => identity!=null && ImportIdentity(g)==identity);
+                    bool manualMatch=false;
+                    if(previous==null && identity!=null && !game.LaunchViaSteam) {previous=SteamShortcutImport.FindDirectMatch(settings,game); manualMatch=previous!=null;}
                     var identical=previous==null ? null : group.Alternatives.FirstOrDefault(a => a.Existing!=null && a.Existing.Id==previous.Id && ActionKey(a.Existing.LaunchId,a.Existing.Arguments,a.Existing.WorkingDirectory,a.Existing.ImportedActionInfo)==ActionKey(game.Target,game.Arguments,game.WorkingDirectory,game.PlayniteActionInfo));
+                    if(manualMatch) identical=group.Alternatives.FirstOrDefault(a => a.Existing!=null && a.Existing.Id==previous.Id);
+                    matchedManual|=manualMatch;
                     if(identical!=null) identical.Incoming=game;
                     else group.Alternatives.Add(new Alternative {Incoming=game,Keep=group.Alternatives.Count==0});
                 }
-                if(group.Alternatives.Any(a => a.Existing==null) && group.Alternatives.Select(a => a.Existing!=null ? ActionKey(a.Existing.LaunchId,a.Existing.Arguments,a.Existing.WorkingDirectory,a.Existing.ImportedActionInfo) : ActionKey(a.Incoming.Target,a.Incoming.Arguments,a.Incoming.WorkingDirectory,a.Incoming.PlayniteActionInfo)).Distinct().Count()>1) conflicts.Add(group);
+                if((matchedManual || group.Alternatives.Any(a => a.Existing==null)) && group.Alternatives.Select(a => a.Existing!=null ? ActionKey(a.Existing.LaunchId,a.Existing.Arguments,a.Existing.WorkingDirectory,a.Existing.ImportedActionInfo) : ActionKey(a.Incoming.Target,a.Incoming.Arguments,a.Incoming.WorkingDirectory,a.Incoming.PlayniteActionInfo)).Distinct().Count()>1) conflicts.Add(group);
             }
             return conflicts;
         }
