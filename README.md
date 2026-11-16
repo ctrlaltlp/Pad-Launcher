@@ -6,8 +6,6 @@ A transparent, controller-friendly Windows game launcher with angled, rectangula
 
 Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, **Xbox app** (installed Xbox / Game Pass titles), and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
 
-Enable **Settings → Launchers → Xbox app → Include Xbox app games** to detect installed Xbox, Game Pass and supported Microsoft Store games for your Windows account. Games launch through Windows; no launcher path is needed. Cloud-only games are not imported.
-
 ## Emulators
 
 Supports **DuckStation, PCSX2, RPCS3, Xenia, Dolphin, Eden, melonDS, Vita3K, RetroArch, PPSSPP, mGBA, Cemu, Azahar and shadPS4**. Configure emulator paths, import libraries (including RetroArch playlists), scan ROM folders or add games manually. Core selection and launch arguments are configurable; imported games can be organised into lists.
