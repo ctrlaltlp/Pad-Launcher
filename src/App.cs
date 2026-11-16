@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.5")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.5")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.5")]
+[assembly: System.Reflection.AssemblyVersion("0.4.6")]
+[assembly: System.Reflection.AssemblyFileVersion("0.4.6")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.4.6")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -126,7 +126,7 @@ namespace PadLauncher {
             }
 #if EMULATOR_DETECTION_TEST
             if(args.Contains("--detection-report")) {
-                File.WriteAllText(System.IO.Path.Combine(Storage.Root,"emulator-detection-report.json"),Storage.Json().Serialize(EmulatorDetection.Scan(CancellationToken.None)));
+                File.WriteAllText(System.IO.Path.Combine(Storage.Root,"emulator-detection-report.json"),Storage.ReadableJson(EmulatorDetection.Scan(CancellationToken.None)));
                 return;
             }
 #endif
@@ -842,8 +842,9 @@ namespace PadLauncher {
             customListOptions.Add(new KeyValuePair<string,string>("source:custom","Custom games"));
             foreach(var item in settings.CustomLists ?? new List<CustomList>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
             foreach(var item in settings.CombinedCollections ?? new List<CombinedCollection>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
+            foreach(var item in CollectionOptions().Where(c => c.Id.StartsWith("source:emulator:",StringComparison.Ordinal))) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(item)));
             var customListPicker=new SettingsComboBox {Name="CustomListPicker",ItemsSource=customListOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
-            var individualNote=Label("Create a list or select one to add and remove individual games.",12,muted);
+            var individualNote=Label("Create a list, edit its games and name, duplicate it, or delete it.",12,muted);
             individualNote.TextWrapping=TextWrapping.Wrap; individualNote.Margin=new Thickness(0,0,0,8); customListPanel.Children.Add(individualNote);
             customListPanel.Children.Add(customListPicker);
             var customNameCaption=Label("List name",12,muted); customListPanel.Children.Add(customNameCaption);
@@ -866,11 +867,18 @@ namespace PadLauncher {
             var customListActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,0)};
             var saveCustomList=new Button {Name="SaveCustomList",Content="Create list",Padding=new Thickness(12,7,12,7)};
             var deleteCustomList=new Button {Content="Delete list",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
+            var duplicateCustomList=new Button {Name="DuplicateCustomList",Content="Duplicate list",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
+            var automaticListNote=Label("Automatic emulator lists can be renamed or duplicated. Manage their games under Emulators, or hide their list under Overlay lists.",12,new SolidColorBrush(Color.FromRgb(255,218,106)));
+            automaticListNote.TextWrapping=TextWrapping.Wrap; automaticListNote.Margin=new Thickness(0,8,0,0);
             Action loadCustomList=() => {
                 var membershipOptions=CollectionOptions();
                 var item=membershipOptions.FirstOrDefault(c => c.Id==customListPicker.SelectedValue as string);
                 customListName.Text=item==null ? "" : item.Name; gameSearch.Text="";
                 customListName.IsEnabled=item==null || item.Id!="source:custom";
+                bool automatic=item!=null && item.Id.StartsWith("source:emulator:",StringComparison.Ordinal);
+                gameChoices.IsEnabled=gameSearch.IsEnabled=selectGames.IsEnabled=!automatic;
+                automaticListNote.Visibility=automatic ? Visibility.Visible : Visibility.Collapsed;
+                duplicateCustomList.Visibility=item==null ? Visibility.Collapsed : Visibility.Visible;
                 gameBoxes.Clear(); gameChoiceRows.Clear(); gameChoices.Children.Clear();
                 var selected=new HashSet<string>(item==null ? new List<string>() : item.Games ?? new List<string>());
                 unavailableGames=selected.Except(library.Games.Select(g => g.Id)).ToList();
@@ -902,26 +910,37 @@ namespace PadLauncher {
                     box.Checked+=(s,e) => {updateCount(); updateHint();}; box.Unchecked+=(s,e) => {updateCount(); updateHint();};
                     updateHint(); gameBoxes[game.Id]=box; gameChoiceRows[game.Id]=gameRow; gameChoices.Children.Add(gameRow);
                 }
-                saveCustomList.Content=item==null ? "Create list" : "Save changes"; deleteCustomList.Visibility=item==null || item.Id=="source:custom" ? Visibility.Collapsed : Visibility.Visible; updateCount();
+                saveCustomList.Content=item==null ? "Create list" : "Save changes"; deleteCustomList.Visibility=item==null || item.Id=="source:custom" || automatic ? Visibility.Collapsed : Visibility.Visible; updateCount();
             };
             gameSearch.TextChanged+=(s,e) => {foreach(var pair in gameBoxes) {var visibility=((string)pair.Value.Tag).IndexOf(gameSearch.Text.Trim(),StringComparison.CurrentCultureIgnoreCase)>=0 ? Visibility.Visible : Visibility.Collapsed; pair.Value.Visibility=visibility; gameChoiceRows[pair.Key].Visibility=visibility;}};
             customListPicker.SelectionChanged+=(s,e) => loadCustomList(); loadCustomList();
             saveCustomList.Click+=(s,e) => {try {
                 var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                 var chosenGames=gameBoxes.Where(b => b.Value.IsChecked==true).Select(b => b.Key).ToList();
-                CustomLists.Save(next,library,String.IsNullOrEmpty(customListPicker.SelectedValue as string) ? null : (string)customListPicker.SelectedValue,customListName.Text,chosenGames.Concat(unavailableGames));
-                Storage.Write("settings.json",next); settings=next; ApplyLibrary(); rebuild();
+                string id=customListPicker.SelectedValue as string;
+                if(id!=null && id.StartsWith("source:emulator:",StringComparison.Ordinal)) {
+                    string name=customListName.Text.Trim();
+                    if(name.Length==0) throw new ArgumentException("Enter a list name.");
+                    if(CollectionOptions().Any(c => c.Id!=id && String.Equals(c.Name,name,StringComparison.CurrentCultureIgnoreCase))) throw new ArgumentException("A list with that name already exists.");
+                    EmulatorLibrary.Config(next,id.Substring("source:emulator:".Length)).ListName=name;
+                } else CustomLists.Save(next,library,String.IsNullOrEmpty(id) ? null : id,customListName.Text,chosenGames.Concat(unavailableGames));
+                Storage.Write("settings.json",next); settings=next; EmulatorLibrary.Apply(library,settings); ApplyLibrary(); rebuild();
             } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
             deleteCustomList.Click+=(s,e) => {try {
+                if(!ConfirmEmulatorRemoval(dialog,"Delete list","Delete this list?","Its games will stay in Pad Launcher.","Delete list")) return;
                 var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); CustomLists.Delete(next,customListPicker.SelectedValue as string);
                 Storage.Write("settings.json",next); settings=next; ApplyLibrary(); rebuild();
             } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
-            customListActions.Children.Add(saveCustomList); customListActions.Children.Add(deleteCustomList); customListPanel.Children.Add(customListActions);
+            duplicateCustomList.Click+=(s,e) => {try {
+                var selected=CollectionOptions().First(c => c.Id==customListPicker.SelectedValue as string);
+                var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                string baseName=selected.Name.Length>69 ? selected.Name.Substring(0,69)+" copy" : selected.Name+" copy",name=baseName;
+                int suffix=2; while(CollectionOptions().Any(c => String.Equals(c.Name,name,StringComparison.CurrentCultureIgnoreCase))) name=baseName+" "+suffix++;
+                CustomLists.Save(next,library,null,name,selected.Games ?? new List<string>());
+                Storage.Write("settings.json",next); settings=next; ApplyLibrary(); rebuild();
+            } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
+            customListActions.Children.Add(saveCustomList); customListActions.Children.Add(duplicateCustomList); customListActions.Children.Add(deleteCustomList); customListPanel.Children.Add(customListActions); customListPanel.Children.Add(automaticListNote);
             listsLayout.Children.Add(customListSection);
-            var editLists=new Expander {Header="Rename, Delete & Duplicate lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listEditorExpanded};
-            editLists.Content=CreateListEditor(dialog,rebuild);
-            editLists.Expanded+=(sender,args) => listEditorExpanded=true;
-            editLists.Collapsed+=(sender,args) => listEditorExpanded=false;
             var combinePanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             var combinedOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new list")};
             foreach(var combined in settings.CombinedCollections ?? new List<CombinedCollection>()) {var list=CollectionOptions().FirstOrDefault(c => c.Id==combined.Id); combinedOptions.Add(new KeyValuePair<string,string>(combined.Id,list==null ? combined.Name : ListLabel(list)));}
@@ -971,9 +990,8 @@ namespace PadLauncher {
             };
             combinedActions.Children.Add(saveCombined); combinedActions.Children.Add(deleteCombined); combinePanel.Children.Add(combinedActions);
             customListSection.Content=combinePanel;
-            var individualGamesSection=new Expander {Name="EditListGamesSection",Header="Edit games in lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),Content=customListPanel};
+            var individualGamesSection=new Expander {Name="EditListGamesSection",Header="Create/Edit lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),Content=customListPanel};
             listsLayout.Children.Add(individualGamesSection);
-            listsLayout.Children.Add(editLists);
             listsLayout.Children.Add(CreateHiddenGamesSettings(rebuild));
             layout.Children.Add(skipEmpty);
             var removeMissing=new CheckBox {Content="Remove missing emulator and custom games on refresh",IsChecked=settings.RemoveMissingEmulatorGames,FontSize=14,Foreground=white,Margin=new Thickness(0,0,0,8)};
@@ -1280,7 +1298,7 @@ namespace PadLauncher {
             xboxToggle.Click+=(s,e) => {settings.XboxEnabled=xboxToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; xboxIntegration.Children.Add(xboxToggle);
             var xboxNote=Label("Finds installed Xbox / Game Pass games registered for your Windows account. Launching is managed by Windows; no executable path is needed. EA Play and Battle.net games use their own integrations.",12,muted); xboxNote.TextWrapping=TextWrapping.Wrap; xboxIntegration.Children.Add(xboxNote);
             AddLauncherReimport(xboxIntegration,"xbox","Xbox app",() => settings.XboxEnabled);
-            var sgdbToggle=new CheckBox {Name="SteamGridDbSetting",Content="SteamGridDB artwork API key",IsChecked=settings.SteamGridDbEnabled,Foreground=white,Margin=new Thickness(0,12,0,12)};
+            var sgdbToggle=new CheckBox {Name="SteamGridDbSetting",Content="SteamGridDB artwork API key",IsChecked=settings.SteamGridDbEnabled && !String.IsNullOrWhiteSpace(ArtworkKey.Load()),Foreground=white,Margin=new Thickness(0,12,0,12)};
             var repairPaths=new Button {Content="Repair missing game paths…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,12,0,8)};
             repairPaths.Click+=(s,e) => ShowMissingFileRepair(dialog,rebuild);
             sgdbToggle.Click+=(s,e) => {settings.SteamGridDbEnabled=sgdbToggle.IsChecked==true; QueueSave(); RefreshLibrary(true);}; systemLayout.Children.Add(sgdbToggle);
@@ -1293,12 +1311,12 @@ namespace PadLauncher {
             saveKey.Click+=async (s,e) => {
                 string key=apiKey.Password.Trim(); if(String.IsNullOrEmpty(key)) {apiStatus.Text="Enter your API key first."; return;}
                 saveKey.IsEnabled=false; apiStatus.Text="Checking key…";
-                try {await Task.Run(() => ArtworkService.ValidateKey(key)); ArtworkKey.Save(key); apiKey.Password=key; apiStatus.Text="Key saved. Refreshing artwork…"; RefreshLibrary(true);}
+                try {await Task.Run(() => ArtworkService.ValidateKey(key)); ArtworkKey.Save(key); apiKey.Password=key; settings.SteamGridDbEnabled=true; sgdbToggle.IsChecked=true; QueueSave(); apiStatus.Text="Key saved. Refreshing artwork…"; RefreshLibrary(true);}
                 catch {apiStatus.Text="Could not verify key. Check the key and your connection; previous key was kept.";}
                 finally {saveKey.IsEnabled=true;}
             };
             var clearKey=new Button {Content="Remove key",Padding=new Thickness(10,5,10,5),Margin=new Thickness(8,0,0,0)};
-            clearKey.Click+=(s,e) => {ArtworkKey.Clear(); apiKey.Clear(); apiStatus.Text="Key removed. Downloaded artwork stays cached.";};
+            clearKey.Click+=(s,e) => {ArtworkKey.Clear(); apiKey.Clear(); settings.SteamGridDbEnabled=false; sgdbToggle.IsChecked=false; QueueSave(); apiStatus.Text="Key removed. Downloaded artwork stays cached.";};
             var getKey=new Button {Content="Get API key",Padding=new Thickness(10,5,10,5),Margin=new Thickness(8,0,0,0)};
             getKey.Click+=(s,e) => Process.Start(new ProcessStartInfo("https://www.steamgriddb.com/profile/preferences/api") {UseShellExecute=true});
             apiButtons.Children.Add(saveKey); apiButtons.Children.Add(clearKey); apiButtons.Children.Add(getKey); systemLayout.Children.Add(apiButtons); systemLayout.Children.Add(apiStatus);
@@ -1436,7 +1454,7 @@ namespace PadLauncher {
             var heading=Label("Import Steam shortcuts",24,white); heading.FontWeight=FontWeights.SemiBold; heading.Margin=new Thickness(0,0,0,12); header.Children.Add(heading);
             var note=Label("",13,muted); note.TextWrapping=TextWrapping.Wrap;
             note.Inlines.Add(new System.Windows.Documents.Run("Uses the Steam folder and user selected in Launchers. "));
-            note.Inlines.Add(new System.Windows.Documents.Run("Previously imported shortcuts are not duplicated.") {Foreground=new SolidColorBrush(Color.FromRgb(255,218,106))});
+            note.Inlines.Add(new System.Windows.Documents.Run("Previously imported shortcuts are not duplicated unless you add both launch modes.") {Foreground=new SolidColorBrush(Color.FromRgb(255,218,106))});
             note.Inlines.Add(new System.Windows.Documents.Run(" Matching names with different launch targets or actions are reviewed before import, so you can choose which entries to keep. Direct launch bypasses Steam; choose Steam for Steam Input or special launch behaviour. Both keeps separate direct-launch and Steam entries. Original shortcuts stay untouched."));
             note.Margin=new Thickness(0,0,0,14); header.Children.Add(note);
             var controls=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,12)};
@@ -1535,7 +1553,7 @@ namespace PadLauncher {
                             string state=SteamShortcutImport.ExistingStatus(settings,library,record,selectedMode=="steam");
                             if(selectedMode=="both") {
                                 string direct=SteamShortcutImport.ExistingStatus(settings,library,record,false),steam=SteamShortcutImport.ExistingStatus(settings,library,record,true);
-                                state=direct=="already added for direct launch" && !String.IsNullOrEmpty(steam) ? "both already added" : "both selected; direct launch "+(direct=="already added for direct launch" ? "already added" : "not added");
+                                state=direct=="already added for direct launch" && !String.IsNullOrEmpty(steam) ? "available both through steam & direct launch" : "both selected; direct launch "+(direct=="already added for direct launch" ? "already added" : "not added");
                             }
                             shortcutCaption.Inlines.Clear();
                             shortcutCaption.Inlines.Add(new System.Windows.Documents.Run(record.Name));
@@ -1605,7 +1623,12 @@ namespace PadLauncher {
             var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,16,0,0)};
             var cancel=new Button {Content="Cancel import",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0)}; cancel.Click+=(s,e) => dialog.DialogResult=false; actions.Children.Add(cancel);
             var apply=new Button {Content="Apply choices & import",Padding=new Thickness(14,8,14,8)};
-            apply.Click+=(s,e) => {dialog.DialogResult=true;}; actions.Children.Add(apply); DockPanel.SetDock(actions,Dock.Bottom); root.Children.Add(actions);
+            apply.Click+=(s,e) => {
+                var duplicates=conflicts.Where(group => group.Alternatives.Count(choice => choice.Keep)>1).Select(group => group.Name).Distinct().ToList();
+                if(duplicates.Count>0 && !ShowEmulatorMessage(dialog,"Confirm duplicate entries","Keep multiple launch entries?",
+                    "Your choices will keep more than one entry for these games, such as both direct launch and launch through Steam:\n\n"+String.Join("\n",duplicates)+"\n\nThese will appear as separate game entries in Pad Launcher.","Keep entries & import")) return;
+                dialog.DialogResult=true;
+            }; actions.Children.Add(apply); DockPanel.SetDock(actions,Dock.Bottom); root.Children.Add(actions);
             var reviewBoxes=new Dictionary<GameImport.Alternative,CheckBox>();
             var reviewTools=new WrapPanel {Margin=new Thickness(0,0,0,14)};
             Func<GameImport.Alternative,bool> steamEntry=choice => {
@@ -1662,102 +1685,6 @@ namespace PadLauncher {
             tabs.SelectionChanged+=(s,e) => {if(e.Source==tabs && tabs.SelectedIndex>=0) customGamesTabIndex=tabs.SelectedIndex;};
             panel.Children.Add(tabs); return panel;
         }
-        bool listEditorExpanded;
-        StackPanel CreateListEditor(Window dialog,Action rebuild) {
-            var editableIds=new HashSet<string>((settings.CustomLists ?? new List<CustomList>()).Select(list => list.Id)
-                .Concat((settings.CombinedCollections ?? new List<CombinedCollection>()).Select(list => list.Id)));
-            var lists=CollectionOptions().Where(list => editableIds.Contains(list.Id) || list.Id.StartsWith("source:emulator:",StringComparison.Ordinal))
-                .OrderBy(list => list.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
-            var panel=new StackPanel {Margin=new Thickness(0,12,0,0)};
-            var status=Label("",12,muted);
-            status.TextWrapping=TextWrapping.Wrap;
-            var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,14,0,0)};
-
-            if(lists.Count==0) {
-                panel.Children.Add(Label("No custom, imported, or combined lists to edit.",14,white));
-            } else {
-                var editNote=Label("Rename or duplicate a list, or delete a custom or combined list.",12,muted);
-                editNote.TextWrapping=TextWrapping.Wrap; editNote.Margin=new Thickness(0,0,0,8); panel.Children.Add(editNote);
-                var deleteNote=Label("Automatic emulator lists cannot be deleted. Hide them under Overlay lists instead. Delete list is available for custom and combined lists.",12,new SolidColorBrush(Color.FromRgb(255,218,106)));
-                deleteNote.TextWrapping=TextWrapping.Wrap; deleteNote.Margin=new Thickness(0,0,0,12); panel.Children.Add(deleteNote);
-                panel.Children.Add(Label("List",12,mint));
-                var picker=new SettingsComboBox {ItemsSource=lists,DisplayMemberPath="Name",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,6,0,12)};
-                panel.Children.Add(picker);
-                panel.Children.Add(Label("Name",12,mint));
-                var name=new TextBox {Text=lists[0].Name,MaxLength=80,Padding=new Thickness(8),Margin=new Thickness(0,6,0,8)};
-                panel.Children.Add(name);
-                panel.Children.Add(status);
-                picker.SelectionChanged+=(sender,args) => {
-                    var selected=picker.SelectedItem as Collection;
-                    if(selected!=null) name.Text=selected.Name;
-                    status.Text="";
-                };
-
-                var rename=new Button {Content="Save changes",IsDefault=true,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0)};
-                var delete=new Button {Content="Delete list…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0)};
-                Action<Settings> commit=next => {
-                    Storage.Write("settings.json",next);
-                    settings=next;
-                    EmulatorLibrary.Apply(library,settings);
-                    ApplyLibrary();
-                    rebuild();
-                };
-                rename.Click+=(sender,args) => {
-                    var selected=(Collection)picker.SelectedItem;
-                    string newName=name.Text.Trim();
-                    if(newName.Length==0) {status.Text="Enter a list name."; return;}
-                    if(CollectionOptions().Any(list => list.Id!=selected.Id && String.Equals(list.Name,newName,StringComparison.CurrentCultureIgnoreCase))) {
-                        status.Text="A list with that name already exists.";
-                        return;
-                    }
-                    try {
-                        var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                        var custom=(next.CustomLists ?? new List<CustomList>()).FirstOrDefault(list => list.Id==selected.Id);
-                        if(custom!=null) custom.Name=newName;
-                        else if(selected.Id.StartsWith("source:emulator:",StringComparison.Ordinal)) EmulatorLibrary.Config(next,selected.Id.Substring("source:emulator:".Length)).ListName=newName;
-                        else next.CombinedCollections.First(list => list.Id==selected.Id).Name=newName;
-                        commit(next);
-                    } catch(Exception error) {status.Text=error.Message;}
-                };
-                delete.Click+=(sender,args) => {
-                    var selected=(Collection)picker.SelectedItem;
-                    if(selected.Id.StartsWith("source:emulator:",StringComparison.Ordinal)) {
-                        return;
-                    }
-                    if(!ConfirmEmulatorRemoval(dialog,"Delete list","Delete this list?","“"+selected.Name+"” will be removed. Its games will stay in Pad Launcher.","Delete list")) return;
-                    try {
-                        var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                        CustomLists.Delete(next,selected.Id);
-                        if(next.CombinedCollections!=null) {
-                            next.CombinedCollections.RemoveAll(list => list.Id==selected.Id);
-                            foreach(var combined in next.CombinedCollections)
-                                if(combined.Sources!=null) combined.Sources.RemoveAll(id => id==selected.Id);
-                        }
-                        commit(next);
-                    } catch(Exception error) {status.Text=error.Message;}
-                };
-                actions.Children.Add(rename);
-                var duplicate=new Button {Content="Duplicate list",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0)};
-                duplicate.Click+=(sender,args) => {try {
-                    var selected=(Collection)picker.SelectedItem;
-                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                    string baseName=selected.Name+" copy",copyName=baseName;
-                    if(baseName.Length>74) baseName=baseName.Substring(0,74);
-                    copyName=baseName;
-                    int suffix=2;
-                    while(CollectionOptions().Any(list => String.Equals(list.Name,copyName,StringComparison.CurrentCultureIgnoreCase))) copyName=baseName+" "+suffix++;
-                    CustomLists.Save(next,library,null,copyName,selected.Games ?? new List<string>());
-                    commit(next);
-                } catch(Exception error) {status.Text=error.Message;}};
-                actions.Children.Add(duplicate);
-                actions.Children.Add(delete);
-                Action updateDeleteLabel=() => delete.Visibility=((Collection)picker.SelectedItem).Id.StartsWith("source:emulator:",StringComparison.Ordinal) ? Visibility.Collapsed : Visibility.Visible;
-                picker.SelectionChanged+=(s,e) => updateDeleteLabel(); updateDeleteLabel();
-            }
-            panel.Children.Add(actions);
-            return panel;
-        }
-
         void StyleSettingsSubtabs(TabControl tabs) {
             tabs.Template=(ControlTemplate)System.Windows.Markup.XamlReader.Parse(@"<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabControl}'>
                 <Grid><Grid.RowDefinitions><RowDefinition Height='Auto'/><RowDefinition Height='*'/></Grid.RowDefinitions>

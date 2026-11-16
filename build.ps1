@@ -93,6 +93,10 @@ if ($args -contains '-Test') {
     if ($LASTEXITCODE -ne 0) { throw 'Ubisoft test build failed.' }
     & (Join-Path $out 'UbisoftTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Ubisoft integration tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'StorageTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\StorageTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Storage test build failed.' }
+    & (Join-Path $out 'StorageTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Storage tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'SteamImportTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\SteamImportTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Steam import test build failed.' }
     & (Join-Path $out 'SteamImportTests.exe')

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -19,7 +19,7 @@ class EmulatorTests {
         try {
             var settings=new Settings();
             Check(settings.Emulators==null && EmulatorLibrary.Presets.Length==14,"Existing settings need no migration and all fourteen emulators are available");
-            Check(settings.RemoveMissingEmulatorGames,"Missing-ROM cleanup is enabled by default");
+            Check(!settings.RemoveMissingEmulatorGames,"Missing-ROM cleanup is disabled by default");
             string missingProbe=FileAt(root,"missing-check\\game.iso");
             Check(!EmulatorLibrary.ConfirmMissingRom(missingProbe),"Existing ROM is preserved");
             Check(!EmulatorLibrary.ConfirmMissingRom(Path.GetDirectoryName(missingProbe)),"Existing directory-based game is preserved");

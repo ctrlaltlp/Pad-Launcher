@@ -138,10 +138,10 @@ class SetupWizardTests {
             Check(Wizard(launcher)==null && Storage.Read<Settings>("settings.json").SetupWizardShown && Storage.Read<Settings>("settings.json").SetupWizardPage==1,"Closing early leaves saved progress and keeps setup optional");
             ArtworkKey.Save(""); launcher.ShowSetupWizard(true,new Dictionary<string,string>()); wizard=Wizard(launcher);
             Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip");
-            Check((string)Find<CheckBox>(wizard,"SetupArtworkEnabled").Content=="Use SteamGridDB artwork (recommended)","Artwork optional label appears on its checkbox");
+            Check((string)Find<CheckBox>(wizard,"SetupArtworkEnabled").Content=="Use SteamGridDB artwork","Artwork checkbox caption");
             wizard.Dispatcher.BeginInvoke(new Action(() => {
                 var warning=wizard.OwnedWindows.Cast<Window>().Single(window => window.Name=="SetupArtworkKeyWarning");
-                Check((string)Find<Button>(warning,"SetupProvideArtworkKey").Content=="Provide API key","Missing-key warning offers the recommended key action");
+                Check((string)Find<Button>(warning,"SetupProvideArtworkKey").Content=="Provide API key (recommended)","Missing-key warning offers the recommended key action");
                 Click(warning,"SetupProvideArtworkKey");
             }));
             Click(wizard,"SetupNext");

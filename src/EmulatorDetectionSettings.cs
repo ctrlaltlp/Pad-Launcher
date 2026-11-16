@@ -68,7 +68,7 @@ namespace PadLauncher {
             };
             report.Click+=(s,e) => {
                 var file=new Microsoft.Win32.SaveFileDialog {Filter="JSON report|*.json",FileName="emulator-detection-report.json"};
-                if(file.ShowDialog(dialog)==true) try {File.WriteAllText(file.FileName,Storage.Json().Serialize(detected)); status.Text="Report saved. It contains detected paths and detection notes.";} catch(Exception error) {status.Text=error.Message;}
+                if(file.ShowDialog(dialog)==true) try {File.WriteAllText(file.FileName,Storage.ReadableJson(detected)); status.Text="Report saved. It contains detected paths and detection notes.";} catch(Exception error) {status.Text=error.Message;}
             };
             close.Click+=(s,e) => dialog.Close(); dialog.Closed+=(s,e) => {closed=true; cancellation.Cancel();}; dialog.Show();
         }

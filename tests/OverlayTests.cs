@@ -179,7 +179,7 @@ public static class OverlayTests {
             Check(chosenCollections.DefaultCollectionId=="remember" && chosenCollections.CollectionId=="couch","Hiding the current or default collection switches safely to an enabled collection");
             window.ShowOverlay();
             window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.PageDown) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
-            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text.StartsWith("Couch games ("),"Collection cycling skips hidden collections, including All games");
+            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="Couch games","Collection cycling skips hidden collections, including All games");
             window.Close();
             bool hiddenDefault=false; try { window.SetDefaultCollection("all"); } catch(ArgumentException) { hiddenDefault=true; }
             Check(hiddenDefault,"A hidden collection cannot be selected as the default");
@@ -187,7 +187,7 @@ public static class OverlayTests {
             bool emptyCollections=false; try { window.SetAvailableCollections(new string[0]); } catch(ArgumentException) { emptyCollections=true; }
             Check(emptyCollections && File.ReadAllText(Path.Combine(Storage.Root,"settings.json"))==beforeEmptyCollections,"Selecting no collections is rejected without changing saved settings");
             var restoredCollections=new Launcher(true,true); restoredCollections.ShowOverlay();
-            Check(((TextBlock)FindElement((FrameworkElement)restoredCollections.Content,"SelectedCollection")).Text.StartsWith("Couch games ("),"Collection visibility survives restarting the launcher");
+            Check(((TextBlock)FindElement((FrameworkElement)restoredCollections.Content,"SelectedCollection")).Text=="Couch games","Collection visibility survives restarting the launcher");
             restoredCollections.ExitApp();
             var missingCollectionSettings=Storage.Read<Settings>("settings.json"); missingCollectionSettings.EnabledCollectionIds=new System.Collections.Generic.List<string> {"removed-collection"}; Storage.Write("settings.json",missingCollectionSettings);
             var missingCollections=new Launcher(true,true);
@@ -196,9 +196,9 @@ public static class OverlayTests {
             window.SetAvailableCollections(null);
             Check(Storage.Read<Settings>("settings.json").EnabledCollectionIds==null,"All-collections mode can be restored for current and future collections");
             window.SetDefaultCollection("couch"); window.ShowOverlay();
-            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text.StartsWith("Couch games ("),"Chosen default collection is used when reopening the overlay");
+            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="Couch games","Chosen default collection is used when reopening the overlay");
             window.Close(); window.SetDefaultCollection("all"); window.ShowOverlay();
-            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text.StartsWith("All games ("),"All games can be selected as the opening collection");
+            Check(((TextBlock)FindElement(content,"SelectedCollection")).Text=="All games","All games can be selected as the opening collection");
             window.Close(); window.SetDefaultCollection("remember");
             window.ShowControls(); // Exercises optional hint with no settings dialog.
             var resident=new Launcher(true,true);
@@ -253,7 +253,7 @@ public static class OverlayTests {
             Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
             var customSection=(Expander)FindElement(listsContents,"CustomListsSection");
             var individualSection=(Expander)FindElement(listsContents,"EditListGamesSection");
-            Check(customSection!=null && (string)customSection.Header=="Combine lists" && individualSection!=null && (string)individualSection.Header=="Edit games in lists","Combine lists and individual game editor have separate dropdown sections");
+            Check(customSection!=null && (string)customSection.Header=="Combine lists" && individualSection!=null && (string)individualSection.Header=="Create/Edit lists","Combine lists and individual game editor have separate dropdown sections");
             customSection.IsExpanded=true; individualSection.IsExpanded=true; helpTabs.SelectedIndex=2;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             Check(FindElement((FrameworkElement)individualSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)individualSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)individualSection.Content,"SaveCustomList")!=null,"Individual list editor keeps picker, name and save action");
@@ -261,7 +261,7 @@ public static class OverlayTests {
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             var listNameToggle=(CheckBox)FindElement((FrameworkElement)settingsPage.Content,"ShowListNameSetting");
             var listCountToggle=(CheckBox)FindElement((FrameworkElement)settingsPage.Content,"ShowListGameCountSetting");
-            Check(listCountToggle.IsChecked==true,"List game counts are enabled by default");
+            Check(listCountToggle.IsChecked==false,"List game counts are disabled by default");
             listNameToggle.IsChecked=false; listNameToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(!listCountToggle.IsEnabled,"Game-count setting is unavailable while the list name is hidden");
             listNameToggle.IsChecked=true; listNameToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

@@ -25,12 +25,24 @@ namespace PadLauncher {
             // Windows file paths are case-insensitive; arguments remain case-sensitive.
             return (target ?? "").Trim().ToUpperInvariant()+"\n"+(arguments ?? "").Trim()+"\n"+(folder ?? "").Trim().TrimEnd('\\','/').ToUpperInvariant()+"\n"+(details ?? "");
         }
+        static string EmulatorForTarget(Settings settings,string target) {
+            var emulator=(settings.Emulators ?? new List<EmulatorConfig>()).FirstOrDefault(config =>
+                !String.IsNullOrWhiteSpace(config.Path) && String.Equals((target ?? "").Trim().Trim('"'),config.Path.Trim().Trim('"'),StringComparison.OrdinalIgnoreCase));
+            return emulator==null ? "" : emulator.Id;
+        }
+        static string EmulatorForGame(Settings settings,Game game) {
+            if(!String.IsNullOrEmpty(game.EmulatorId)) return game.EmulatorId;
+            if(game.Source=="emulator") return "unknown-emulator";
+            var custom=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==game.Id);
+            return EmulatorForTarget(settings,custom!=null ? custom.Target : game.Shortcut ? game.ShortcutTarget : game.LaunchId);
+        }
         public static List<Conflict> Conflicts(Settings settings,Library library,List<CustomGame> incoming) {
             var conflicts=new List<Conflict>();
-            foreach(var names in incoming.GroupBy(g => ArtworkService.Normalize(g.Name))) {
+            foreach(var names in incoming.GroupBy(g => new {Name=ArtworkService.Normalize(g.Name),Emulator=EmulatorForTarget(settings,g.Target)})) {
                 var group=new Conflict {Name=names.First().Name};
                 bool matchedManual=false;
-                group.Alternatives.AddRange(library.Games.Where(g => ArtworkService.Normalize(g.Name)==names.Key).Select(g => new Alternative {Existing=g,Keep=true}));
+                group.Alternatives.AddRange(library.Games.Where(g => ArtworkService.Normalize(g.Name)==names.Key.Name &&
+                    EmulatorForGame(settings,g)==names.Key.Emulator).Select(g => new Alternative {Existing=g,Keep=true}));
                 foreach(var game in names) {
                     string identity=ImportIdentity(game);
                     var previous=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => identity!=null && ImportIdentity(g)==identity);

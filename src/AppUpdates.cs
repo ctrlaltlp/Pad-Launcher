@@ -115,7 +115,7 @@ namespace PadLauncher {
             string folder=Path.GetDirectoryName(payload),helper=Path.Combine(folder,"PadLauncher.Updater.exe"),job=Path.Combine(folder,"update.json");
             Verify(payload,digest);
             File.Copy(current,helper,true);
-            File.WriteAllText(job,Storage.Json().Serialize(new AppUpdateJob {Target=current,Payload=payload,Sha256=digest,DataRoot=Storage.Root,ResumeFile=resumeFile,ProcessId=Process.GetCurrentProcess().Id}));
+            File.WriteAllText(job,Storage.ReadableJson(new AppUpdateJob {Target=current,Payload=payload,Sha256=digest,DataRoot=Storage.Root,ResumeFile=resumeFile,ProcessId=Process.GetCurrentProcess().Id}));
             Process.Start(new ProcessStartInfo(helper,"--apply-update \""+job+"\"") {UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=folder});
         }
         public static string ReplaceExecutable(AppUpdateJob job) {

@@ -14,7 +14,7 @@ namespace PadLauncher {
             var panel=new StackPanel {Margin=new Thickness(24)}; warning.Content=panel;
             var message=Label("You have not provided a SteamGridDB API key, artwork may fail on emulator & custom games and maybe some launcher games.\n\nWhat do you want to do?",14,white); message.TextWrapping=TextWrapping.Wrap; panel.Children.Add(message);
             var buttons=new WrapPanel {HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,22,0,0)}; panel.Children.Add(buttons);
-            var provide=new Button {Name="SetupProvideArtworkKey",Content="Provide API key",IsDefault=true,IsCancel=true,Padding=new Thickness(14,8,14,8),Background=mint,Foreground=Brushes.Black};
+            var provide=new Button {Name="SetupProvideArtworkKey",Content="Provide API key (recommended)",IsDefault=true,IsCancel=true,Padding=new Thickness(14,8,14,8)};
             var proceed=new Button {Name="SetupContinueWithoutArtworkKey",Content="Continue",Padding=new Thickness(14,8,14,8),Margin=new Thickness(10,0,0,0)};
             provide.Click+=(s,e) => {warning.DialogResult=false;}; proceed.Click+=(s,e) => {warning.DialogResult=true;}; buttons.Children.Add(provide); buttons.Children.Add(proceed);
             return warning;
@@ -149,12 +149,14 @@ namespace PadLauncher {
             PasswordBox apiKey=null;
             Action buildArtwork=() => {
                 var panel=new StackPanel(); pages[2]=panel;
-                note(panel,"Existing launcher artwork and local images work without a SteamGridDB key. Add a key only if you want SteamGridDB artwork.");
-                var enabled=new CheckBox {Name="SetupArtworkEnabled",Content="Use SteamGridDB artwork (recommended)",IsChecked=settings.SteamGridDbEnabled,Margin=new Thickness(0,12,0,12)}; panel.Children.Add(enabled);
+                note(panel,"Existing launcher artwork and local images work without a SteamGridDB key. Add a key only if you want SteamGridDB artwork for custom games, emulator games, or launcher games with missing artwork.");
+                var enabled=new CheckBox {Name="SetupArtworkEnabled",Content="Use SteamGridDB artwork",IsChecked=settings.SteamGridDbEnabled && !String.IsNullOrWhiteSpace(ArtworkKey.Load()),Margin=new Thickness(0,12,0,12)}; panel.Children.Add(enabled);
                 panel.Children.Add(Label("SteamGridDB API key",14,mint));
                 apiKey=new PasswordBox {Name="SetupArtworkKey",Password=ArtworkKey.Load() ?? "",Padding=new Thickness(9),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(apiKey);
+                bool hadKey=!String.IsNullOrWhiteSpace(apiKey.Password);
+                apiKey.PasswordChanged+=(s,e) => {bool hasKey=!String.IsNullOrWhiteSpace(apiKey.Password); if(!hasKey || !hadKey) enabled.IsChecked=hasKey; hadKey=hasKey;};
                 note(panel,"Stored encrypted for your Windows account. Leaving this blank keeps any saved key. You can verify or change it later under System.");
-                apply[2]=draft => {draft.SteamGridDbEnabled=enabled.IsChecked==true;};
+                apply[2]=draft => {draft.SteamGridDbEnabled=enabled.IsChecked==true && (!String.IsNullOrWhiteSpace(apiKey.Password) || !String.IsNullOrWhiteSpace(ArtworkKey.Load()));};
             };
             Action buildAppearance=() => {
                 var panel=new StackPanel(); pages[3]=panel;

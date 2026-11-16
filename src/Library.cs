@@ -361,7 +361,7 @@ namespace PadLauncher {
         public string UbisoftLauncherPath {get;set;}
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { ShowPanelOutlines=true; SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=true; RemoveMissingEmulatorGames=true; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { ShowPanelOutlines=true; SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=false; RemoveMissingEmulatorGames=false; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -401,13 +401,40 @@ namespace PadLauncher {
         public static string Root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"PadLauncher.Data");
         public static void InitializePortable() { Directory.CreateDirectory(Root); }
         public static JavaScriptSerializer Json() { return new JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024 }; }
+        public static string ReadableJson(object data) {
+            string json=Json().Serialize(data);
+            var output=new StringBuilder(json.Length);
+            bool quoted=false,escaped=false; int depth=0;
+            for(int i=0;i<json.Length;i++) {
+                char c=json[i];
+                if(quoted) {
+                    output.Append(c);
+                    if(escaped) escaped=false;
+                    else if(c=='\\') escaped=true;
+                    else if(c=='"') quoted=false;
+                    continue;
+                }
+                if(c=='"') {quoted=true; output.Append(c);}
+                else if(c=='{' || c=='[') {
+                    output.Append(c); depth++;
+                    if(i+1<json.Length && json[i+1]!='}' && json[i+1]!=']') output.AppendLine().Append(' ',depth*2);
+                } else if(c=='}' || c==']') {
+                    depth--;
+                    if(i>0 && json[i-1]!='{' && json[i-1]!='[') output.AppendLine().Append(' ',depth*2);
+                    output.Append(c);
+                } else if(c==',') output.Append(c).AppendLine().Append(' ',depth*2);
+                else if(c==':') output.Append(": ");
+                else output.Append(c);
+            }
+            return output.AppendLine().ToString();
+        }
         public static T Read<T>(string name) where T : class {
             try { return Json().Deserialize<T>(File.ReadAllText(Path.Combine(Root, name))); } catch { return null; }
         }
         public static void Write(string name, object data) {
             Directory.CreateDirectory(Root);
             string path = Path.Combine(Root, name), temp = path + ".tmp";
-            File.WriteAllText(temp, Json().Serialize(data));
+            File.WriteAllText(temp, ReadableJson(data));
             if (File.Exists(path)) File.Replace(temp, path, null); else File.Move(temp, path);
         }
     }
