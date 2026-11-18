@@ -6,7 +6,7 @@ A transparent, controller-friendly Windows game launcher with angled, rectangula
 
 Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, **Xbox app** (installed Xbox / Game Pass titles), and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
 
-Choose **SteamGridDB** or **Libretro** artwork per emulator during setup and per list in Artwork settings, with fallback or single-source choices. Libretro needs no account or API key. [Details](docs/libretro-artwork.md).
+Choose **SteamGridDB** or **Libretro** artwork per emulator during setup and per list in Artwork settings, with fallback or single-source choices. Libretro needs no account or API key.
 
 ## Usage
 
