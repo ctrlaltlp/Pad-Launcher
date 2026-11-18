@@ -8,8 +8,6 @@ Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**
 
 Choose **SteamGridDB** or **Libretro** artwork per emulator during setup and per list in Artwork settings, with fallback or single-source choices. Libretro needs no account or API key. [Details](docs/libretro-artwork.md).
 
-Enable **Settings → Launchers → Xbox app → Include Xbox app games** to detect installed Xbox, Game Pass and supported Microsoft Store games for your Windows account. Games launch through Windows; no launcher path is needed. Cloud-only games are not imported.
-
 ## Emulators
 
 Supports **DuckStation, PCSX2, RPCS3, xemu, Xenia, Dolphin, Eden, melonDS, Vita3K, RetroArch, PPSSPP, mGBA, Cemu, Azahar and shadPS4**. Configure emulator paths, import libraries (including RetroArch playlists), scan ROM folders or add games manually. Core selection and launch arguments are configurable; imported games can be organised into lists.
