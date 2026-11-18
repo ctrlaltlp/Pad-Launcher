@@ -54,8 +54,6 @@ Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original 
 
 Left and right stick speeds are adjustable in Controls (both default to 5×). D-pad and left stick up/down switch lists in Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
 
-During search, D-pad/left stick navigates keys or results. Cross / Xbox A / Nintendo B types or plays; Triangle / Xbox Y / Nintendo X inserts a space while typing; Circle / Xbox B / Nintendo A exits search. Square / Xbox X / Nintendo Y backspaces. Up above the first keyboard row focuses the games; Down below the games returns to the keyboard. Triangle / Xbox Y / Nintendo X returns directly to the keyboard when focused on games. L3 cancels and jumps to its configured list; R3 toggles the selected result's favourite status. R2/RT/ZR also switches layouts in search. Enter finishes typing or plays a result; Escape cancels. Layout switches last only for the session by default. Enable **Controls → Remember layout changes made with controls** to save them per list across restarts.
-
 ## Artwork
 
 Pad Launcher uses existing launcher artwork and local images, plus **SteamGridDB (SGDB)** and **Libretro** downloads. SGDB requires your API key; Libretro does not. Downloaded images are cached locally, and manually chosen images take priority.
