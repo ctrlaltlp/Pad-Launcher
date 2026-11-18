@@ -2,9 +2,13 @@
 
 Pad Launcher reads Xbox/XInput controllers through Windows XInput, DualShock 4 and DualSense through native Raw Input, and original Nintendo Switch Pro Controllers through SDL 3.4.20's HIDAPI driver. Input is routed from the active controller rather than an idle first-connected pad. The Nintendo button-label setting remains independent of controller detection.
 
+## PlayStation held input
+
+DualShock 4 and DualSense reports retain their latest input state until another report updates it or a Windows device-removal notification clears it. An unchanged held stick no longer expires after one second without a new report. Stopping native input clears all cached states. Regression tests cover held-state retention and disconnect cleanup; physical-controller confirmation of the reported intermittent cycling issue is still needed.
+
 ## Switch Pro
 
-The native reader targets Nintendo vendor `057e`, product `2009`, over USB or Bluetooth. SDL performs the controller handshake and stick calibration; Pad Launcher consumes its physical-position gamepad buttons and axes. South/B plays, east/A dismisses, plus shows hints, minus changes monitor, and right-stick click toggles favourites, matching the existing Nintendo prompts. No rumble or motion input is requested.
+The native reader targets Nintendo vendor `057e`, product `2009`, over USB or Bluetooth. SDL performs the controller handshake and stick calibration; Pad Launcher consumes its physical-position gamepad buttons and axes. South/B plays, east/A dismisses, plus shows hints, minus refreshes the library, ZR changes monitor, and right-stick click toggles favourites, matching the existing Nintendo prompts. No rumble or motion input is requested.
 
 Windows Raw Input device enumeration checks for a connected Pro controller once per second while the overlay is active. Only then is SDL extracted, checksum-verified and loaded. SDL's Raw Input, DirectInput, Windows Gaming Input, GameInput, XInput, Sony and Joy-Con drivers are disabled for this backend, and only original Pro devices are opened. This preserves the existing readers and avoids double-reading Xbox or PlayStation input. Closing the overlay closes SDL controller handles and stops its gamepad subsystem.
 

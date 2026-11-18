@@ -1,8 +1,8 @@
-﻿# Gamepad search
+# Gamepad search
 
-These are the default bindings. **Controls → Change controls…** provides independent controller and keyboard mappings for the overlay, search keyboard and search results; visible hints follow the saved choices.
+These are the default bindings. **Settings → Controls → Show/Change controls** provides independent controller and keyboard mappings for the overlay, search keyboard and search results; visible hints follow the saved choices.
 
-Layout shortcut: Square on the normal overlay, or R2 during search, toggles the current list between a 5-column, 3-row Grid and its previous Angled/Rectangular layout, including during search. A held button switches only once. Overrides last for this app session and do not modify saved global or per-list settings.
+Layout shortcut: Square on the normal overlay, or R2 during search, toggles the current list between a 5-column, 3-row Grid and its previous Angled/Rectangular layout, including during search. A held button switches only once. Switches last for this app session by default. Enable **Controls → Remember layout changes made with controls** to save the layout per list across restarts, including the previous Angled/Rectangular layout. Global layout settings are unchanged.
 
 Triangle / Xbox Y / Nintendo X opens the compact keyboard overlay; on the keyboard it inserts a space. Select/Create / Xbox Back/View / Nintendo minus refreshes the library; Options/Start still shows control hints. L3 keeps its existing list-jump assignment. Ctrl+F also opens search.
 

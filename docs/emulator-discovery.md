@@ -1,4 +1,12 @@
-﻿# Emulator game discovery
+# Emulator game discovery
+
+## Current import workflow
+
+**Import library** reads configured folders, playlists, databases or installed titles, depending on the emulator; reading configured folders can include scanning ROM files. **Scan ROM folders** is a separate action for a folder selected in Pad Launcher. Both offer review before import, reuse registered games on repeated imports and leave emulator-owned files unchanged. **Import all emulator libraries** uses each emulator's supported library adapter; it is not restricted to saved database entries.
+
+In review, already-added games can be hidden or shown, and selected titles can be cleaned using **Remove tags from game titles** or **Normalise titles**. These edits apply on import. RetroArch defaults to **One list per playlist**, with an automatic RetroArch list or chosen list available instead. Sources show the resolved core, or **No usable core found**; unresolved sources require choosing an installed core before they can be imported. Cancelling review returns to source selection and allows loading sources again.
+
+The sections below preserve dated upstream research and adapter limitations. They are implementation references, not claims of physical testing for every emulator/version.
 
 ### xemu (checked 2026-11-18)
 
@@ -23,7 +31,7 @@ Research checked against upstream source on 2026-11-10. Pad Launcher supports ex
 
 Library import review offers separate tag removal and title normalisation previews; moving trailing `, The` changes only the chosen display names when the import is committed. Original ROM paths, artwork metadata, cores and emulator-owned library files are preserved. Repeated imports retain path-based identity and do not duplicate renamed entries.
 
-Artwork metadata from RetroArch playlists is retained alongside imported games: `db_name` identifies the thumbnail system and the original label helps match region/disc names. Mixed playlist names do not replace known platform metadata on repeated imports. The optional [Libretro artwork fallback](libretro-artwork.md) uses this metadata without changing launch commands or emulator-owned files.
+Artwork metadata from RetroArch playlists is retained alongside imported games: `db_name` identifies the thumbnail system and the original label helps match region/disc names. Mixed playlist names do not replace known platform metadata on repeated imports. The configurable [artwork source system](libretro-artwork.md) uses this metadata without changing launch commands or emulator-owned files.
 
 Missing Libretro-preferred artwork also uses this console/region metadata for offline placeholder sizing. Profiles were measured from public [Libretro box-art catalogues](https://thumbnails.libretro.com/) on 2026-11-17; sample filenames, dimensions and regional exceptions are recorded in [libretro-placeholder-samples.json](libretro-placeholder-samples.json). Unknown consoles retain a square placeholder. These estimates affect no imports, ROM files, emulator settings or loaded image dimensions.
 
@@ -33,7 +41,7 @@ Steam installations are also checked during explicit emulator detection. The det
 
 Executable detection is available in regular Settings and the optional setup wizard. It checks both user/machine and 32/64-bit **App Paths** and **Uninstall** registrations, relevant Start-menu shortcut targets, and emulator-named folders immediately under Program Files and local application locations. It checks known executable filenames, including common alternate builds, without launching them, writing registrations, scanning ROMs or searching entire drives. This is candidate discovery, not proof that an emulator was installed by an installer: portable applications with shortcuts can also appear. Paths outside these sources, renamed binaries, Microsoft Store packages and arbitrary portable folders can be missed; manual Browse remains available.
 
-The review screen retains distinct installations, combines duplicate evidence, and leaves already-configured emulators unchecked. Applying checked choices uses normal executable validation and library-location detection; games, ROM folders, arguments and unchecked paths are retained. No games are imported automatically. A separate `-EmulatorDetectionTest` build remains available with its own data folder and instance, with app updates and Windows startup changes disabled. First-run setup is shown automatically only for fresh profiles; existing profiles can open it from System without being forced through setup after an upgrade.
+The review screen retains distinct installations, combines duplicate evidence, and leaves already-configured emulators unchecked. Applying checked choices uses normal executable validation and library-location detection; games, ROM folders, arguments and unchecked paths are retained. Apply is disabled when nothing is checked. Configured entries show their current path in yellow and explain that checking them applies a changed path. No games are imported automatically. Development-only detection builds remain supported by the build script; normal use does not require a separate test application. First-run setup is shown automatically only for fresh profiles; existing profiles can open it from System without being forced through setup after an upgrade.
 
 Microsoft documents per-user/per-machine [App Paths](https://learn.microsoft.com/en-us/windows/win32/shell/app-registration), [installer registration values](https://learn.microsoft.com/en-us/windows/win32/msi/uninstall-registry-key), and [Shell Link targets](https://learn.microsoft.com/en-us/windows/win32/shell/links). PPSSPP's upstream [Windows installer](https://github.com/hrydgard/ppsspp/blob/master/ppsspp.iss) demonstrates installer-created shortcuts and a DisplayIcon that can name the 32-bit executable even when the 64-bit executable is installed; discovery therefore also probes known sibling filenames. Fixtures cover all supported aliases and this PPSSPP case; real installed-emulator coverage remains unverified on the current portable-only setup.
 
@@ -99,7 +107,7 @@ Core resolution supports standard playlists whose entries use `DETECT`: preserve
 
 The inventory honours `libretro_directory` and `libretro_info_path` in the active configuration, with standard `cores`/`info` folders as fallback. Evidence: [playlist default-core behaviour](https://docs.libretro.com/guides/roms-playlists-thumbnails/), [core info metadata](https://github.com/libretro/libretro-core-info/blob/master/00_example_libretro.info), and verified local standard RetroArch configuration/playlist files.
 
-Both individual and bulk library imports offer **One list per playlist** in the destination selector. Each non-empty selected playlist gets a list named after it; games shared across playlists retain one game entry with multiple list memberships. Reimport reuses saved per-playlist destinations, preserving renamed lists and their overlay visibility. The automatic RetroArch list remains available as an alternative destination.
+Both individual and bulk library imports default to **One list per playlist** in the destination selector. Each non-empty selected playlist gets a list named after it; games shared across playlists retain one game entry with multiple list memberships. Reimport reuses saved per-playlist destinations, preserving renamed lists and their overlay visibility. The automatic RetroArch list remains available as an alternative destination.
 
 Archive members in playlists use `archive.zip#folder/ROM.ext` (also `.7z#...`). The importer resolves the archive against the RetroArch installation, preserves the member, label, database and core, and passes the full content path as one quoted launch argument. No extraction or emulator-file changes are performed. Different members remain distinct; repeat imports reuse their entries. Missing-game checks use the containing archive rather than treating the virtual member path as a missing Windows file. Member contents are left for RetroArch to validate; Pad Launcher does not enumerate archives or detect individual members deleted inside an existing archive. Other emulators' archive syntax remains unsupported unless separately implemented.
 
@@ -145,15 +153,13 @@ Sources: [Xenia storage/content resolution](https://github.com/xenia-project/xen
 8. Keep imports explicit initially. Any future ongoing synchronization needs clear user controls, retained exclusions and defined behaviour for missing games. Background scans must not delay opening the overlay.
 9. Test fixtures for normal/portable/custom roots, recursion/exclusions, malformed or unsupported configuration, inaccessible paths, missing files, duplicates and installed-game versus update/DLC classification. Keep the manual add/scan fallback.
 
-Suggested implementation order: configured folders (DuckStation, PCSX2, Dolphin, Eden); installed inventories (RPCS3, Vita3K); RetroArch playlists; PPSSPP/melonDS hints; mGBA database; Xenia content inspection. This order is a project recommendation, not an upstream requirement.
+The supported adapter categories are configured folders, installed-title inventories, playlists, recent-file hints and read-only databases. New adapters should follow the validation rules above rather than assuming all emulators expose the same kind of library.
 
-## Artwork follow-up
+## Artwork and remaining import limits
 
-Imported titles already use Pad Launcher's SteamGridDB lookup by game name. User artwork overrides remain tied to the same game ID when a list is updated. The import readers do not fetch artwork themselves.
+Import readers preserve artwork metadata but do not fetch images themselves. The [artwork source system](libretro-artwork.md) applies each list's preference or emulator defaults, using SGDB, Libretro or a permitted fallback. Manually chosen images retain priority, and repeated imports keep the same game identity.
 
-A useful next source is Libretro box art: [thumbnail layout and public server](https://docs.libretro.com/guides/roms-playlists-thumbnails/#thumbnails). It does not require an API key. Prefer reusing installed RetroArch thumbnails when present; a network fallback can use the official thumbnail server. Match by system and playlist/database label, keeping region and edition distinctions. Do not guess from a broad title search across systems. Preserve the chosen cover first, then portrait artwork when available; use console box art as a fallback, keeping its aspect ratio.
-
-Current import limitations: RetroArch supports plain JSON and legacy six-line playlists, with executable-relative paths and explicit/default core assignment. Compressed playlists and archive-member entries are reported for manual handling. Installed Wii NAND, installed Switch content and melonDS DSiWare are separate future adapters. Xenia content import deliberately filters to game containers; it cannot discover arbitrary external ISO folders from content-root settings alone.
+RetroArch supports plain JSON and legacy six-line playlists, executable-relative paths, explicit/default or manually selected cores, and archive-member paths such as `archive.zip#ROM.ext`. Compressed playlists still require manual handling. Archive members are not extracted or enumerated by Pad Launcher; RetroArch validates the member when launching. Installed Wii NAND, installed Switch content and melonDS DSiWare remain separate future adapters. Xenia content import filters to game containers and cannot discover arbitrary external ISO folders from content-root settings alone.
 
 ### Azahar (Nintendo 3DS)
 

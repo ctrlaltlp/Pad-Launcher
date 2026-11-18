@@ -54,6 +54,10 @@ Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original 
 
 Left and right stick speeds are adjustable in Controls (both default to 5×). D-pad and left stick up/down switch lists in Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
 
+## Overlay layouts
+
+Choose **Angled** for a slanted artwork carousel, **Rectangular** for a straight carousel, or **Grid** for multiple rows and columns. **Fixed (blurred edges)** keeps consistent panel sizing and fills unused edges with artwork colours; **Fit artwork** follows each cover's proportions to show the full image. Layout and sizing can be set globally or per list.
+
 ## Artwork
 
 Pad Launcher uses existing launcher artwork and local images, plus **SteamGridDB (SGDB)** and **Libretro** downloads. SGDB requires your API key; Libretro does not. Downloaded images are cached locally, and manually chosen images take priority.
@@ -66,7 +70,7 @@ Change emulator defaults or override individual lists under **Settings → Artwo
 
 ## Lists
 
-Choose which lists appear and arrange their order under **Settings → Lists → Overlay lists**. Each list can have its own layout, panel sizes and outlines under **Per-list layout**, plus its own artwork preference under **Artwork → Per-list artwork**. Create lists from individual games or combine existing lists; combined lists update with their artwork sources. You can show or hide any list you want on the overlay including the preconfigured ones.
+Choose which lists appear and arrange their order under **Settings → Lists → Overlay lists**. Each list can have its own layout, panel sizes and outlines under **Per-list layout**, plus its own artwork preference under **Artwork → Per-list artwork**. Create lists from individual games or combine existing lists; combined lists update with their source lists. You can show or hide any list you want on the overlay including the preconfigured ones.
 
 - **Recently added:** Newly registered games from all sources, newest first. Tracking starts when this feature is first used; existing games have no historical added date. Refreshing or reimporting a game does not move it to the top.
 - **Favourites:** Your hand-picked games. Press R3 / right stick click or F by default to add or remove the selected game.

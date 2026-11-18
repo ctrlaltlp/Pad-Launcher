@@ -1,70 +1,70 @@
-﻿# Libretro artwork fallback
+# Artwork sources and preferences
 
-Libretro requires no account or API key. The wizard offers per-emulator artwork preferences; individual lists can override them in Artwork settings. There is no global Libretro checkbox; the effective source policy controls provider availability.
+Pad Launcher combines existing launcher artwork and local images with downloads from **SteamGridDB (SGDB)** and **Libretro**. SGDB requires your API key; Libretro requires no account or key. Manually chosen images take priority. Provider preferences control automatic downloads and cached-cover selection; they do not remove original launcher or local files.
 
-Existing launcher/local/chosen artwork and cached covers are preserved. For a missing emulator cover, Pad Launcher follows the effective source policy, including its permitted fallback. Libretro still works when there is no SteamGridDB key or that service is unavailable. Disabling downloads leaves already cached images available.
+## Defaults and setup
 
-The service reads public `Named_Boxarts` directory catalogs over HTTPS from `thumbnails.libretro.com`, matches within the relevant console, and downloads only the selected PNG. Catalogs are cached for seven days under `PadLauncher.Data/artwork/libretro/catalogs`. Covers and six-hour missing-match markers are cached under `artwork/libretro`. The in-memory filename indexes last only for an artwork batch, rather than retaining all console catalogs for the app's lifetime.
+PC launcher games use available launcher artwork, with SGDB for missing covers. Custom games use chosen images or available Steam shortcut artwork, with SGDB for missing covers.
 
-Matching uses exact names and normalized aliases, region/language/revision suffixes, disc numbers, and database article ordering. It does not use a broad fuzzy match that could substitute a sequel. Current game names take precedence over older imported names. Original ROM names help retain region-specific matches.
+Emulator defaults are:
 
-Most configured emulators identify one console directly. For Dolphin and mGBA, extensions and console-specific folders are used where possible; if a title matches multiple distinct consoles and the platform cannot be resolved, the fallback skips it. RetroArch imports preserve the playlist item's `db_name` (or a recognized system playlist name) and original label. Existing/manual RetroArch entries can also use the core's `.info` database field or an unambiguous ROM extension. Mixed playlists such as Favourites are not treated as consoles. The currently published Libretro catalog does not include Nintendo Switch, so Eden still relies on its other artwork sources.
+| Emulators | Preferred provider | Fallback |
+| --- | --- | --- |
+| DuckStation, mGBA, melonDS | Libretro | SteamGridDB |
+| Other emulators, including RetroArch and xemu | SteamGridDB | Libretro |
 
-Libretro panels keep the reference panel height in all three layouts. Fit artwork follows the cover proportions; Fixed retains the original panel heights and widens Libretro panels so their top/bottom colour-edge fill matches the modern portrait reference. The Overlay artwork-gap slider sets the minimum visible gap for modern and retro artwork (0–64, default 16). Angled accounts for different panel heights and the slant; Grid packs each row by its actual panel widths. Grid retains a common height, reduced uniformly only when a row would exceed screen width. With Grid outlines disabled, the selected panel enlarges by up to 12% within the viewport without changing row sizes or navigation.
+Existing saved preferences are preserved. **Setup wizard → Choose artwork (3/5)** lets users choose sources per emulator. Configured emulators appear first; **Other emulators** is collapsed initially. Entering or omitting the SGDB key does not reset source choices. If a choice includes SGDB and no key is supplied, continuing offers a missing-key warning. There is no global SGDB or Libretro checkbox in the wizard and no separate RetroArch detection prompt.
 
-`Choose Libretro image…` is also available under Artwork → Game artwork. Choose a console, search its cover titles, preview an image, and select `Use image`. This manual picker works even when automatic Libretro downloads are disabled. A selected image takes priority over automatic artwork; the existing clear/reset artwork action removes the choice.
+Change emulator defaults later under **Settings → Artwork**. There is no global Libretro enable checkbox: the selected source policy determines whether Libretro is used.
 
-## Verified references (2026-11-17)
+## Per-list preferences
 
-- [Libretro thumbnail documentation](https://docs.libretro.com/guides/roms-playlists-thumbnails/): folder layout, database/playlist names and character substitutions.
-- [Thumbnail repository](https://github.com/libretro-thumbnails/libretro-thumbnails): box-art categories and naming conventions.
-- [Public thumbnail server](https://thumbnails.libretro.com/): actual console folder names and direct HTTPS image access.
-- [PlayStation box-art catalog](https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/): region/disc naming and live cover-download verification.
+**Artwork → Per-list artwork** offers:
 
-Checks cover disabled defaults, platform isolation, RetroArch metadata, title aliases, multiple discs, sequel rejection, malformed catalog links, image proportions, cache reloads, SteamGridDB precedence, operation without keys, provider failures and cancellation. A real PlayStation cover was downloaded and validated from the public server without authentication.
+- **Use emulator defaults:** Inherit applicable RetroArch list settings or each game's emulator preference. Importing an emulator game into a custom or mixed list does not discard its emulator default. PC/custom games retain their normal artwork chain.
+- **Prefer Libretro with SteamGridDB as fallback.**
+- **Prefer SteamGridDB with Libretro fallback.**
+- **Only SteamGridDB.**
+- **Only Libretro.**
 
-## Per-list source
+An explicit list preference wins over inherited preferences; a manual image wins over automatic selection. “Only” choices do not download or display the other provider as fallback. SGDB downloads require an enabled, saved API key.
 
-Under Artwork → Per-list artwork, select a list and choose Automatic, SteamGridDB, or Libretro, then Save changes. This choice is independent of whether the list inherits its layout. Preferred covers are cached separately without changing the shared game, so one game can use different artwork in different lists. Manually chosen images take priority, and an unavailable match retains existing artwork. SteamGridDB downloads require its API key to be enabled; an explicit Libretro list choice works independently of the global fallback checkbox.
+**Lists → RetroArch lists settings** provides shared artwork and layout defaults for automatic RetroArch lists, imported playlists and RetroArch-only custom/combined lists. An explicit per-list artwork choice takes precedence. In mixed lists without an explicit artwork choice, each game resolves its emulator preference; RetroArch games can inherit the shared RetroArch artwork preference. Mixed lists do not inherit the RetroArch group layout.
 
-## Panel sizes and manual artwork
+Artwork preferences are separate from **Lists → Per-list layout**. The old **Libretro artwork lists** checklist and **Prefer Libretro artwork for RetroArch games** checkbox have been replaced by these source settings. Saved choices are retained.
 
-Overlay has Modern panel size and Retro panel size controls. Their lock is enabled by default: changing either changes both while preserving the matched reference heights. Unlocking allows independent display scales. Per-list layout settings offer the same two sizes and lock when global layout inheritance is disabled.
+## Switching covers and choosing images
 
-Choosing an image from SteamGridDB, Libretro, or a local file immediately rebuilds the active list's artwork display copies. Reset artwork clears the manual choice and returns to the list's preferred automatic source; a Libretro-preferred list can therefore legitimately show Libretro again after resetting.
+SGDB and Libretro keep separate downloaded caches. Saving a different preference displays the appropriate cached cover when available, or requests artwork using the new policy. It does not delete the other provider's cache. One registered game can show different preferred artwork in different lists.
 
-## Selecting list artwork sources
+Under **Artwork → Game artwork**, choose a SteamGridDB image, Libretro image or local file to create a manual override. The Libretro picker lets users select a console, search titles and preview covers. Both provider pickers offer a button to use the other provider instead. Choosing a provider in the picker does not change the list preference; selecting an image creates the manual override.
 
-Choose each list's source in Artwork → Per-list artwork, or use RetroArch lists settings for shared defaults. The redundant Artwork → Libretro artwork lists checklist has been removed. Its saved choices remain in the same per-list source settings; no migration or reset is needed. Use emulator defaults shows a Currently using note identifying shared RetroArch settings or the emulator defaults it inherits. Mixed lists show the applicable emulator sources separately.
+The **Games without artwork** picker follows the game's effective artwork preference. **Reset artwork** removes the manual choice and returns to automatic selection; a Libretro-preferred game can therefore show Libretro again after reset.
 
-The dropdown offers **Use emulator defaults**, two provider preferences with the other provider as fallback, and **Only SteamGridDB / Only Libretro**. Preferences actively try the permitted fallback; Only choices exclude it. Manual images always take priority.
+## Clear and redownload
 
-Clicking a game in **Games without artwork** opens the picker for its effective preference. The active overlay list supplies context when it contains that game; otherwise its list preferences and the RetroArch default are consulted. Automatic with no Libretro preference starts in SteamGridDB. Both pickers offer **Choose from … instead…**, closing the old picker and retaining the same game and selection callback. Switching providers does not change list preferences or save an image; choosing an image still creates an explicit manual override.
-# RetroArch default and list artwork refresh
+**Artwork → Per-list artwork → Clear and redownload list artwork…** clears downloaded provider images and retry records for the selected games, then downloads using the saved policy. The operation requires confirmation. **Keep manually chosen images** is checked by default; unchecking it removes manual assignments without deleting original chosen files.
 
-Selecting Libretro as the shared RetroArch artwork source also enables the RetroArch-wide preference, including games in mixed Automatic lists; an older false preference flag cannot negate that source choice. Explicit individual list choices and manual images still win.
+Native launcher artwork and game files are preserved. Games shared with other lists share provider caches, so refreshing them can affect those lists too. Each list has independent progress: another list can start refreshing while the first is running. Closing Settings does not stop these jobs; exiting the app cancels them.
 
-Forced list artwork refresh clears the relevant Libretro catalogue caches as well as images/retry records, and explicit source refresh downloads from that provider without first fetching SteamGridDB fallback art. Completion reports refreshed, manually kept and missing images rather than claiming that every game obtained a match. Automatic-source refresh retains the normal fallback behaviour. Libretro itself includes portrait, square and landscape box art; a portrait-shaped cover does not necessarily indicate SteamGridDB artwork.
+## Libretro matching and layout
 
-Missing artwork uses console-specific template proportions when the effective source is Libretro, including an Automatic per-list choice inheriting Libretro from RetroArch lists settings. The offline profiles were measured from 573 public Libretro covers across 120 platform libraries on 2026-11-17. NES uses portrait packaging, GBA square, and western SNES/N64 landscape; known Japanese packaging differences use preserved region tags from the imported title or ROM path. Unknown consoles, unavailable catalogues and ambiguous mixed-system cores use a neutral square fallback. Explicit per-list SteamGridDB choices keep modern placeholders. Loaded images always supply their own dimensions; their layout and artwork are unchanged.
+Libretro matches within the relevant console using names, normalized aliases, region/language/revision tags, disc numbers and article ordering. It avoids broad fuzzy matches that could select a sequel. RetroArch imports preserve the playlist database and original labels; cleaned display names do not erase that matching metadata. Unresolved or ambiguous platforms may have no match. Nintendo Switch has no catalogue in the catalogues checked during implementation.
 
-Measurements and original sample filenames are recorded in [libretro-placeholder-samples.json](libretro-placeholder-samples.json). Samples cover representative images, not every edition: unusual boxes and untagged regional variants may differ. Six of the 126 inspected catalogues had no usable covers; eleven had fewer than three usable samples. The measurement tools are `tools/sample-libretro-covers.py` and `tools/build-libretro-placeholder-profiles.py`; downloaded images stay under ignored `bin/libretro-cover-samples/` and are not bundled with the app. Placeholder sizing uses small built-in tables and a weak per-game cache, with no extra downloads or recurring catalogue scans during rendering.
+Covers can be portrait, square or landscape. Loaded images supply their own proportions. Fit artwork follows those proportions; Fixed uses the configured panel height with colour-edge fill. Modern and Retro panel sizes can be adjusted together or independently. **Overlay → Artwork gap** controls spacing; per-list layout settings can override layout, panel sizes, outlines, angled sizing and grid dimensions.
 
-**Lists → RetroArch lists settings** provides shared artwork source, layout, outlines, modern/retro panel sizes and size locking, angled sizing, and grid columns/rows. **Artwork source** controls the shared list preference. The wizard artwork page selects per-emulator source defaults; detection does not change artwork preferences. Automatic RetroArch lists, imported playlists and RetroArch-only custom/combined lists inherit these defaults; mixed lists do not inherit the group layout. Individual per-list layout/artwork overrides take priority. Lists created later inherit the same defaults without copying settings into each list. Select **Use global Overlay settings** to make the shared layout follow global settings.
+Missing Libretro artwork uses console-specific placeholder proportions, with regional differences where known. Profiles were measured from 573 public covers across 120 platform libraries on 2026-11-17. Unknown platforms use square placeholders. These are estimates, not a guarantee for every edition. The original sample dimensions and filenames are recorded in [libretro-placeholder-samples.json](libretro-placeholder-samples.json).
 
-List artwork refreshes have independent running states and progress messages. Selecting another list allows starting its refresh while existing jobs continue; only an already-running list's own refresh button is disabled. Closing Settings does not stop those jobs, and exiting the app cancels them.
+## Cache and implementation references
 
+Libretro reads public `Named_Boxarts` catalogues over HTTPS. Catalogues are cached for seven days under `PadLauncher.Data/artwork/libretro/catalogs`; images and six-hour missing-match markers live under `artwork/libretro`. Filename indexes are scoped to an artwork batch. Downloaded disk caches are separate from the [bounded decoded-image RAM cache](artwork-performance.md).
 
-RetroArch game selectors show **Game title · RetroArch · Console**, using imported database metadata and existing console detection. Unknown consoles are labelled explicitly rather than guessed.
+The measurement tools are `tools/sample-libretro-covers.py` and `tools/build-libretro-placeholder-profiles.py`. Sample downloads remain under ignored `bin/libretro-cover-samples/`; they are not bundled with the app.
 
-Artwork → Per-list artwork offers **Clear and redownload list artwork…**. It clears the selected games' downloaded provider images and retry records, then downloads again using the saved source preference. **Keep manually chosen images** is checked by default. Unchecking removes manual assignments without deleting the original chosen files. Native launcher artwork, game files and unrelated games' caches are preserved. Games shared with other lists share refreshed caches too.
+Upstream references checked during implementation on 2026-11-17:
 
+- [Libretro thumbnail documentation](https://docs.libretro.com/guides/roms-playlists-thumbnails/).
+- [Thumbnail repositories](https://github.com/libretro-thumbnails/libretro-thumbnails).
+- [Public thumbnail server](https://thumbnails.libretro.com/).
 
-
-## Artwork source policies (2026-11-18)
-
-Wizard artwork setup now offers one source choice per emulator. DuckStation, mGBA and melonDS prefer Libretro by default; other emulators, including xemu, prefer SteamGridDB. The wizard has no global SteamGridDB checkbox. Editing or omitting the API key preserves source choices. A missing-key warning appears only if a selected emulator policy includes SteamGridDB. The old RetroArch detection prompt and wizard-wide Libretro checkbox are removed. Emulator defaults can be edited later under Artwork.
-
-Per-list artwork preferences live under Artwork → Per-list artwork, separate from Lists → Per-list layout. The four explicit choices are Prefer Libretro with SteamGridDB fallback, Prefer SteamGridDB with Libretro fallback, Only SteamGridDB and Only Libretro. Use emulator defaults inherits shared RetroArch list defaults or emulator defaults where applicable. Manual images remain authoritative. Both providers keep independent cache files: saving another preference switches to a cached cover immediately when available, otherwise downloads missing artwork. Only choices do not request or display the other provider as fallback.
-
-Clear and redownload remains an explicit, confirmed operation, separate from changing preference. Switching sources does not delete either cached provider’s covers. SteamGridDB downloads still need its enabled API key.
+Automated checks cover provider order and restrictions, list inheritance, manual overrides, cached switches, matching, cancellation, placeholder proportions, panel geometry and startup artwork restoration. These checks do not establish that every game has a matching cover.
