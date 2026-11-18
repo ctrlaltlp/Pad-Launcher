@@ -45,6 +45,15 @@ class EmulatorImportTests {
         string root=Path.Combine(Path.GetTempPath(),"EmulatorImportTests-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try {
             var token=CancellationToken.None;
+            Check(EmulatorTitleTags.Clean("Game (USA, Europe) (En,Fr,De) (Rev 1) [n]")=="Game","Title cleanup removes region, language, revision and dump tags found in RetroArch paths");
+            Check(EmulatorTitleTags.Clean("Game (Japan) [T-En by Aeon Genesis v1.00] (SGB Enhanced)")=="Game","Title cleanup removes translation and compatibility metadata");
+            Check(EmulatorTitleTags.Clean("Game (PAL) (NTSC-U) (Disc 2) [Legend of the Crystals]")=="Game (Disc 2) [Legend of the Crystals]","Title cleanup preserves disc numbers and unknown subtitle text");
+            Check(EmulatorTitleTags.Clean("Game USA") == "Game USA" && EmulatorTitleTags.Clean("(USA)")=="(USA)" && EmulatorTitleTags.Clean("Game - PAL")=="Game","Title cleanup protects untagged title words and never empties a title");
+            Check(EmulatorTitleTags.Normalise("Legend of Zelda, The")=="The Legend of Zelda","Normalisation moves a trailing article to the front");
+            Check(EmulatorTitleTags.Normalise("Legend of Zelda, The - A Link to the Past (USA)")=="The Legend of Zelda - A Link to the Past (USA)","Normalisation keeps subtitles and region tags");
+            Check(EmulatorTitleTags.Normalise("Game, The (Disc 2) [!]")=="The Game (Disc 2) [!]","Normalisation keeps disc and dump metadata");
+            Check(EmulatorTitleTags.Normalise("Game, The Movie")=="Game, The Movie" && EmulatorTitleTags.Normalise("The Legend of Zelda")=="The Legend of Zelda" && EmulatorTitleTags.Normalise("Game, Theatre")=="Game, Theatre","Normalisation does not rewrite other title words");
+            Check(EmulatorTitleTags.Normalise(EmulatorTitleTags.Normalise("Game, The"))=="The Game","Repeated normalisation is idempotent");
             string azahar=Write(root,"Azahar/azahar.exe"),azRoot=Path.GetDirectoryName(azahar);
             string azRom=Write(azRoot,"roms/Cartridge (USA).cci"),nested=Write(azRoot,"roms/nested/Other.zcci");
             Write(azRoot,"roms/Installer.cia");
@@ -81,13 +90,14 @@ class EmulatorImportTests {
             string retro=Write(root,"Retro Arch\\retroarch.exe"),retroRoot=Path.GetDirectoryName(retro),core=Write(retroRoot,"cores\\snes9x_libretro.dll"),otherCore=Write(retroRoot,"cores\\mgba_libretro.dll");
             string rom=Write(retroRoot,"roms\\Game #1.sfc"),extra=Write(retroRoot,"roms\\New game.sfc");
             string retroCfg=Write(retroRoot,"retroarch.cfg","playlist_directory = \"playlists\"");
-            string playlist=Write(retroRoot,"playlists\\SNES.lpl",Storage.Json().Serialize(new {default_core_path=core,items=new[]{new {path=@"roms\Game #1.sfc",label="Game One",core_path="DETECT"},new {path=@"roms\missing.sfc",label="Missing",core_path="DETECT"}}}));
+            string playlist=Write(retroRoot,"playlists\\SNES.lpl",Storage.Json().Serialize(new {default_core_path=core,items=new[]{new {path=@"roms\Game #1.sfc",label="Game One",core_path="DETECT",db_name="Nintendo - Super Nintendo Entertainment System.lpl"},new {path=@"roms\missing.sfc",label="Missing",core_path="DETECT",db_name="Nintendo - Super Nintendo Entertainment System.lpl"}}}));
             string legacy=Write(retroRoot,"playlists\\Favourites.lpl",String.Join("\n",new[]{rom,"Alternate label",otherCore,"mGBA","","Favourites.lpl"}));
             var sources=EmulatorImport.Sources("retroarch",retro,retroCfg);
             Check(sources.Count==2 && EmulatorImport.DetectLocation("retroarch",retro)==retroCfg,"RetroArch finds configured playlists beside selected executable");
             var snes=sources.Single(s => s.Path==playlist); var favorites=sources.Single(s => s.Path==legacy);
             var batch=EmulatorImport.Read("retroarch",retro,new[]{snes},null,token);
             Check(batch.Games.Count==1 && batch.Games[0].Path==rom && batch.Games[0].Name=="Game One" && batch.Games[0].CorePath==core && batch.Warnings.Count==1,"JSON playlist preserves labels/core defaults and skips missing files");
+            Check(batch.Games[0].ArtworkSystem=="Nintendo - Super Nintendo Entertainment System" && batch.Games[0].ArtworkTitle=="Game One","RetroArch playlist database and original label are retained for box-art matching");
             var oldFormat=EmulatorImport.Read("retroarch",retro,new[]{favorites},null,token);
             Check(oldFormat.Games.Single().CorePath==otherCore,"Legacy six-line playlist preserves assigned core");
             var settings=new Settings {EnabledCollectionIds=new List<string>{"all"}}; var library=new Library {Games=new List<Game>{new Game {Id="steam-one",Name="Steam game"}}};
@@ -95,9 +105,17 @@ class EmulatorImportTests {
             string other=EmulatorImport.Import(settings,library,"retroarch",retro,retroCfg,new[]{favorites},oldFormat.Games,null,null,"Retro favourites");
             EmulatorLibrary.Apply(library,settings);
             var game=EmulatorLibrary.Config(settings,"retroarch").Games.Single(); string stableId=game.Id; game.Name="My renamed game";
+            var renameSettings=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            var renameGame=EmulatorLibrary.Config(renameSettings,"retroarch").Games.Single(); renameGame.Name="My game (USA)";
+            var renameDraft=new EmulatorImportGame {Path=rom,Name=EmulatorTitleTags.Clean(renameGame.Name),CorePath=core};
+            EmulatorImport.AddEntries(renameSettings,"retroarch",retro,new[]{renameDraft});
+            Check(renameGame.Name=="My game (USA)","Ordinary reimport preserves an existing title until cleanup is explicitly applied");
+            renameDraft.RenameExisting=true; EmulatorImport.AddEntries(renameSettings,"retroarch",retro,new[]{renameDraft});
+            Check(renameGame.Name=="My game" && EmulatorLibrary.Config(renameSettings,"retroarch").Games.Count==1 && game.Name=="My renamed game","Explicit title cleanup updates the saved entry without duplicates or touching the original settings draft");
             settings.ArtworkOverrides=new Dictionary<string,string>{{stableId,"my-art.png"}};
             settings.CustomLists.First(l => l.Id==target).Games.Add("steam-one"); settings.EnabledCollectionIds.Remove(target);
             Check(settings.CustomLists.Single(l => l.Id==other).Games.Single()==stableId && game.CorePath==core,"One ROM shared between playlists keeps existing entry and core");
+            Check(game.ArtworkSystem=="Nintendo - Super Nintendo Entertainment System" && game.ArtworkTitle=="Game One","A mixed favourites playlist does not overwrite known artwork platform metadata");
             Write(retroRoot,"playlists\\SNES.lpl",Storage.Json().Serialize(new {default_core_path=core,items=new[]{new {path=extra,label="New game",core_path="DETECT"}}}));
             var update=EmulatorImport.Read("retroarch",retro,new[]{snes},null,token);
             EmulatorImport.Import(settings,library,"retroarch",retro,retroCfg,new[]{snes},update.Games,new[]{snes.Id+"|excluded"},target,"ignored");
@@ -108,8 +126,40 @@ class EmulatorImportTests {
             string combined=CombinedCollections.Save(restored,library,null,"Mixed games",new[]{target,other});
             Check(CombinedCollections.Options(library,restored).Single(c => c.Id==combined).Games.Count==3 && restored.EmulatorImports.Single(d => d.ListId==target).ExcludedKeys.Count==1,"Imported lists combine with deduplication and saved exclusions persist");
             CustomLists.Delete(restored,other); Check(restored.EmulatorImports.Count==1,"Deleting destination cleans up saved import definition");
+            string archive=Write(retroRoot,"roms\\Handheld games.zip"),sevenZip=Write(retroRoot,"roms\\More games.7z");
+            var playlistSettings=new Settings {EnabledCollectionIds=new List<string>()}; var playlistLibrary=new Library();
+            var playlistGames=batch.Games.Concat(oldFormat.Games).ToList();
+            EmulatorImport.ImportPlaylists(playlistSettings,playlistLibrary,retro,retroCfg,new[]{snes,favorites},playlistGames,null);
+            Check(playlistSettings.CustomLists.Count==2 && playlistSettings.CustomLists.Any(list => list.Name=="SNES") && playlistSettings.CustomLists.Any(list => list.Name.StartsWith("Favourites")) && EmulatorLibrary.Config(playlistSettings,"retroarch").Games.Count==1,"Per-playlist import creates named lists and shares games appearing in multiple playlists");
+            var namedPlaylist=playlistSettings.CustomLists.First(list => list.Name=="SNES"); string namedId=namedPlaylist.Id;
+            namedPlaylist.Name="My SNES"; playlistSettings.EnabledCollectionIds.Remove(namedId);
+            EmulatorImport.ImportPlaylists(playlistSettings,playlistLibrary,retro,retroCfg,new[]{snes,favorites},playlistGames,null);
+            Check(playlistSettings.CustomLists.Count==2 && namedPlaylist.Id==namedId && namedPlaylist.Name=="My SNES" && !playlistSettings.EnabledCollectionIds.Contains(namedId) && playlistSettings.EmulatorImports.Count==2,"Repeated playlist import reuses lists and preserves renamed lists and overlay visibility");
+            string archivePlaylist=Write(retroRoot,"playlists\\Archived.lpl",Storage.Json().Serialize(new {default_core_path=otherCore,items=new[]{
+                new {path=@"roms\Handheld games.zip#folder\Yoshi.gb",label="Yoshi",core_path="DETECT",db_name="Nintendo - Game Boy.lpl"},
+                new {path=@"roms\Handheld games.zip#Wario.gb",label="Wario",core_path="DETECT",db_name="Nintendo - Game Boy.lpl"},
+                new {path=@"roms\More games.7z#Mario.gb",label="Mario",core_path="DETECT",db_name="Nintendo - Game Boy.lpl"},
+                new {path=@"roms\Absent.zip#Missing.gb",label="Absent archive",core_path="DETECT",db_name="Nintendo - Game Boy.lpl"}}}));
+            var archiveSource=EmulatorImport.Sources("retroarch",retro,retroCfg).Single(source => source.Path==archivePlaylist);
+            var archived=EmulatorImport.Read("retroarch",retro,new[]{archiveSource},null,token);
+            Check(archived.Games.Count==3 && archived.Warnings.Count==1 && archived.Games[0].Path==archive+"#folder/Yoshi.gb" && archived.Games[0].CorePath==otherCore && archived.Games[0].ArtworkTitle=="Yoshi","Archive playlist imports ZIP/7z members with relative archive paths, labels, cores and artwork metadata");
+            Check(EmulatorImport.RetroArchSourceCoreStatus(archived,archiveSource,new EmulatorGame[0])=="Core: mgba_libretro.dll","Source selection names the usable core found for a playlist");
+            var archiveSettings=new Settings(); var archiveLibrary=new Library();
+            string archiveList=EmulatorImport.Import(archiveSettings,archiveLibrary,"retroarch",retro,retroCfg,new[]{archiveSource},archived.Games,null,null,"Archived games");
+            EmulatorImport.Import(archiveSettings,archiveLibrary,"retroarch",retro,retroCfg,new[]{archiveSource},archived.Games,null,archiveList,"Archived games");
+            Check(EmulatorLibrary.Config(archiveSettings,"retroarch").Games.Count==3,"Repeat archive import does not duplicate members and separate ROMs inside one archive stay distinct");
+            EmulatorLibrary.Apply(archiveLibrary,archiveSettings);
+            var archivedGame=archiveLibrary.Games.Single(entry => entry.Name=="Yoshi");
+            Check(EmulatorLibrary.StartInfo(archivedGame,archiveSettings).Arguments.Contains("\""+archive+"#folder/Yoshi.gb\"") && !EmulatorLibrary.Missing(archivedGame,archiveSettings),"Archive member launches as one quoted RetroArch content argument and is not marked missing");
+            Check(!EmulatorLibrary.ConfirmMissingRom(archive+"#folder/Yoshi.gb"),"Refresh keeps archived ROMs while their archive exists");
+            File.Delete(archive);
+            Check(EmulatorLibrary.ConfirmMissingRom(archive+"#folder/Yoshi.gb") && EmulatorLibrary.Missing(archivedGame,archiveSettings),"Removing the archive is detected by missing-game checks");
             var unresolved=EmulatorImport.Read("retroarch",retro,new[]{snes},null,token); File.Delete(core); unresolved=EmulatorImport.Read("retroarch",retro,new[]{snes},null,token);
             Check(unresolved.Games.Single().Problem!=null,"Missing RetroArch cores are flagged before review");
+            var coreNotes=EmulatorImport.RetroArchCoreReviewNotes(unresolved,new[]{snes},new EmulatorGame[0]);
+            Check(coreNotes.Count==1 && coreNotes[0].StartsWith("SNES: Playlist left out") && coreNotes[0].Contains("core"),"Core review names playlists left out because no installed core is available");
+            Check(EmulatorImport.RetroArchSourceCoreStatus(unresolved,snes,new EmulatorGame[0])=="No usable core found — will not be imported","Source selection can show missing core status before reviewing games");
+            Check(EmulatorImport.RetroArchCoreReviewNotes(unresolved,new[]{snes},new[]{new EmulatorGame {Path=unresolved.Games[0].Path,CorePath=otherCore}}).Count==0,"Already added games with a valid core are not falsely reported as left out for missing playlist cores");
 
             string rpcs=Write(root,"RPCS3\\rpcs3.exe"),rpcsRoot=Path.GetDirectoryName(rpcs),hdd=Path.Combine(root,"Custom PS3 HDD");
             string installed=Path.Combine(hdd,"game","NPUB10001"); Write(installed,"USRDIR\\EBOOT.BIN"); Sfo(Path.Combine(installed,"PARAM.SFO"),"Installed PS3 game","HG");
@@ -176,6 +226,17 @@ class EmulatorImportTests {
             Check(EmulatorImport.Read("xenia",xenia,EmulatorImport.Sources("xenia",xenia,xeniaCfg),null,token).Games.Single().Name=="game","Xenia ignores inline comments after empty and quoted paths");
             Check(EmulatorImport.Scalar(commented["Storage/quoted"])=="folder #1; games" && EmulatorImport.Scalar(commented["Storage/escaped"])=="folder\"#1","Comment markers inside quoted paths and escaped quotes are preserved");
             using(var cancel=new CancellationTokenSource()) {cancel.Cancel(); bool stopped=false; try {EmulatorImport.Read("xenia",xenia,EmulatorImport.Sources("xenia",xenia,xeniaCfg),null,cancel.Token);} catch(OperationCanceledException) {stopped=true;} Check(stopped,"Discovery can be cancelled");}
+            string xboxExe=Write(root,"xemu/xemu.exe"),xboxRom=Write(root,"Xbox games/Halo.iso"),xboxCfg=Write(root,"xemu/xemu.toml","[general]\ngames_dir = "+Quote(Path.GetDirectoryName(xboxRom))+" # library\n[sys.files]\ndvd_path = "+Quote(xboxRom)+"\n");
+            Check(EmulatorImport.DetectLocation("xemu",xboxExe)==Path.GetFullPath(xboxCfg),"xemu detects its portable configuration");
+            var xboxSources=EmulatorImport.Sources("xemu",xboxExe,xboxCfg);
+            var xboxBatch=EmulatorImport.Read("xemu",xboxExe,xboxSources,null,CancellationToken.None);
+            Check(xboxSources.Any(source => source.Kind=="folder") && xboxSources.Any(source => source.Kind=="xemu-disc") && xboxBatch.Games.Select(xboxGame => xboxGame.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count()==1,"xemu imports configured games and last disc with the same identity: "+String.Join("; ",xboxSources.Select(source => source.Kind+"="+source.Path))+" games="+xboxBatch.Games.Count+" notes="+String.Join("; ",xboxBatch.Warnings));
+            var xboxSettings=new Settings(); var xboxLibrary=new Library();
+            string xboxList=EmulatorImport.Import(xboxSettings,xboxLibrary,"xemu",xboxExe,xboxCfg,xboxSources,xboxBatch.Games,null,null,"Xbox games");
+            EmulatorImport.Import(xboxSettings,xboxLibrary,"xemu",xboxExe,xboxCfg,xboxSources,xboxBatch.Games,null,xboxList,"Xbox games");
+            Check(EmulatorLibrary.Config(xboxSettings,"xemu").Games.Count==1,"Repeated xemu import does not duplicate the same game across sources");
+            Check(EmulatorLibrary.DefaultArguments("xemu")=="-full-screen -dvd_path {game}","xemu uses documented fullscreen disc arguments");
+            Check(LibretroArtwork.Systems(new Game {Source="emulator",EmulatorId="xemu"},new Settings()).Single()=="Microsoft - Xbox","xemu artwork uses the original Xbox system");
             Console.WriteLine(checks+" emulator library import checks passed");
         } finally {Directory.Delete(root,true);}
     }

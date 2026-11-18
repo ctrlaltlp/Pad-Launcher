@@ -6,11 +6,13 @@ A transparent, controller-friendly Windows game launcher with angled, rectangula
 
 Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, **Xbox app** (installed Xbox / Game Pass titles), and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
 
+Choose **SteamGridDB** or **Libretro** artwork per emulator during setup and per list in Artwork settings, with fallback or single-source choices. Libretro needs no account or API key. [Details](docs/libretro-artwork.md).
+
 Enable **Settings → Launchers → Xbox app → Include Xbox app games** to detect installed Xbox, Game Pass and supported Microsoft Store games for your Windows account. Games launch through Windows; no launcher path is needed. Cloud-only games are not imported.
 
 ## Emulators
 
-Supports **DuckStation, PCSX2, RPCS3, Xenia, Dolphin, Eden, melonDS, Vita3K, RetroArch, PPSSPP, mGBA, Cemu, Azahar and shadPS4**. Configure emulator paths, import libraries (including RetroArch playlists), scan ROM folders or add games manually. Core selection and launch arguments are configurable; imported games can be organised into lists.
+Supports **DuckStation, PCSX2, RPCS3, xemu, Xenia, Dolphin, Eden, melonDS, Vita3K, RetroArch, PPSSPP, mGBA, Cemu, Azahar and shadPS4**. Configure emulator paths, import libraries (including RetroArch playlists), scan ROM folders or add games manually. Core selection and launch arguments are configurable; imported games can be organised into lists.
 
 There are 2 ways to import emulator games to the app:
 - Import library from emulator: Reads the emulator’s configured game folders, playlists, registered games or installed titles, depending on the emulator. Folder-based libraries may involve scanning those folders.
@@ -31,6 +33,10 @@ Launchers are detected automatically. If detection fails, set the installation f
 
 Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**. Options / Start (or F1) briefly shows control hints and the game title.
 
+Use **Controls → Show/Change controls** to remap controller buttons and keyboard shortcuts independently for the overlay, search keyboard and search results. Conflicting assignments are flagged before saving; **Restore defaults** is available. The table below shows the defaults. [Remapping details](docs/control-bindings.md).
+
+Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original Switch Pro Controller through SDL. Switch Pro USB/Bluetooth support is implemented but still awaiting physical-controller testing; Joy-Cons and Switch 2 controllers are not enabled. See [controller support](docs/controller-support.md) for details.
+
 | Action | Controller | Keyboard / mouse |
 | --- | --- | --- |
 | Browse games | D-pad / left stick; right stick for faster browsing | Left / Right |
@@ -39,14 +45,24 @@ Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**.
 | Dismiss overlay | Tap Circle / Xbox B / Nintendo A | Esc |
 | Exit app completely | Hold Circle / Xbox B / Nintendo A for 1 second | Tray → Exit app |
 | Change list | L1 / R1, Xbox LB / RB, Nintendo L / R | Page Up / Page Down |
-| Move to next monitor | Square / Xbox X / Nintendo Y | M |
-| Refresh games, artwork and lists | Tap Triangle / Xbox Y / Nintendo X | F5 |
+| Toggle Grid 5×3 ↔ previous Angled/Rectangular layout | Square / Xbox X / Nintendo Y | — |
+| Move to next monitor | R2 / Xbox RT / Nintendo ZR | M |
+| Search games with the gamepad keyboard | Triangle / Xbox Y / Nintendo X | Ctrl+F |
+| Refresh games, artwork and lists | Select/Create / Xbox Back/View / Nintendo − | F5 |
 | Toggle favourite | R3 / right stick click | F |
 | Jump to a chosen list (optional) | L3 / left stick click | — |
 | Brief control hints and game title | Options / Start / Nintendo + | F1 |
 | Open Settings | — | Tray menu → Settings |
 
-Left and right stick speeds are adjustable in Controls (both default to 5×). D-pad and left stick up/down switch lists in Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 always toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
+Left and right stick speeds are adjustable in Controls (both default to 5×). D-pad and left stick up/down switch lists in Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
+
+During search, D-pad/left stick navigates keys or results. Cross / Xbox A / Nintendo B types or plays; Triangle / Xbox Y / Nintendo X inserts a space while typing; Circle / Xbox B / Nintendo A exits search. Square / Xbox X / Nintendo Y backspaces. Up above the first keyboard row focuses the games; Down below the games returns to the keyboard. Triangle / Xbox Y / Nintendo X returns directly to the keyboard when focused on games. L3 cancels and jumps to its configured list; R3 toggles the selected result's favourite status. R2/RT/ZR also switches layouts in search. Enter finishes typing or plays a result; Escape cancels. The temporary layout toggle lasts only for the session and leaves saved layout settings unchanged.
+
+**Recently added** tracks newly registered games from all sources, newest first. Enable or hide it under **Lists → Overlay lists**. Tracking starts with this version; existing games have no historical added date. Refreshing or reimporting an existing game does not move it to the top.
+
+## Credits
+
+Controller artwork from **PS5 Button Icons and Controls**, **Xbox Series Button Icons and Controls**, and **Switch Button Icons and Controls** by [Zacksly](https://zacksly.itch.io), licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Pad Launcher crops and scales these images and adds interactive control labels and guide lines.
 
 ## Inspiration
 

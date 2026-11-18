@@ -8,12 +8,13 @@ using System.Threading;
 
 namespace PadLauncher {
     public class EmulatorImportSource {
-        public string Id,Name,Kind,Path;
+        public string Id,Name,Kind,Path,CorePath;
         public bool Recursive;
         public List<string> Exclusions=new List<string>();
     }
     public class EmulatorImportGame {
-        public string Key,Name,Path,CorePath,SourceId,Problem;
+        public bool RenameExisting;
+        public string Key,Name,Path,CorePath,SourceId,Problem,ArtworkSystem,ArtworkTitle;
     }
     public class EmulatorImportBatch {
         public List<EmulatorImportGame> Games=new List<EmulatorImportGame>();
@@ -28,11 +29,48 @@ namespace PadLauncher {
         public List<string> Sources {get;set;}
         public List<string> ExcludedKeys {get;set;}
         public List<string> ImportedGames {get;set;}
+        public Dictionary<string,string> SourceCores {get;set;}
     }
     public static class EmulatorImport {
+        public static bool CoreAvailable(string path) {return !String.IsNullOrWhiteSpace(path) && File.Exists(path) && System.IO.Path.GetExtension(path).Equals(".dll",StringComparison.OrdinalIgnoreCase);}
+        public static bool CanImport(string emulator,EmulatorImportGame incoming,EmulatorGame existing,string fallbackCore) {
+            return incoming.Problem==null || (existing!=null && (emulator!="retroarch" || CoreAvailable(existing.CorePath ?? fallbackCore)));
+        }
+        public static void RestoreSourceCores(Settings settings,string emulator,string location,IEnumerable<EmulatorImportSource> sources) {
+            if(emulator!="retroarch") return;
+            foreach(var source in sources) {
+                var previous=(settings.EmulatorImports ?? new List<EmulatorImportDefinition>()).LastOrDefault(import => import.EmulatorId==emulator && String.Equals(import.Location,location,StringComparison.OrdinalIgnoreCase) && import.SourceCores!=null && import.SourceCores.ContainsKey(source.Id));
+                if(previous!=null) source.CorePath=previous.SourceCores[source.Id];
+            }
+        }
+        public static string RetroArchSourceCoreStatus(EmulatorImportBatch batch,EmulatorImportSource source,IEnumerable<EmulatorGame> existing) {
+            var current=(existing ?? Enumerable.Empty<EmulatorGame>()).ToList();
+            var paths=new HashSet<string>(current.Where(game => CoreAvailable(game.CorePath)).Select(game => game.Path),StringComparer.OrdinalIgnoreCase);
+            var games=batch.Games.Where(game => game.SourceId==source.Id).GroupBy(game => game.Key).Select(group => group.First()).ToList();
+            int blocked=games.Count(game => game.Problem!=null && !paths.Contains(game.Path));
+            var cores=games.Select(game => {var saved=current.FirstOrDefault(entry => String.Equals(entry.Path,game.Path,StringComparison.OrdinalIgnoreCase)); return saved!=null && CoreAvailable(saved.CorePath) ? saved.CorePath : game.CorePath;})
+                .Where(path => !String.IsNullOrWhiteSpace(path) && File.Exists(path)).Select(System.IO.Path.GetFileName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name,StringComparer.CurrentCultureIgnoreCase).ToList();
+            string found=cores.Count==0 ? null : (cores.Count==1 ? "Core: " : "Cores: ")+String.Join(", ",cores);
+            if(blocked==0) return found;
+            string warning=blocked==games.Count ? "No usable core found — will not be imported" : blocked+" games have no usable core — will not be imported";
+            if(games.Where(game => game.Problem!=null && !paths.Contains(game.Path)).All(game => game.Problem.StartsWith("Multiple compatible cores",StringComparison.Ordinal))) warning="Multiple compatible cores found — choose a core before import";
+            return found==null ? warning : found+" · "+warning;
+        }
+        public static List<string> RetroArchCoreReviewNotes(EmulatorImportBatch batch,IEnumerable<EmulatorImportSource> sources,IEnumerable<EmulatorGame> existing) {
+            var paths=new HashSet<string>((existing ?? Enumerable.Empty<EmulatorGame>()).Where(game => CoreAvailable(game.CorePath)).Select(game => game.Path),StringComparer.OrdinalIgnoreCase);
+            var notes=new List<string>();
+            foreach(var source in sources) {
+                var games=batch.Games.Where(game => game.SourceId==source.Id).GroupBy(game => game.Key).Select(group => group.First()).ToList();
+                int blocked=games.Count(game => game.Problem!=null && !paths.Contains(game.Path));
+                if(blocked==0) continue;
+                notes.Add(source.Name+": "+(blocked==games.Count ? "Playlist left out" : blocked+" of "+games.Count+" games left out")+" — no usable RetroArch core. Assign an installed core to the playlist in RetroArch, or set a default core in Pad Launcher, then review sources again.");
+            }
+            return notes;
+        }
         public static string[] ConfigNames(string id) {
             switch(id) {
                 case "duckstation": return new[]{"settings.ini"};
+                case "xemu": return new[]{"xemu.toml"};
                 case "pcsx2": return new[]{"inis/PCSX2.ini","PCSX2.ini"};
                 case "dolphin": return new[]{"User/Config/Dolphin.ini","Config/Dolphin.ini","Dolphin.ini"};
                 case "azahar":
@@ -44,6 +82,7 @@ namespace PadLauncher {
                 case "melonds": return new[]{"melonDS.toml","melonDS.ini"};
                 case "mgba": return new[]{"library.sqlite3"};
                 case "cemu": return new[]{"settings.xml"};
+                case "shadps4": return new[]{"user/config.json","config.json"};
                 default: return new[]{"xenia-canary.config.toml","xenia.config.toml"};
             }
         }
@@ -55,9 +94,10 @@ namespace PadLauncher {
                 foreach(string relative in ConfigNames(id)) {string portable=System.IO.Path.Combine(folder,relative.Replace('/',System.IO.Path.DirectorySeparatorChar)); if(File.Exists(portable)) return portable;}
                 return System.IO.Path.Combine(folder,"user");
             }
+            if(id=="shadps4" && Directory.Exists(System.IO.Path.Combine(folder,"user"))) return System.IO.Path.Combine(folder,"user","config.json");
             if(id=="rpcs3") roots.Insert(0,System.IO.Path.Combine(folder,"config"));
             string docs=Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),roaming=Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),local=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string[] names=id=="dolphin" ? new[]{"Dolphin Emulator"} : id=="pcsx2" ? new[]{"PCSX2"} : id=="ppsspp" ? new[]{"PPSSPP"} : id=="vita3k" ? new[]{"Vita3K/Vita3K","Vita3K"} : id=="xenia" ? new[]{"Xenia"} : new[]{EmulatorLibrary.Preset(id).Name,id};
+            string[] names=id=="dolphin" ? new[]{"Dolphin Emulator"} : id=="pcsx2" ? new[]{"PCSX2"} : id=="ppsspp" ? new[]{"PPSSPP"} : id=="vita3k" ? new[]{"Vita3K/Vita3K","Vita3K"} : id=="xemu" ? new[]{"xemu/xemu","xemu"} : id=="xenia" ? new[]{"Xenia"} : new[]{EmulatorLibrary.Preset(id).Name,id};
             // An explicit saved override always takes precedence in the UI. Only select one installation here.
             foreach(string root in new[]{roaming,local,docs}) foreach(string name in names) roots.Add(System.IO.Path.Combine(root,name.Replace('/',System.IO.Path.DirectorySeparatorChar)));
             foreach(string root in roots.Distinct(StringComparer.OrdinalIgnoreCase)) foreach(string name in ConfigNames(id)) {string file=System.IO.Path.Combine(root,name.Replace('/',System.IO.Path.DirectorySeparatorChar)); if(File.Exists(file)) return file;}
@@ -184,6 +224,15 @@ namespace PadLauncher {
             }
             if(id=="mgba") {if(file!=null) sources.Add(Source("Saved library","mgba-library",file,false)); return sources;}
             if(id=="shadps4") {
+                if(file!=null && file.EndsWith(".json",StringComparison.OrdinalIgnoreCase)) {
+                    object data=Storage.Json().DeserializeObject(Text(file));
+                    foreach(var entry in EpicLibrary.Entries(Vdf.Get(Vdf.Get(data,"General"),"install_dirs"))) {
+                        if(Vdf.Get(entry,"enabled") is bool && !(bool)Vdf.Get(entry,"enabled")) continue;
+                        string path=Resolve(Vdf.Str(entry,"path"),root);
+                        if(path!=null && !sources.Any(source => String.Equals(source.Path,path,StringComparison.OrdinalIgnoreCase))) sources.Add(Source("Configured games: "+path,"folder",path,true));
+                    }
+                    return sources;
+                }
                 if(!Directory.Exists(location)) throw new IOException("Choose the folder containing your installed PS4 games.");
                 sources.Add(Source("Installed games","folder",root,true));
                 return sources;
@@ -200,7 +249,10 @@ namespace PadLauncher {
                 return sources;
             }
             var settings=SettingsFile(file);
-            if(id=="duckstation" || id=="pcsx2") {
+            if(id=="xemu") {
+                folder(Get(settings,"general/games_dir"),true);
+                if(!String.IsNullOrWhiteSpace(Get(settings,"sys.files/dvd_path"))) sources.Add(Source("Last inserted disc (partial library)","xemu-disc",file,false));
+            } else if(id=="duckstation" || id=="pcsx2") {
                 foreach(string path in StringList(GetRaw(settings,"GameList/Paths"))) folder(path,false);
                 foreach(string path in StringList(GetRaw(settings,"GameList/RecursivePaths"))) folder(path,true);
                 var exclusions=StringList(GetRaw(settings,"GameList/ExcludedPaths")).Select(p => Resolve(p,root)).ToList(); foreach(var source in sources) source.Exclusions=exclusions;
@@ -236,37 +288,42 @@ namespace PadLauncher {
             return sources;
         }
         static string GetRaw(Dictionary<string,string> values,string key) {string value; return values.TryGetValue(key,out value) ? value : "";}
-        static void Candidate(EmulatorImportBatch batch,string id,EmulatorImportSource source,string path,string name,string core,string fallbackCore,string basePath=null) {
+        static void Candidate(EmulatorImportBatch batch,string id,EmulatorImportSource source,string path,string name,string core,string fallbackCore,string basePath=null,string database=null,string coreProblem=null) {
             try {
                 if(path!=null && path.Contains("|")) throw new ArgumentException("Archive-member paths need manual setup; import the archive through the game picker instead.");
-                if(basePath!=null) path=Resolve(path,basePath);
-                if(path!=null && path.Contains("#") && !File.Exists(path) && !Directory.Exists(path)) throw new ArgumentException("Archive-member paths need manual setup.");
+                string archive,member;
+                if(id=="retroarch" && EmulatorLibrary.SplitRetroArchArchive(path,out archive,out member)) path=(basePath==null ? archive : Resolve(archive,basePath))+"#"+member;
+                else {
+                    if(basePath!=null) path=Resolve(path,basePath);
+                    if(path!=null && path.Contains("#") && !File.Exists(path) && !Directory.Exists(path)) throw new ArgumentException("Archive-member paths need manual setup.");
+                }
                 path=EmulatorLibrary.GamePath(id,path);
                 var entry=new EmulatorImportGame {Key=source.Id+"|"+path.ToUpperInvariant(),SourceId=source.Id,Path=path,Name=String.IsNullOrWhiteSpace(name) ? EmulatorLibrary.SuggestedName(id,path) : name.Trim(),CorePath=core};
-                if(id=="retroarch") {try {entry.CorePath=EmulatorLibrary.Core(String.IsNullOrWhiteSpace(core) || core=="DETECT" ? fallbackCore : core);} catch(Exception error) {entry.Problem=error.Message;}}
+                if(id=="retroarch") {entry.ArtworkSystem=LibretroArtwork.NormalizeDatabase(String.IsNullOrWhiteSpace(database) ? System.IO.Path.GetFileNameWithoutExtension(source.Path) : database); entry.ArtworkTitle=name;}
+                if(id=="retroarch") {if(coreProblem!=null) entry.Problem=coreProblem; else try {entry.CorePath=EmulatorLibrary.Core(String.IsNullOrWhiteSpace(core) || core=="DETECT" ? fallbackCore : core);} catch(Exception error) {entry.Problem=error.Message;}}
                 batch.Games.Add(entry);
             } catch(Exception error) {if(batch.Warnings.Count<30) batch.Warnings.Add((String.IsNullOrWhiteSpace(name) ? path : name)+": "+error.Message);}
         }
         public static EmulatorImportBatch Read(string id,string executable,IEnumerable<EmulatorImportSource> sources,string fallbackCore,CancellationToken token) {
             var batch=new EmulatorImportBatch(); string exeRoot=System.IO.Path.GetDirectoryName(EmulatorLibrary.Executable(executable));
+            var coreResolver=id=="retroarch" ? new RetroArchCoreResolver(executable) : null;
             foreach(var source in sources) {
                 token.ThrowIfCancellationRequested();
                 try {
                     if(source.Kind=="playlist") {
                         string text=Text(source.Path),root=exeRoot;
                         if(text.TrimStart().StartsWith("{")) {
-                            var data=Storage.Json().DeserializeObject(text); string defaultCore=Vdf.Str(data,"default_core_path");
+                            var data=Storage.Json().DeserializeObject(text); string defaultCore=Vdf.Str(data,"default_core_path"),defaultCoreName=Vdf.Str(data,"default_core_name");
                             foreach(var item in EpicLibrary.Entries(Vdf.Get(data,"items"))) {
-                                token.ThrowIfCancellationRequested(); string path=Vdf.Str(item,"path"),core=Vdf.Str(item,"core_path");
-                                if(String.IsNullOrEmpty(core) || core=="DETECT") core=defaultCore;
-                                if(!String.IsNullOrEmpty(core) && core!="DETECT") core=Resolve(core,root);
-                                Candidate(batch,id,source,path,Vdf.Str(item,"label"),core,fallbackCore,root);
+                                token.ThrowIfCancellationRequested(); string path=Vdf.Str(item,"path"),database=Vdf.Str(item,"db_name"),problem;
+                                string core=coreResolver.Resolve(Vdf.Str(item,"core_path"),Vdf.Str(item,"core_name"),defaultCore,defaultCoreName,source.CorePath ?? fallbackCore,path,String.IsNullOrWhiteSpace(database) ? source.Name : database,out problem);
+                                Candidate(batch,id,source,path,Vdf.Str(item,"label"),core,fallbackCore,root,database,problem);
                             }
                         } else {
                             if(text.Any(c => c=='\0')) throw new FormatException("Compressed playlists are not supported yet. Save this playlist uncompressed in RetroArch first.");
                             var lines=text.Replace("\r","").Split('\n'); if(lines.Length%6==1 && lines[lines.Length-1]=="") lines=lines.Take(lines.Length-1).ToArray();
                             if(lines.Length%6!=0) throw new FormatException("Unsupported playlist format.");
-                            for(int i=0;i<lines.Length;i+=6) {token.ThrowIfCancellationRequested(); string core=lines[i+2]; Candidate(batch,id,source,lines[i],lines[i+1],core=="DETECT" ? core : Resolve(core,root),fallbackCore,root);}
+                            for(int i=0;i<lines.Length;i+=6) {token.ThrowIfCancellationRequested(); string problem; string core=coreResolver.Resolve(lines[i+2],lines[i+3],null,null,source.CorePath ?? fallbackCore,lines[i],String.IsNullOrWhiteSpace(lines[i+5]) ? source.Name : lines[i+5],out problem); Candidate(batch,id,source,lines[i],lines[i+1],core,fallbackCore,root,lines[i+5],problem);}
                         }
                     } else if(source.Kind=="rpcs3-registered") {
                         foreach(var pair in YamlScalars(source.Path)) {
@@ -282,6 +339,8 @@ namespace PadLauncher {
                             string sfo=System.IO.Path.Combine(folder,"sce_sys","param.sfo"),category=EmulatorLibrary.SfoValue(sfo,"CATEGORY"); if(category=="gp" || category=="ac") continue;
                             Candidate(batch,id,source,folder,EmulatorLibrary.SfoTitle(sfo),null,null);
                         }
+                    } else if(source.Kind=="xemu-disc") {
+                        Candidate(batch,id,source,Get(SettingsFile(source.Path),"sys.files/dvd_path"),null,null,null,System.IO.Path.GetDirectoryName(source.Path));
                     } else if(source.Kind=="recent") {
                         var cfg=SettingsFile(source.Path); var paths=new List<string>();
                         if(id=="ppsspp") paths.AddRange(cfg.Where(p => p.Key.StartsWith("Recent/FileName",StringComparison.OrdinalIgnoreCase)).Select(p => Scalar(p.Value)));
@@ -330,9 +389,26 @@ namespace PadLauncher {
                 EmulatorGame existing; byPath.TryGetValue(path,out existing);
                 string core=emulator=="retroarch" && existing==null ? EmulatorLibrary.Core(item.CorePath) : null;
                 if(existing==null) {existing=new EmulatorGame {Id="emulator:"+emulator+":"+Guid.NewGuid().ToString("N"),Path=path,Name=String.IsNullOrWhiteSpace(item.Name) ? EmulatorLibrary.SuggestedName(emulator,path) : item.Name.Trim().Substring(0,Math.Min(120,item.Name.Trim().Length)),CorePath=core}; config.Games.Add(existing); byPath[path]=existing;}
+                else if(item.RenameExisting && !String.IsNullOrWhiteSpace(item.Name)) existing.Name=item.Name.Trim().Substring(0,Math.Min(120,item.Name.Trim().Length));
+                if(emulator=="retroarch" && !CoreAvailable(existing.CorePath ?? config.CorePath) && CoreAvailable(item.CorePath)) existing.CorePath=item.CorePath;
+                if(!String.IsNullOrWhiteSpace(item.ArtworkSystem)) existing.ArtworkSystem=item.ArtworkSystem;
+                if(!String.IsNullOrWhiteSpace(item.ArtworkTitle) && (!String.IsNullOrWhiteSpace(item.ArtworkSystem) || String.IsNullOrWhiteSpace(existing.ArtworkTitle))) existing.ArtworkTitle=item.ArtworkTitle;
                 ids.Add(existing.Id);
             }
             return ids;
+        }
+        public static void ImportPlaylists(Settings settings,Library library,string executable,string location,IEnumerable<EmulatorImportSource> sources,IEnumerable<EmulatorImportGame> chosen,IEnumerable<string> excluded) {
+            var games=chosen.ToList();
+            foreach(var source in sources) {
+                var selected=games.Where(game => game.SourceId==source.Id).ToList(); if(selected.Count==0) continue;
+                var lists=settings.CustomLists ?? new List<CustomList>();
+                var old=(settings.EmulatorImports ?? new List<EmulatorImportDefinition>()).FirstOrDefault(d => d.EmulatorId=="retroarch" && String.Equals(d.Location,location,StringComparison.OrdinalIgnoreCase) && d.Sources!=null && d.Sources.Count==1 && d.Sources[0]==source.Id && lists.Any(list => list.Id==d.ListId));
+                string name=String.IsNullOrWhiteSpace(source.Name) ? "RetroArch playlist" : source.Name;
+                if(name.Length>72) name=name.Substring(0,72);
+                string proposed=name; int suffix=2;
+                while(CombinedCollections.Options(library,settings).Any(list => String.Equals(list.Name,proposed,StringComparison.CurrentCultureIgnoreCase))) proposed=name+" ("+(suffix++)+")";
+                Import(settings,library,"retroarch",executable,location,new[]{source},selected,(excluded ?? Enumerable.Empty<string>()).Where(key => key.StartsWith(source.Id+"|",StringComparison.Ordinal)),old==null ? null : old.ListId,proposed);
+            }
         }
         public static string Import(Settings settings,Library library,string emulator,string executable,string location,IEnumerable<EmulatorImportSource> sources,IEnumerable<EmulatorImportGame> chosen,IEnumerable<string> excluded,string listId,string name) {
             var ids=AddEntries(settings,emulator,executable,chosen);
@@ -348,7 +424,7 @@ namespace PadLauncher {
             var sourceIds=sources.Select(s => s.Id).Distinct().OrderBy(s => s,StringComparer.Ordinal).ToList();
             var definition=settings.EmulatorImports.FirstOrDefault(d => d.EmulatorId==emulator && String.Equals(d.Location,location,StringComparison.OrdinalIgnoreCase) && d.ListId==target && (d.Sources ?? new List<string>()).OrderBy(s => s,StringComparer.Ordinal).SequenceEqual(sourceIds));
             if(definition==null) {definition=new EmulatorImportDefinition {Id=Guid.NewGuid().ToString("N"),EmulatorId=emulator,Location=location,ListId=target}; settings.EmulatorImports.Add(definition);}
-            definition.SourceLabel=String.Join(", ",sources.Select(s => s.Name)); definition.Sources=sourceIds; definition.ExcludedKeys=(excluded ?? Enumerable.Empty<string>()).Distinct().ToList(); definition.ImportedGames=(definition.ImportedGames ?? new List<string>()).Concat(ids).Distinct().ToList(); config.ImportPath=location;
+            definition.SourceLabel=String.Join(", ",sources.Select(s => s.Name)); definition.Sources=sourceIds; definition.SourceCores=sources.Where(source => !String.IsNullOrWhiteSpace(source.CorePath)).GroupBy(source => source.Id).ToDictionary(group => group.Key,group => group.First().CorePath); definition.ExcludedKeys=(excluded ?? Enumerable.Empty<string>()).Distinct().ToList(); definition.ImportedGames=(definition.ImportedGames ?? new List<string>()).Concat(ids).Distinct().ToList(); config.ImportPath=location;
             return target;
         }
     }

@@ -6,6 +6,16 @@ using System.Linq;
 
 namespace PadLauncher {
     public partial class Launcher {
+        const string SettingsCleanupKey="PadLauncher.SettingsContentCleanup";
+        void RegisterSettingsCleanup(Window owner,Action cleanup) {
+            var actions=owner.Resources[SettingsCleanupKey] as System.Collections.Generic.List<Action>;
+            if(actions==null) {actions=new System.Collections.Generic.List<Action>(); owner.Resources[SettingsCleanupKey]=actions;}
+            actions.Add(cleanup);
+        }
+        void CleanupSettingsContent(Window owner) {
+            var actions=owner.Resources[SettingsCleanupKey] as System.Collections.Generic.List<Action>; if(actions==null) return;
+            var pending=actions.ToArray(); actions.Clear(); foreach(var cleanup in pending) cleanup();
+        }
         sealed class LauncherPathFeedback {
             public string PreviousText,Message,DetectedPath;
             public System.Windows.Media.Brush PreviousColor;

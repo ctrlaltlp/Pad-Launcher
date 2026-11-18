@@ -17,10 +17,13 @@ namespace PadLauncher {
         public string DirectWarning;
     }
     public static class SteamShortcutImport {
-        public static List<SteamShortcutRecord> Read(Settings settings) {
+        public static List<SteamShortcutRecord> Read(Settings settings,bool allowMissingUser=false) {
             string root=String.IsNullOrWhiteSpace(settings.SteamPath) ? SteamLibrary.DetectSteam() : settings.SteamPath;
             var library=SteamLibrary.Scan(root,settings.UserId);
-            if(String.IsNullOrEmpty(library.UserId)) throw new IOException("Choose a Steam user in Launchers settings first.");
+            if(String.IsNullOrEmpty(library.UserId)) {
+                if(allowMissingUser) return new List<SteamShortcutRecord>();
+                throw new IOException("Choose a Steam user in Launchers settings first.");
+            }
             string config=Path.Combine(root,"userdata",library.UserId,"config"),file=Path.Combine(config,"shortcuts.vdf");
             if(!File.Exists(file)) return new List<SteamShortcutRecord>();
             var result=new List<SteamShortcutRecord>();
@@ -60,27 +63,7 @@ namespace PadLauncher {
             uint id; if(!UInt32.TryParse(Vdf.Str(value,"appid"),out id)) id=SteamLibrary.ShortcutId(raw,name);
             return new SteamShortcutRecord {Key=user+":"+id,Name=name.Trim(),Target=resolved ?? target,Arguments=String.Join(" ",new[]{tail,options}.Where(s => !String.IsNullOrWhiteSpace(s))),WorkingDirectory=directory,SteamLaunchId=SteamLibrary.ShortcutLaunchId(id),CanLaunchDirect=warning==null,DirectWarning=warning};
         }
-        public static List<CustomGame> PrepareModes(SteamShortcutRecord record,string mode) {
-            if(mode!="direct" && mode!="steam" && mode!="both") throw new ArgumentException("Choose a launch mode.");
-            var result=new List<CustomGame>();
-            if(mode!="steam") result.Add(Prepare(record,false));
-            if(mode!="direct") result.Add(Prepare(record,true));
-            return result;
-        }
-        public static void SelectLaunchModes(Settings settings,List<GameImport.Conflict> conflicts) {
-            foreach(var conflict in conflicts) foreach(var shortcuts in conflict.Alternatives.Where(a => a.Incoming!=null).GroupBy(a => a.Incoming.SteamShortcutKey)) {
-                bool keepSteam=shortcuts.Any(a => a.Incoming.LaunchViaSteam);
-                string launchId=shortcuts.First().Incoming.SteamLaunchId;
-                var native=conflict.Alternatives.Where(a => a.Existing!=null && a.Existing.Shortcut && a.Existing.LaunchId==launchId).ToList();
-                foreach(var incoming in shortcuts) incoming.Keep=!incoming.Incoming.LaunchViaSteam || native.Count==0;
-                foreach(var existing in native) existing.Keep=keepSteam;
-                foreach(var existing in conflict.Alternatives.Where(a => a.Existing!=null && a.Existing.Source=="custom")) {
-                    var custom=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(c => c.Id==existing.Existing.Id);
-                    if(custom!=null && custom.SteamShortcutKey==shortcuts.Key)
-                        existing.Keep=shortcuts.Any(a => a==existing && (!custom.LaunchViaSteam || native.Count==0));
-                }
-            }
-        }
+        public static CustomGame Prepare(SteamShortcutRecord record) {return Prepare(record,!record.CanLaunchDirect);}
         public static void PreserveLists(Settings settings,Library before,List<CustomGame> prepared,Dictionary<string,string> destinations) {
             var lists=CombinedCollections.Options(before,settings);
             foreach(var group in prepared.GroupBy(g => g.SteamShortcutKey)) {
@@ -109,28 +92,6 @@ namespace PadLauncher {
                 }
             }
         }
-        public static string ExistingStatus(Settings settings,Library library,SteamShortcutRecord record,bool throughSteam) {
-            var custom=settings.CustomGames ?? new List<CustomGame>();
-            bool imported=custom.Any(g => g.LaunchViaSteam==throughSteam && (throughSteam
-                ? g.SteamLaunchId==record.SteamLaunchId
-                : GameImport.ActionKey(g.Target,g.Arguments,g.WorkingDirectory)==GameImport.ActionKey(record.Target,record.Arguments,record.WorkingDirectory)));
-            if(imported) return throughSteam ? "already added through Steam" : "already added for direct launch";
-            bool steam=library.Games.Any(g => g.Shortcut && g.LaunchId==record.SteamLaunchId);
-            if(throughSteam && steam) return "already available through Steam";
-            return !throughSteam && (steam || custom.Any(g => g.SteamLaunchId==record.SteamLaunchId && g.LaunchViaSteam))
-                ? "available through Steam; direct launch not added" : "";
-        }
-        public static string ImportStatus(Settings settings,Library library,SteamShortcutRecord record,string mode) {
-            var imported=(settings.CustomGames ?? new List<CustomGame>()).Where(g => g.SteamShortcutKey==record.Key).ToList();
-            bool direct=imported.Any(g => !g.LaunchViaSteam) || ExistingStatus(settings,library,record,false)=="already added for direct launch";
-            bool steam=imported.Any(g => g.LaunchViaSteam) || !String.IsNullOrEmpty(ExistingStatus(settings,library,record,true));
-            if(mode=="both" && direct && steam) return "Both launch modes already available";
-            string directAction=direct ? "Will update existing direct launch" : "Will add direct launch";
-            string steamAction=steam ? "Will use existing Steam launch" : "Will add Steam launch";
-            if(mode=="both") return directAction+"; "+steamAction;
-            if(mode=="steam") return steamAction+(direct ? "; direct launch also exists" : "");
-            return directAction+(steam ? "; Steam launch also exists" : "");
-        }
         public static CustomGame Prepare(SteamShortcutRecord record,bool throughSteam) {
             if(!Regex.IsMatch(record.Key ?? "",@"^\d+:\d+$")) throw new ArgumentException("Invalid Steam shortcut import identity.");
             if(!throughSteam && !record.CanLaunchDirect) throw new ArgumentException(record.Name+": "+record.DirectWarning);
@@ -145,18 +106,21 @@ namespace PadLauncher {
                 }
                 } catch {art=null;}
             }
-            var game=new CustomGame {Name=record.Name,Target=record.Target,Arguments=record.Arguments,WorkingDirectory=record.WorkingDirectory,Artwork=art,SteamShortcutKey=record.Key,SteamLaunchId=record.SteamLaunchId,LaunchViaSteam=throughSteam};
+            var game=new CustomGame {Name=record.Name,Target=record.Target,Arguments=record.Arguments,WorkingDirectory=record.WorkingDirectory,Artwork=art,SteamShortcutKey=record.Key,SteamLaunchId=record.SteamLaunchId,LaunchViaSteam=throughSteam,SteamDirectSupported=record.CanLaunchDirect};
             game.PlayniteActionInfo=Describe(game); return game;
         }
         public static string Describe(CustomGame game) {return game.LaunchViaSteam ? "Launch through Steam: steam://rungameid/"+game.SteamLaunchId : "Direct launch (without Steam)";}
         public static void Merge(Settings settings,CustomGame game) {
             if(!Regex.IsMatch(game.SteamShortcutKey ?? "",@"^\d+:\d+$")) throw new ArgumentException("Invalid Steam shortcut import identity.");
-            var existing=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.SteamShortcutKey==game.SteamShortcutKey && g.LaunchViaSteam==game.LaunchViaSteam);
-            if(existing==null && !game.LaunchViaSteam) existing=FindDirectMatch(settings,game);
-            game.Id=existing==null ? null : existing.Id; CustomGameLibrary.Save(settings,game);
+            SteamShortcutIdentity.Normalize(settings);
+            var existing=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.SteamShortcutKey==game.SteamShortcutKey) ?? FindDirectMatch(settings,game);
+            game.Id=existing==null ? null : existing.Id;
+            if(existing!=null && !String.IsNullOrEmpty(existing.Artwork)) game.Artwork=existing.Artwork;
+            CustomGameLibrary.Save(settings,game);
+            SteamShortcutIdentity.Normalize(settings);
         }
         public static CustomGame FindDirectMatch(Settings settings,CustomGame game) {
-            return (settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => !g.LaunchViaSteam &&
+            return (settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => (!g.LaunchViaSteam || SteamShortcutIdentity.IsImported(g)) &&
                 GameImport.ActionKey(g.Target,g.Arguments,g.WorkingDirectory)==GameImport.ActionKey(game.Target,game.Arguments,game.WorkingDirectory));
         }
     }

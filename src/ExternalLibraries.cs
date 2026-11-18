@@ -72,6 +72,7 @@ namespace PadLauncher {
             current.Games.AddRange(fresh.Games.Where(owns).Where(g => !(settings.ReplacedGameIds ?? new List<string>()).Contains(g.Id)).GroupBy(g => g.Id).Select(g => g.First()));
             current.Collections.RemoveAll(c => c.Source==source || c.Id=="source:"+source || (source=="steam" && ((c.Id ?? "").StartsWith("tag:") || (c.Id ?? "").StartsWith("user-collections."))));
             current.Collections.AddRange(fresh.Collections.GroupBy(c => c.Id).Select(group => group.First()));
+            if(source=="steam") SteamShortcutIdentity.Reconcile(current,settings);
             current.Games=current.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
         }
         public static Library Scan(Settings settings,string manifestFolder=null,string catalogFile=null) {
@@ -134,6 +135,7 @@ namespace PadLauncher {
         public string SteamShortcutKey {get;set;}
         public string SteamLaunchId {get;set;}
         public bool LaunchViaSteam {get;set;}
+        public bool? SteamDirectSupported {get;set;}
         public bool? IncludeInCustomGamesList {get;set;}
         // Legacy serialized name for action details, also used by existing Steam shortcut imports.
         public string PlayniteActionInfo {get;set;}
@@ -147,7 +149,7 @@ namespace PadLauncher {
     public static class CustomGameLibrary {
         public static string EntrySourceLabel(Settings settings,Game game) {
             var entry=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==game.Id);
-            if(entry!=null && !String.IsNullOrEmpty(entry.SteamShortcutKey)) return entry.LaunchViaSteam ? "Steam import (through Steam)" : "Steam import (direct launch)";
+            if(entry!=null && !String.IsNullOrEmpty(entry.SteamShortcutKey)) return "Steam import";
             return "Custom game";
         }
         public static bool InCustomGamesList(Settings settings,CustomGame game) {
@@ -198,6 +200,7 @@ namespace PadLauncher {
             if(previous!=null && !game.IncludeInCustomGamesList.HasValue) game.IncludeInCustomGamesList=previous.IncludeInCustomGamesList;
             if(previous!=null && String.IsNullOrEmpty(game.SteamShortcutKey)) game.SteamShortcutKey=previous.SteamShortcutKey;
             if(previous!=null && String.IsNullOrEmpty(game.SteamLaunchId)) game.SteamLaunchId=previous.SteamLaunchId;
+            if(previous!=null && !game.SteamDirectSupported.HasValue) game.SteamDirectSupported=previous.SteamDirectSupported;
             if(previous!=null && String.IsNullOrEmpty(game.PlayniteActionInfo)) game.PlayniteActionInfo=previous.PlayniteActionInfo;
             if(!String.IsNullOrEmpty(game.Id) && !settings.CustomGames.Any(g => g.Id==game.Id)) throw new ArgumentException("This custom game no longer exists.");
             if(String.IsNullOrEmpty(game.Id)) game.Id="custom:"+Guid.NewGuid().ToString("N");
@@ -205,10 +208,13 @@ namespace PadLauncher {
             return game.Id;
         }
         public static void Apply(Library library,Settings settings) {
+            SteamShortcutIdentity.Normalize(settings);
             library.Games.RemoveAll(g => g.Source=="custom"); library.Collections.RemoveAll(c => c.Id=="source:custom");
             foreach(var entry in settings.CustomGames ?? new List<CustomGame>()) {
-                library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="custom",LaunchId=entry.Target,SteamLaunchId=entry.LaunchViaSteam ? entry.SteamLaunchId : null,Arguments=entry.Arguments,WorkingDirectory=entry.WorkingDirectory,ImportedActionInfo=entry.PlayniteActionInfo,Art=ArtworkPath(entry.Artwork)});
+                bool throughSteam=SteamShortcutIdentity.ThroughSteam(settings,entry);
+                library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="custom",LaunchId=entry.Target,SteamLaunchId=throughSteam ? entry.SteamLaunchId : null,Arguments=entry.Arguments,WorkingDirectory=entry.WorkingDirectory,ImportedActionInfo=SteamShortcutIdentity.IsImported(entry) ? (throughSteam ? "Launch through Steam" : "Direct launch") : entry.PlayniteActionInfo,Art=ArtworkPath(entry.Artwork),ArtworkProvider=String.IsNullOrWhiteSpace(entry.Artwork) ? null : LibretroArtwork.IsChosenPath(entry.Artwork) ? "libretro-chosen" : "chosen"});
             }
+            SteamShortcutIdentity.Reconcile(library,settings);
             var games=CustomListGameIds(library,settings);
             if(games.Count>0) library.Collections.Add(new Collection {Id="source:custom",Name="Custom games",Games=games});
         }

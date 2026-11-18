@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -16,6 +16,7 @@ namespace PadLauncher {
         public string Value {get;set;}
     }
     public sealed class UpdateSession {
+        public string SettingsTabName {get;set;}
         public bool SettingsOpen {get;set;}
         public bool OverlayOpen {get;set;}
         public int SettingsTab {get;set;}
@@ -56,6 +57,7 @@ namespace PadLauncher {
         }
         string SaveUpdateSession(string folder) {
             var state=new UpdateSession {SettingsOpen=helpWindow!=null,OverlayOpen=IsVisible,SettingsTab=helpTabs==null ? 0 : helpTabs.SelectedIndex,CustomTab=customGamesTabIndex,EmulatorTab=emulatorTabIndex,CustomGame=selectedCustomGameId,CollectionId=settings.CollectionId,SelectedId=settings.SelectedId,Form=new List<UpdateFormValue>()};
+            if(helpTabs!=null && helpTabs.SelectedItem is TabItem) state.SettingsTabName=Convert.ToString(((TabItem)helpTabs.SelectedItem).Header);
             if(filters.Count>collectionIndex) state.CollectionId=filters[collectionIndex].Id;
             if(visible.Count>selected) state.SelectedId=visible[selected].Id;
             if(IsVisible) state.Monitor=System.Windows.Forms.Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle).DeviceName;
@@ -94,7 +96,9 @@ namespace PadLauncher {
             if(state.SettingsOpen) {
                 customGamesTabIndex=Math.Max(0,Math.Min(2,state.CustomTab)); emulatorTabIndex=Math.Max(0,Math.Min(1,state.EmulatorTab)); selectedCustomGameId=state.CustomGame;
                 ShowHelpWindow();
-                helpTabs.SelectedIndex=Math.Max(0,Math.Min(helpTabs.Items.Count-1,state.SettingsTab));
+                var namedTab=helpTabs.Items.Cast<TabItem>().FirstOrDefault(tab => Convert.ToString(tab.Header)==state.SettingsTabName);
+                if(namedTab!=null) helpTabs.SelectedItem=namedTab;
+                else helpTabs.SelectedIndex=Math.Max(0,Math.Min(helpTabs.Items.Count-1,String.IsNullOrEmpty(state.SettingsTabName) ? (state.SettingsTab==6 ? 7 : SettingsTabIndex(state.SettingsTab)) : state.SettingsTab));
                 if(state.Width>0 && state.Height>0 && !Double.IsInfinity(state.Width) && !Double.IsInfinity(state.Height)) {
                     var area=new Rect(SystemParameters.VirtualScreenLeft,SystemParameters.VirtualScreenTop,SystemParameters.VirtualScreenWidth,SystemParameters.VirtualScreenHeight);
                     var bounds=new Rect(state.Left,state.Top,state.Width,state.Height);

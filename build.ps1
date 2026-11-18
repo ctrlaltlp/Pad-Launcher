@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $framework = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
 $compiler = Join-Path $framework 'csc.exe'
 if (!(Test-Path $compiler)) { throw 'The Windows .NET Framework 4 compiler is required.' }
@@ -8,6 +8,14 @@ $refs = @('System.dll','System.Core.dll','System.Security.dll','System.Web.Exten
 $librarySources = @((Join-Path $PSScriptRoot 'src\Library.cs'),(Join-Path $PSScriptRoot 'src\DynamicRules.cs'),(Join-Path $PSScriptRoot 'src\ExternalLibraries.cs'),(Join-Path $PSScriptRoot 'src\ArtworkService.cs'),(Join-Path $PSScriptRoot 'src\StartupSetting.cs'),(Join-Path $PSScriptRoot 'src\GameImport.cs'),(Join-Path $PSScriptRoot 'src\GogLibrary.cs'),(Join-Path $PSScriptRoot 'src\EaLibrary.cs'),(Join-Path $PSScriptRoot 'src\SteamShortcutImport.cs'),(Join-Path $PSScriptRoot 'src\UbisoftLibrary.cs'),(Join-Path $PSScriptRoot 'src\RockstarLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorLibrary.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImport.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSqlite.cs'))
 $librarySources += (Join-Path $PSScriptRoot 'src\BattleNetLibrary.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\XboxLibrary.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\SteamShortcutIdentity.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\LibretroArtwork.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\LibretroPlaceholderSizing.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\ListArtwork.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\EmulatorTitleTags.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\RetroArchListDefaults.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\RetroArchCoreResolver.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\ControlBindings.cs')
 $appSources = @((Join-Path $PSScriptRoot 'src\App.cs'),(Join-Path $PSScriptRoot 'src\PlayStationInput.cs'),(Join-Path $PSScriptRoot 'src\EmulatorSettings.cs'),(Join-Path $PSScriptRoot 'src\ListTransitions.cs'),(Join-Path $PSScriptRoot 'src\EmulatorImportSettings.cs'))
 $appSources += (Join-Path $PSScriptRoot 'src\ListToolsSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\UpdateSettings.cs')
@@ -18,6 +26,22 @@ $appSources += (Join-Path $PSScriptRoot 'src\EmulatorDetectionSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\SettingsAppearance.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\SetupWizard.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\LayoutPreviews.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\SwitchProInput.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\LibretroArtworkPicker.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\LibretroPanelLayout.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\ListArtworkSettings.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\PanelSizingSettings.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\GameSearch.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\ControllerBindings.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\ControlSettings.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\SettingsWindowSizing.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\ControlDiagram.cs')
+$refs += '/resource:' + (Join-Path $PSScriptRoot 'assets\PlayStationControls.png') + ',PlayStationControls.png'
+$refs += '/resource:' + (Join-Path $PSScriptRoot 'assets\XboxControls.png') + ',XboxControls.png'
+$refs += '/resource:' + (Join-Path $PSScriptRoot 'assets\NintendoControls.png') + ',NintendoControls.png'
+$appSources += (Join-Path $PSScriptRoot 'src\EmulatorTitleTagSettings.cs')
+$refs += '/resource:' + (Join-Path $PSScriptRoot 'third_party\SDL3\SDL3.dll.gz') + ',SDL3.dll.gz'
+$refs += '/resource:' + (Join-Path $PSScriptRoot 'third_party\SDL3\LICENSE.txt') + ',SDL3-LICENSE.txt'
 $refs += '/resource:' + (Join-Path $PSScriptRoot 'src\SettingsTheme.xaml') + ',SettingsTheme.xaml'
 $artworkTest = $args -contains '-ArtworkTest'
 $firstStartupTest = $args -contains '-FirstStartupTest'
@@ -70,6 +94,26 @@ if ($args -contains '-Test') {
     if ($LASTEXITCODE -ne 0) { throw 'Emulator UI test build failed.' }
     & (Join-Path $out 'EmulatorUiTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Emulator UI tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:ListButtonLayoutTests ('/out:' + (Join-Path $out 'ListButtonLayoutTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\ListButtonLayoutTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'List button layout test build failed.' }
+    & (Join-Path $out 'ListButtonLayoutTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'List button layout tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:ArtworkRefreshUiTests ('/out:' + (Join-Path $out 'ArtworkRefreshUiTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\ArtworkRefreshUiTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Artwork refresh UI test build failed.' }
+    & (Join-Path $out 'ArtworkRefreshUiTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Artwork refresh UI tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:StartupArtworkTests ('/out:' + (Join-Path $out 'StartupArtworkTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\StartupArtworkTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Startup artwork tests failed to compile.' }
+    & (Join-Path $out 'StartupArtworkTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Startup artwork tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:RetroArchListDefaultsTests ('/out:' + (Join-Path $out 'RetroArchListDefaultsTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\RetroArchListDefaultsTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'RetroArch list defaults test build failed.' }
+    & (Join-Path $out 'RetroArchListDefaultsTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'RetroArch list defaults tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:RetroArchCoreResolverTests ('/out:' + (Join-Path $out 'RetroArchCoreResolverTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\RetroArchCoreResolverTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'RetroArch core resolution test build failed.' }
+    & (Join-Path $out 'RetroArchCoreResolverTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'RetroArch core resolution tests failed.' }
 
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'EmulatorTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\EmulatorTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Emulator test build failed.' }
@@ -97,6 +141,30 @@ if ($args -contains '-Test') {
     if ($LASTEXITCODE -ne 0) { throw 'Storage test build failed.' }
     & (Join-Path $out 'StorageTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Storage tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'LibretroArtworkTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\LibretroArtworkTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Libretro artwork test build failed.' }
+    & (Join-Path $out 'LibretroArtworkTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Libretro artwork tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:LibretroPickerTests ('/out:' + (Join-Path $out 'LibretroPickerTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\LibretroPickerTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Libretro artwork picker test build failed.' }
+    & (Join-Path $out 'LibretroPickerTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Libretro artwork picker tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:LibretroPanelTests ('/out:' + (Join-Path $out 'LibretroPanelTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\LibretroPanelTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Libretro panel test build failed.' }
+    & (Join-Path $out 'LibretroPanelTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Libretro panel tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'ListArtworkTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\ListArtworkTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Per-list artwork test build failed.' }
+    & (Join-Path $out 'ListArtworkTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Per-list artwork tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:GameSearchTests ('/out:' + (Join-Path $out 'GameSearchTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\GameSearchTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Game search test build failed.' }
+    & (Join-Path $out 'GameSearchTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Game search tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:ControlBindingTests ('/out:' + (Join-Path $out 'ControlBindingTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\ControlBindingTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Control binding tests failed to compile.' }
+    & (Join-Path $out 'ControlBindingTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Control binding tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'SteamImportTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\SteamImportTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Steam import test build failed.' }
     & (Join-Path $out 'SteamImportTests.exe')
@@ -137,6 +205,10 @@ if ($args -contains '-Test') {
     if ($LASTEXITCODE -ne 0) { throw 'Controller test build failed.' }
     & (Join-Path $out 'ControllerTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Controller tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 /main:SwitchProTests ('/out:' + (Join-Path $out 'SwitchProTests.exe')) $refs $librarySources $appSources (Join-Path $PSScriptRoot 'tests\SwitchProTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Switch Pro test build failed.' }
+    & (Join-Path $out 'SwitchProTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Switch Pro tests failed.' }
 }
 $installedExecutable = Join-Path $out ($executableName + '.exe')
 try { Copy-Item -LiteralPath $stagedExecutable -Destination $installedExecutable -Force }

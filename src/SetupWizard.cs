@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -20,8 +20,9 @@ namespace PadLauncher {
             return warning;
         }
         Window setupWindow;
+        bool setupTemplateOnly,setupDismissed;
         readonly bool freshProfile;
-        internal bool NeedsInitialSetup {get {return !demo && !preview && !settings.SetupWizardShown && (freshProfile || TestEnvironment.EmulatorDetection);}}
+        internal bool NeedsInitialSetup {get {return !demo && !preview && !setupDismissed && !settings.SetupWizardShown && (freshProfile || TestEnvironment.EmulatorDetection);}}
         public void StartInitialSetup() {
             if(NeedsInitialSetup) ShowSetupWizard();
             else if(TestEnvironment.EmulatorDetection && !demo && !preview) OpenSettingsTab(5);
@@ -35,20 +36,23 @@ namespace PadLauncher {
         public void ShowSetupWizard(bool restart=false,IDictionary<string,string> detectedLaunchers=null) {
             if(setupWindow!=null) {setupWindow.WindowState=WindowState.Normal; setupWindow.Activate(); return;}
             if(scanning) {ThemedMessage.Show(helpWindow,"Please wait for the current library refresh to finish, then restart setup.","Setup"); return;}
+            var settings=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(this.settings));
+            string pendingKey=ArtworkKey.Load() ?? "";
+            bool committed=false,finishBusy=false,importSteamShortcuts=false;
             int page=restart ? 0 : Math.Max(0,Math.Min(4,settings.SetupWizardPage));
             bool useSavedLauncherChoices=settings.SetupWizardShown;
             var initial=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
             initial.SetupWizardShown=true; initial.SetupWizardCompleted=false; initial.SetupWizardPage=page;
-            Storage.Write("settings.json",initial); settings=initial;
+            settings=initial;
             var detected=detectedLaunchers ?? DetectSetupLaunchers();
             var dialog=new Window {Title="Pad Launcher · Setup",Width=760,Height=700,MinWidth=620,MinHeight=460,Background=new SolidColorBrush(Color.FromRgb(13,25,34)),Foreground=white,FontFamily=FontFamily,WindowStartupLocation=helpWindow!=null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,Icon=Icon};
             if(helpWindow!=null) dialog.Owner=helpWindow;
-            ApplySettingsTheme(dialog); setupWindow=dialog;
+            ApplySettingsTheme(dialog); SettingsWindowSizing.Attach(dialog); setupWindow=dialog;
             var root=new DockPanel {Margin=new Thickness(28),Background=dialog.Background}; dialog.Content=root;
             var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
             var progress=Label("",12,mint); progress.Name="SetupProgress"; header.Children.Add(progress);
             var title=Label("",27,white); title.Name="SetupPageTitle"; title.Margin=new Thickness(0,8,0,8); header.Children.Add(title);
-            var optional=Label("Every step is optional. Next saves this page; Skip keeps your current settings. You can close setup and reopen it from System.",12,muted); optional.TextWrapping=TextWrapping.Wrap; optional.Margin=new Thickness(0,0,0,18); header.Children.Add(optional);
+            var optional=Label("Every step is optional. Changes apply only when you click Finish. Closing setup discards this session's changes.",12,muted); optional.TextWrapping=TextWrapping.Wrap; optional.Margin=new Thickness(0,0,0,18); header.Children.Add(optional);
             var footer=new StackPanel(); DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
             var status=Label("",12,muted); status.Name="SetupStatus"; status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,12,0,12); footer.Children.Add(status);
             var actions=new Grid(); actions.ColumnDefinitions.Add(new ColumnDefinition()); actions.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto}); footer.Children.Add(actions);
@@ -128,7 +132,7 @@ namespace PadLauncher {
             };
             Action buildEmulators=() => {
                 var panel=new StackPanel(); pages[1]=panel;
-                note(panel,"Find installed emulators or portable copies with Start-menu shortcuts, or choose executable paths below.");
+                note(panel,"Find installed emulators, Steam installations or portable copies with Start-menu shortcuts, or choose executable paths below.");
                 var importNote=note(panel,"Games can be imported later in Emulator settings; this page does not scan ROM folders.");
                 importNote.Foreground=new SolidColorBrush(Color.FromRgb(255,211,105));
                 var paths=new Dictionary<string,TextBox>();
@@ -141,22 +145,59 @@ namespace PadLauncher {
                     var browse=new Button {Content="Browse…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,8,0,0)};
                     browse.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter=preset.Name+" executable|*.exe",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) field.Text=file.FileName;}; body.Children.Add(browse);
                 }
-                detect.Click+=(s,e) => ShowEmulatorDetection(dialog,() => {
+                detect.Click+=(s,e) => ShowEmulatorDetectionDraftCore(dialog,() => settings,nextSettings => {
+                    settings=nextSettings;
                     foreach(var pair in paths) {var saved=EmulatorLibrary.Config(settings,pair.Key); if(saved!=null) pair.Value.Text=saved.Path ?? "";}
-                });
+                },null,true);
                 apply[1]=draft => {foreach(var pair in paths) if(!String.IsNullOrWhiteSpace(pair.Value.Text)) EmulatorLibrary.SavePath(draft,pair.Key,pair.Value.Text);};
             };
             PasswordBox apiKey=null;
+            Func<bool> artworkUsesSgdb=() => false;
+            Action groupEmulatorArtwork=() => {};
             Action buildArtwork=() => {
                 var panel=new StackPanel(); pages[2]=panel;
                 note(panel,"Existing launcher artwork and local images work without a SteamGridDB key. Add a key only if you want SteamGridDB artwork for custom games, emulator games, or launcher games with missing artwork.");
-                var enabled=new CheckBox {Name="SetupArtworkEnabled",Content="Use SteamGridDB artwork",IsChecked=settings.SteamGridDbEnabled && !String.IsNullOrWhiteSpace(ArtworkKey.Load()),Margin=new Thickness(0,12,0,12)}; panel.Children.Add(enabled);
                 panel.Children.Add(Label("SteamGridDB API key",14,mint));
-                apiKey=new PasswordBox {Name="SetupArtworkKey",Password=ArtworkKey.Load() ?? "",Padding=new Thickness(9),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(apiKey);
-                bool hadKey=!String.IsNullOrWhiteSpace(apiKey.Password);
-                apiKey.PasswordChanged+=(s,e) => {bool hasKey=!String.IsNullOrWhiteSpace(apiKey.Password); if(!hasKey || !hadKey) enabled.IsChecked=hasKey; hadKey=hasKey;};
-                note(panel,"Stored encrypted for your Windows account. Leaving this blank keeps any saved key. You can verify or change it later under System.");
-                apply[2]=draft => {draft.SteamGridDbEnabled=enabled.IsChecked==true && (!String.IsNullOrWhiteSpace(apiKey.Password) || !String.IsNullOrWhiteSpace(ArtworkKey.Load()));};
+                apiKey=new PasswordBox {Name="SetupArtworkKey",Password=pendingKey,Padding=new Thickness(9),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(apiKey);
+                note(panel,"SteamGridDB downloads require an API key. Stored encrypted for your Windows account. Leaving this blank keeps any saved key and does not change your source choices. You can verify or change the key later under System.");
+                var emulatorArtworkHeading=Label("Choose emulator artwork sources",17,mint); emulatorArtworkHeading.Name="SetupEmulatorArtworkHeading"; emulatorArtworkHeading.Margin=new Thickness(0,18,0,8); panel.Children.Add(emulatorArtworkHeading);
+                var artworkChoices=new Dictionary<string,SettingsComboBox>();
+                note(panel,"Choose artwork sources for each emulator. Preferences try the other source as fallback; Only choices restrict downloads to one source. These defaults can be changed later in Artwork.");
+                var emulatorRows=new Dictionary<string,StackPanel>();
+                var emulatorGroups=new StackPanel(); panel.Children.Add(emulatorGroups);
+                foreach(var preset in EmulatorLibrary.Presets) {
+                    var emulatorRow=new StackPanel(); emulatorRows[preset.Id]=emulatorRow;
+                    emulatorRow.Children.Add(Label(preset.Name,14,mint));
+                    string saved; string selected=settings.EmulatorArtworkSources!=null && settings.EmulatorArtworkSources.TryGetValue(preset.Id,out saved) && ArtworkService.ValidArtworkSource(saved) ? saved : ArtworkService.DefaultEmulatorArtworkSource(preset.Id);
+                    var choice=new SettingsComboBox {Name="SetupArtworkSource_"+preset.Id,ItemsSource=ArtworkService.ArtworkSourceChoices(false),DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=selected,Padding=new Thickness(8),Margin=new Thickness(0,6,0,12)};
+                    emulatorRow.Children.Add(choice); artworkChoices[preset.Id]=choice;
+                }
+                groupEmulatorArtwork=() => {
+                    foreach(var row in emulatorRows.Values) {var parent=row.Parent as Panel; if(parent!=null) parent.Children.Remove(row);}
+                    emulatorGroups.Children.Clear();
+                    foreach(bool isDetected in new[]{true,false}) {
+                        var matches=EmulatorLibrary.Presets.Where(preset => {
+                            var config=EmulatorLibrary.Config(settings,preset.Id);
+                            return (config!=null && !String.IsNullOrWhiteSpace(config.Path))==isDetected;
+                        }).ToList();
+                        if(matches.Count==0) continue;
+                        StackPanel destination=emulatorGroups;
+                        if(isDetected) {
+                            var heading=Label("Configured emulators:",14,mint);
+                            heading.Margin=new Thickness(0,12,0,10); emulatorGroups.Children.Add(heading);
+                        } else {
+                            destination=new StackPanel {Margin=new Thickness(12,10,12,0)};
+                            emulatorGroups.Children.Add(new Expander {Name="SetupOtherEmulatorArtwork",Header="Other emulators",IsExpanded=false,Foreground=mint,Margin=new Thickness(0,12,0,0),Content=destination});
+                        }
+                        foreach(var preset in matches) destination.Children.Add(emulatorRows[preset.Id]);
+                    }
+                };
+                groupEmulatorArtwork();
+                artworkUsesSgdb=() => artworkChoices.Values.Any(choice => ArtworkService.ArtworkProviders(choice.SelectedValue as string).Contains("sgdb"));
+                apply[2]=draft => {
+                    draft.SteamGridDbEnabled=!String.IsNullOrWhiteSpace(apiKey.Password) || !String.IsNullOrWhiteSpace(pendingKey); draft.LibretroArtworkEnabled=true;
+                    draft.EmulatorArtworkSources=artworkChoices.ToDictionary(pair => pair.Key,pair => pair.Value.SelectedValue as string);
+                };
             };
             Action buildAppearance=() => {
                 var panel=new StackPanel(); pages[3]=panel;
@@ -176,26 +217,34 @@ namespace PadLauncher {
                 apply[3]=draft => {draft.ButtonPrompts=(string)buttons.SelectedValue; draft.CarouselLayout=(string)layout.SelectedValue; draft.OpenMonitor=(string)monitor.SelectedValue; draft.ShowGameTitle=titleCheck.IsChecked==true; draft.ShowCollectionName=listCheck.IsChecked==true;};
             };
             var finishPanel=new StackPanel(); pages[4]=finishPanel;
-            note(finishPanel,"Your saved choices are ready. Nothing else is required. Finish returns the app to the tray; running the executable again or double-clicking its tray icon opens the overlay.");
-            note(finishPanel,"Enabled launcher libraries will refresh after Finish. You can import emulator games and create lists later in Settings. Restart setup keeps the settings you have already saved.");
+            note(finishPanel,"Your choices are ready. Finish applies them and returns the app to the tray; running the executable again or double-clicking its tray icon opens the overlay.");
+            var finishNote=note(finishPanel,"");
+            finishNote.Inlines.Add(new System.Windows.Documents.Run("Enabled launcher libraries will refresh after Finish. "));
+            finishNote.Inlines.Add(new System.Windows.Documents.Run("You can import emulator games and create lists later in Settings.") {Foreground=mint});
+            finishNote.Inlines.Add(new System.Windows.Documents.Run(" Restart setup keeps the settings you have already saved."));
             var openSettings=new CheckBox {Name="SetupOpenSettings",Content="Open Settings when finished",IsChecked=false,Margin=new Thickness(0,18,0,0)}; finishPanel.Children.Add(openSettings);
             buildLaunchers(); buildEmulators(); buildArtwork(); buildAppearance();
             string[] titles={"Connect your launchers","Add your emulators","Choose artwork","Controls & overlay","You're ready"};
             Action render=() => {
+                if(page==2) groupEmulatorArtwork();
                 progress.Text="Step "+(page+1)+" of "+pages.Length; title.Text=titles[page]; scroll.Content=pages[page]; scroll.ScrollToTop();
                 back.IsEnabled=page>0; skip.Visibility=next.Visibility=page==4 ? Visibility.Collapsed : Visibility.Visible;
                 again.Visibility=finish.Visibility=page==4 ? Visibility.Visible : Visibility.Collapsed; status.Text="";
-                optional.Text=page==4 ? "All choices remain available in Settings. Restart setup keeps your saved choices." : "Every step is optional. Next saves this page; Skip keeps your current settings. You can close setup and reopen it from System.";
+                optional.Text=page==4 ? "Click Finish to apply your choices. Closing setup discards this session's changes." : "Every step is optional. Changes apply only when you click Finish. Closing setup discards this session's changes.";
                 next.IsDefault=page<4; finish.IsDefault=page==4;
             };
             Action<bool> advance=save => {
                 try {
-                    if(save && page==2 && String.IsNullOrWhiteSpace(apiKey.Password) && String.IsNullOrWhiteSpace(ArtworkKey.Load())) {
+                    if(save && page==2 && artworkUsesSgdb() && String.IsNullOrWhiteSpace(apiKey.Password) && String.IsNullOrWhiteSpace(pendingKey)) {
                         if(CreateSetupArtworkKeyWarning(dialog).ShowDialog()!=true) {apiKey.Focus(); return;}
                     }
                     var draft=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                    if(save) {apply[page](draft); if(page==2 && !String.IsNullOrWhiteSpace(apiKey.Password) && apiKey.Password.Trim()!=ArtworkKey.Load()) ArtworkKey.Save(apiKey.Password.Trim());}
-                    draft.SetupWizardPage=page+1; Storage.Write("settings.json",draft); settings=draft;
+                    if(save) {
+                        apply[page](draft);
+                        if(page==0) importSteamShortcuts=draft.SteamEnabled && draft.IncludeSteamShortcuts;
+                        if(page==2 && !String.IsNullOrWhiteSpace(apiKey.Password)) pendingKey=apiKey.Password.Trim();
+                    }
+                    draft.SetupWizardPage=page+1; settings=draft;
                     if(!save) {if(page==0) buildLaunchers(); else if(page==1) buildEmulators(); else if(page==2) buildArtwork(); else buildAppearance();}
                     page++; render();
                 } catch(Exception error) {status.Text="Could not save this page. "+error.Message;}
@@ -203,18 +252,40 @@ namespace PadLauncher {
             next.Click+=(s,e) => advance(true); skip.Click+=(s,e) => advance(false);
             back.Click+=(s,e) => {if(page>0) {page--; render();}};
             again.Click+=(s,e) => {
-                try {var draft=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); draft.SetupWizardPage=0; Storage.Write("settings.json",draft); settings=draft; useSavedLauncherChoices=true; page=0; buildLaunchers(); buildEmulators(); buildArtwork(); buildAppearance(); render();}
+                try {var draft=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); draft.SetupWizardPage=0; settings=draft; useSavedLauncherChoices=true; page=0; buildLaunchers(); buildEmulators(); buildArtwork(); buildAppearance(); render();}
                 catch(Exception error) {status.Text=error.Message;}
             };
-            finish.Click+=(s,e) => {
+            finish.Click+=async (s,e) => {
+                if(finishBusy) return;
+                finishBusy=true; root.IsEnabled=false;
                 try {
                     var draft=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); draft.SetupWizardShown=true; draft.SetupWizardCompleted=true; draft.SetupWizardPage=4;
-                    Storage.Write("settings.json",draft); settings=draft; ApplyLibrary();
-                    bool show=openSettings.IsChecked==true; dialog.Close(); RefreshLibrary(); if(show) OpenSettingsTab(5);
+                    if(importSteamShortcuts && draft.SteamEnabled && draft.IncludeSteamShortcuts) {
+                        status.Text="Importing non-Steam games…";
+                        var imported=await System.Threading.Tasks.Task.Run(() => SteamShortcutImport.Read(draft,true).Select(record => SteamShortcutImport.Prepare(record)).ToList());
+                        foreach(var game in imported) {
+                            SteamShortcutImport.Merge(draft,game);
+                            draft.CustomGames.First(item => item.Id==game.Id).IncludeInCustomGamesList=true;
+                        }
+                    }
+                    string keyPath=Path.Combine(Storage.Root,"steamgriddb.key");
+                    byte[] oldKey=File.Exists(keyPath) ? File.ReadAllBytes(keyPath) : null;
+                    bool changeKey=!String.IsNullOrWhiteSpace(pendingKey) && pendingKey!=ArtworkKey.Load();
+                    if(changeKey) ArtworkKey.Save(pendingKey);
+                    try {Storage.Write("settings.json",draft);}
+                    catch {if(changeKey) {if(oldKey==null) ArtworkKey.Clear(); else File.WriteAllBytes(keyPath,oldKey);} throw;}
+                    this.settings=draft; settings=draft; committed=true; setupTemplateOnly=false; setupDismissed=true;
+                    CustomGameLibrary.Apply(library,this.settings); ApplyLibrary();
+                    bool show=openSettings.IsChecked==true; dialog.Close(); RefreshLibrary(); if(show) OpenSettingsTab(1);
                 } catch(Exception error) {status.Text="Could not finish setup. "+error.Message;}
+                finally {finishBusy=false; root.IsEnabled=true;}
             };
             dialog.PreviewKeyDown+=(s,e) => {if(e.Key==System.Windows.Input.Key.Escape) {dialog.Close(); e.Handled=true;}};
-            dialog.Closed+=(s,e) => {setupWindow=null; if(freshProfile && !TestEnvironment.EmulatorDetection && !settings.SetupWizardCompleted && !exiting && !demo) RefreshLibrary();}; render(); dialog.Show();
+            dialog.Closing+=(s,e) => {if(finishBusy && !committed) e.Cancel=true;};
+            dialog.Closed+=(s,e) => {
+                setupWindow=null;
+                if(!committed && !exiting) {setupDismissed=true; if(freshProfile || library.Games.Count==0) setupTemplateOnly=true;}
+            }; render(); dialog.Show();
         }
     }
 }

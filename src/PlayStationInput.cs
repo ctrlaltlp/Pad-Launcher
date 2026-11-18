@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 
@@ -84,9 +83,8 @@ namespace PadLauncher {
         static extern uint GetRawInputDeviceInfo(IntPtr device,uint command,ref DeviceInfo info,ref uint size);
         readonly Dictionary<IntPtr,SonyPadModel> models=new Dictionary<IntPtr,SonyPadModel>();
         HwndSource source;
-        sealed class Sample { public PadState State; public long Received; }
+        sealed class Sample { public PadState State; }
         readonly Dictionary<IntPtr,Sample> pads=new Dictionary<IntPtr,Sample>();
-        static long Milliseconds { get { return (long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency); } }
         public bool Start(IntPtr window) {
             if(source!=null && !source.IsDisposed && source.Handle==window) return true;
             Stop();
@@ -114,7 +112,9 @@ namespace PadLauncher {
         }
         public List<KeyValuePair<string,PadState>> ReadAll() {
             var result=new List<KeyValuePair<string,PadState>>();
-            foreach(var pair in pads) if(Milliseconds-pair.Value.Received<=1000) result.Add(new KeyValuePair<string,PadState>("sony:"+pair.Key.ToInt64(),pair.Value.State));
+            // Raw input is stateful: an unchanged held input is valid until a
+            // newer report or WM_INPUT_DEVICE_CHANGE removal replaces it.
+            foreach(var pair in pads) result.Add(new KeyValuePair<string,PadState>("sony:"+pair.Key.ToInt64(),pair.Value.State));
             return result;
         }
         IntPtr OnMessage(IntPtr window,int message,IntPtr wParam,IntPtr lParam,ref bool handled) {
@@ -143,9 +143,8 @@ namespace PadLauncher {
                 Buffer.BlockCopy(data,offset+8+(int)(i*reportSize),report,0,report.Length);
                 PadState decoded;
                 if(!SonyReports.Decode(model,report,out decoded)) continue;
-                long now=Milliseconds;
                 Sample previous; decoded.Packet=pads.TryGetValue(inputDevice,out previous) ? previous.State.Packet+1 : 1;
-                pads[inputDevice]=new Sample {State=decoded,Received=now};
+                pads[inputDevice]=new Sample {State=decoded};
             }
             return IntPtr.Zero;
         }

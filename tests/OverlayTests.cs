@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -32,7 +32,8 @@ public static class OverlayTests {
             Check(defaults.ButtonPrompts=="PlayStation" && defaults.ShowGameTitle,"Older configuration files default to PlayStation prompts and visible title");
             Check(defaults.OpenMonitor=="cursor","Older configuration files default to the cursor's monitor");
             Check(defaults.DefaultCollectionId=="remember" && defaults.CarouselScale==1,"Older settings preserve last-collection behaviour, normal size");
-            Check(Prompts.Help(defaults).Contains("×") && !Prompts.Help(defaults).Contains("LB"),"PlayStation hint uses cross, circle and L1/R1");
+            Check(Prompts.Help(defaults).Contains("✕") && !Prompts.Help(defaults).Contains("LB"),"PlayStation hint uses cross, circle and L1/R1");
+            Check(Prompts.Help(defaults).Contains("◻  Toggle Grid 5×3") && Prompts.RightTrigger(new Settings {ButtonPrompts="Xbox"})=="RT" && Prompts.RightTrigger(new Settings {ButtonPrompts="Nintendo"})=="ZR","Grid-toggle hints use Square and trigger labels match each controller style");
             defaults.ButtonPrompts="Xbox";
             Storage.Write("settings.json",defaults);
             var restored=Storage.Read<Settings>("settings.json");
@@ -44,10 +45,10 @@ public static class OverlayTests {
             Check(hold.Update(true,300)==ButtonGesture.None && hold.Update(true,1300)==ButtonGesture.Hold && hold.Update(true,1400)==ButtonGesture.None && hold.Update(false,1500)==ButtonGesture.None,"Hold triggers once and does not also trigger a tap on release");
             hold.Update(true,2000); hold.Reset();
             Check(hold.Update(false,4000)==ButtonGesture.None,"Focus loss or controller disconnect cancels a pending gesture");
-            Check(Prompts.Help(defaults).Contains("Tap Y") && Prompts.Help(new Settings()).Contains("Tap △"),"Tap refresh appears in the selected controller hint style");
+            Check(Prompts.Help(defaults).Contains("Y  Search") && Prompts.Help(new Settings()).Contains("△  Search") && Prompts.Help(defaults).Contains("Back / View  Refresh"),"Search and refresh appear in the selected controller hint style");
             var nintendo=new Settings {ButtonPrompts="Nintendo"};
             Check(Prompts.Buttons(nintendo)[0]=="B" && Prompts.Buttons(nintendo)[1]=="A" && Prompts.Buttons(nintendo)[3]=="X" && Prompts.Buttons(nintendo)[4]=="+","Nintendo labels follow the same physical button positions");
-            Check(Prompts.Help(nintendo).Contains("B  Play") && Prompts.Help(nintendo).Contains("Tap X"),"Nintendo help uses its face buttons and refresh label");
+            Check(Prompts.Help(nintendo).Contains("B  Play") && Prompts.Help(nintendo).Contains("X  Search") && Prompts.Help(nintendo).Contains("−  Refresh"),"Nintendo help uses its face buttons and refresh label");
             window=new Launcher(true,true);
             var refreshFlags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
             var launcherType=typeof(Launcher);
@@ -103,6 +104,7 @@ public static class OverlayTests {
             Check(VisualTreeHelper.HitTest(hitPanel,new Point(1,1))==null && VisualTreeHelper.HitTest(hitPanel,new Point(hitPanel.ActualWidth-1,hitPanel.ActualHeight-1))==null && VisualTreeHelper.HitTest(hitPanel,new Point(hitPanel.ActualWidth/2,hitPanel.ActualHeight/2))!=null,"Angled panel hit testing excludes empty corners and includes the visible panel");
             bool invalidLayout=false; try { window.SetCarouselLayout("unknown"); } catch(ArgumentException) { invalidLayout=true; }
             Check(invalidLayout && Storage.Read<Settings>("settings.json").CarouselLayout=="angled","Invalid layouts preserve the saved choice");
+            window.SetGridRows(2); // The navigation fixture explicitly exercises a two-row saved layout.
             window.SetCarouselLayout("grid");
             content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
             Check(panels.Children.Count==9 && Canvas.GetTop(panels.Children[0])==10 && Canvas.GetTop(panels.Children[5])==255 && ((FrameworkElement)panels.Children[0]).Width==150,"Grid places game covers in two rows of five");
@@ -113,9 +115,10 @@ public static class OverlayTests {
             var handle=new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
             var inputSource=System.Windows.Interop.HwndSource.FromHwnd(handle);
             window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.Down) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
-            Check(((TextBlock)gameTitle).Text=="Sekiro","Grid down navigation selects the game in the next row");
+            Check(((TextBlock)gameTitle).Text=="Death Stranding","Grid down navigation selects the nearest game in the centred next row");
             window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.Up) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
-            Check(((TextBlock)gameTitle).Text=="The Witcher 3","Grid up navigation returns to the same column");
+            Check(((TextBlock)gameTitle).Text=="Ghost of Tsushima","Grid up navigation selects the nearest panel above with consistent leftmost tie breaking");
+            window.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,inputSource,0,System.Windows.Input.Key.Right) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
             Check(defaults.GridColumns==5,"Older settings keep five grid columns");
             window.SetGridColumns(3);
             content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
@@ -130,7 +133,7 @@ public static class OverlayTests {
             bool invalidColumns=false; try { window.SetGridColumns(11); } catch(ArgumentOutOfRangeException) { invalidColumns=true; }
             Check(invalidColumns && Storage.Read<Settings>("settings.json").GridColumns==10,"Invalid grid column counts preserve the saved setting");
             window.SetGridColumns(5);
-            Check(defaults.GridRows==2,"Older settings retain two grid rows");
+            Check(defaults.GridColumns==5 && defaults.GridRows==3,"Settings without saved grid dimensions default to five columns and three rows");
             window.SetGridRows(1);
             content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout();
             Check(panels.Children.Count<=5 && Storage.Read<Settings>("settings.json").GridRows==1,"One grid row limits page size and is saved");
@@ -141,6 +144,19 @@ public static class OverlayTests {
             bool invalidRows=false; try { window.SetGridRows(6); } catch(ArgumentOutOfRangeException) { invalidRows=true; }
             Check(invalidRows && Storage.Read<Settings>("settings.json").GridRows==3,"Invalid grid row counts preserve the saved setting");
             window.SetGridRows(2);
+            var gridFlags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+            var selectionField=typeof(Launcher).GetField("selected",gridFlags);
+            var moveRow=typeof(Launcher).GetMethod("MoveGridRow",gridFlags);
+            int originalSelection=(int)selectionField.GetValue(window);
+            selectionField.SetValue(window,2); moveRow.Invoke(window,new object[]{1});
+            Check((int)selectionField.GetValue(window)==6,"Down chooses the visually nearest panel in a centred incomplete row rather than its column number");
+            selectionField.SetValue(window,4); moveRow.Invoke(window,new object[]{1});
+            Check((int)selectionField.GetValue(window)==8,"Down from a column missing in the last row selects that row's last game");
+            moveRow.Invoke(window,new object[]{1});
+            Check((int)selectionField.GetValue(window)==3,"Down from the last row wraps to the first row");
+            selectionField.SetValue(window,4); moveRow.Invoke(window,new object[]{-1});
+            Check((int)selectionField.GetValue(window)==8,"Up from the first row wraps into an incomplete last row");
+            selectionField.SetValue(window,originalSelection);
             window.SetCarouselLayout("angled");
             window.NavigateController(new PadState());
             string beforeMapped=((TextBlock)gameTitle).Text;
@@ -234,12 +250,12 @@ public static class OverlayTests {
             var helpDialog=resident.CreateHelpWindow();
             var helpRoot=(FrameworkElement)helpDialog.Content;
             var helpTabs=(TabControl)FindElement(helpRoot,"HelpSettingsTabs");
-            var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[0]).Content;
-            var settingsPage=(ScrollViewer)((TabItem)helpTabs.Items[1]).Content;
-            Check(helpTabs.Items.Count==7 && (string)((TabItem)helpTabs.Items[0]).Header=="Controls" && (string)((TabItem)helpTabs.Items[1]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Launchers" && (string)((TabItem)helpTabs.Items[6]).Header=="System","Settings tabs keep System last");
+            var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[5]).Content;
+            var settingsPage=(ScrollViewer)((TabItem)helpTabs.Items[0]).Content;
+            Check(helpTabs.Items.Count==8 && (string)((TabItem)helpTabs.Items[5]).Header=="Controls" && (string)((TabItem)helpTabs.Items[0]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[1]).Header=="Lists" && (string)((TabItem)helpTabs.Items[2]).Header=="Launchers" && (string)((TabItem)helpTabs.Items[7]).Header=="System","Settings tabs keep System last");
             Check(helpPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto && settingsPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto,"Both tabs show their slim scrollbar only when scrolling is needed");
-            var systemContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[6]).Content).Content;
-            var integrationsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[3]).Content).Content;
+            var systemContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[7]).Content).Content;
+            var integrationsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[2]).Content).Content;
             Check(FindElement(systemContents,"StartWithWindowsSetting")!=null && FindElement(systemContents,"SteamGridDbSetting")!=null,"System contains startup and SteamGridDB settings");
             var steamSection=(Expander)FindElement(integrationsContents,"SteamIntegrationSection");
             Check(FindElement(systemContents,"SteamPathSetting")==null && FindElement((FrameworkElement)steamSection.Content,"SteamPathSetting")!=null,"Launcher path settings live in the Steam integration dropdown");
@@ -249,15 +265,15 @@ public static class OverlayTests {
             Check(((StackPanel)integrationsContents).Children.OfType<Expander>().Count()==8 && ((StackPanel)integrationsContents).Children.OfType<Expander>().All(section => !section.IsExpanded),"Each launcher has its own initially collapsed integration section");
             var xboxSection=(Expander)FindElement(integrationsContents,"XboxIntegrationSection");
             Check(xboxSection!=null && FindElement((FrameworkElement)xboxSection.Content,"XboxEnabledSetting") is CheckBox,"Xbox app has its own integration and inclusion checkbox");
-            var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[2]).Content).Content;
+            var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[1]).Content).Content;
             Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
             var customSection=(Expander)FindElement(listsContents,"CustomListsSection");
             var individualSection=(Expander)FindElement(listsContents,"EditListGamesSection");
             Check(customSection!=null && (string)customSection.Header=="Combine lists" && individualSection!=null && (string)individualSection.Header=="Create/Edit lists","Combine lists and individual game editor have separate dropdown sections");
-            customSection.IsExpanded=true; individualSection.IsExpanded=true; helpTabs.SelectedIndex=2;
+            customSection.IsExpanded=true; individualSection.IsExpanded=true; helpTabs.SelectedIndex=1;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             Check(FindElement((FrameworkElement)individualSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)individualSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)individualSection.Content,"SaveCustomList")!=null,"Individual list editor keeps picker, name and save action");
-            helpTabs.SelectedIndex=1;
+            helpTabs.SelectedIndex=0;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             var listNameToggle=(CheckBox)FindElement((FrameworkElement)settingsPage.Content,"ShowListNameSetting");
             var listCountToggle=(CheckBox)FindElement((FrameworkElement)settingsPage.Content,"ShowListGameCountSetting");
@@ -276,7 +292,7 @@ public static class OverlayTests {
             Check(slimBar.ActualWidth<=6.1 && ((SolidColorBrush)mintThumb.Background).Color==Color.FromRgb(163,240,205),"Scrollbar is six pixels wide and matches the mint selection colour");
             var settingsStyleButtons=(StackPanel)FindElement((FrameworkElement)helpPage.Content,"ButtonStyleChoices");
             ((Button)settingsStyleButtons.Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(helpTabs.SelectedIndex==1 && ((TextBlock)FindElement((FrameworkElement)helpPage.Content,"LaunchButtonGuide")).Text=="A","Button style lives with Help and updates its controls guide");
+            Check(helpTabs.SelectedIndex==0 && Prompts.Style(Storage.Read<Settings>("settings.json"))=="Xbox","Button style remains configurable in Controls without the reference list");
             var settingLayoutPicker=(ComboBox)FindElement((FrameworkElement)settingsPage.Content,"CarouselLayoutSetting");
             settingLayoutPicker.SelectedValue="grid";
             Check(FindElement((FrameworkElement)settingsPage.Content,"GridColumnsSettings").Visibility==Visibility.Visible,"Grid column settings appear when Grid is selected");
@@ -459,22 +475,23 @@ public static class OverlayTests {
             emptyContent.Measure(new Size(1600,900)); emptyContent.Arrange(new Rect(0,0,1600,900)); emptyContent.UpdateLayout();
             Check(((TextBlock)FindElement(emptyContent,"SelectedGameTitle")).Text=="Choose available lists in Settings","Empty library keeps its guidance title");
             var emptyCarousel=(Canvas)FindElement(emptyContent,"GameCarousel");
-            Check(emptyCarousel.Children.Count==4 && FindElement(emptyContent,"GuideCardSteam")!=null && FindElement(emptyContent,"GuideCardCustomGames")!=null && FindElement(emptyContent,"GuideCardEmulators")!=null && FindElement(emptyContent,"GuideCardLists")!=null,"Empty library offers four setup panels instead of a blank carousel");
+            Check(emptyCarousel.Children.Count==5 && FindElement(emptyContent,"GuideCardSteam")!=null && FindElement(emptyContent,"GuideCardCustomGames")!=null && FindElement(emptyContent,"GuideCardEmulators")!=null && FindElement(emptyContent,"GuideCardLists")!=null,"Empty library offers four setup panels and an action row");
+            Check(FindElement(emptyContent,"TemplateRunSetup") is Button && FindElement(emptyContent,"TemplateQuitApp") is Button,"Template overlay offers first-launch wizard and quit actions");
             var emptyHandle=new System.Windows.Interop.WindowInteropHelper(emptyWindow).EnsureHandle(); var emptySource=System.Windows.Interop.HwndSource.FromHwnd(emptyHandle);
             emptyWindow.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,emptySource,0,System.Windows.Input.Key.Enter) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
             var settingsDialog=emptyWindow.HelpWindow;
-            Check(settingsDialog!=null && ((TabControl)FindElement((FrameworkElement)settingsDialog.Content,"HelpSettingsTabs")).SelectedIndex==2,"Enter on an empty library opens Settings on the Lists tab");
+            Check(settingsDialog!=null && ((TabControl)FindElement((FrameworkElement)settingsDialog.Content,"HelpSettingsTabs" )).SelectedIndex==1,"Enter on an empty library opens Settings on the Lists tab");
             settingsDialog.Close();
             emptyWindow.OpenSettingsTab(3);
             var reopened=emptyWindow.HelpWindow;
-            Check(reopened!=null && ((TabControl)FindElement((FrameworkElement)reopened.Content,"HelpSettingsTabs")).SelectedIndex==3,"Settings deep link opens the Launchers tab");
+            Check(reopened!=null && ((TabControl)FindElement((FrameworkElement)reopened.Content,"HelpSettingsTabs" )).SelectedIndex==2,"Settings deep link opens the Launchers tab");
             var listsGuide=(FrameworkElement)FindElement(emptyContent,"GuideCardLists");
             Check(listsGuide.Tag is Int32 && (int)listsGuide.Tag==2,"Setup panels carry the Settings tab their click opens");
             reopened.Close();
             var emptyHelp=emptyWindow.CreateHelpWindow();
             var emptyHelpRoot=(FrameworkElement)emptyHelp.Content;
             var emptyTabs=(TabControl)FindElement(emptyHelpRoot,"HelpSettingsTabs");
-            var emptyOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)emptyTabs.Items[1]).Content).Content;
+            var emptyOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)emptyTabs.Items[6]).Content).Content;
             var emptyMissing=(WrapPanel)FindElement(emptyOverlayPage,"MissingArtworkList");
             var emptyMissingCount=(TextBlock)FindElement(emptyOverlayPage,"MissingArtworkCount");
             Check(emptyMissing!=null && emptyMissing.Children.Count==0 && emptyMissingCount.Text=="Every game has artwork.","Missing artwork list reports nothing to fix when the library is empty");
@@ -485,7 +502,7 @@ public static class OverlayTests {
             var bareHelp=bareWindow.CreateHelpWindow();
             var bareHelpRoot=(FrameworkElement)bareHelp.Content;
             var bareTabs=(TabControl)FindElement(bareHelpRoot,"HelpSettingsTabs");
-            var bareOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)bareTabs.Items[1]).Content).Content;
+            var bareOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)bareTabs.Items[6]).Content).Content;
             var bareMissing=(WrapPanel)FindElement(bareOverlayPage,"MissingArtworkList");
             var bareMissingCount=(TextBlock)FindElement(bareOverlayPage,"MissingArtworkCount");
             Check(bareMissing!=null && bareMissing.Children.Count==1 && String.Equals((string)((Button)bareMissing.Children[0]).Content,"No art game",StringComparison.Ordinal) && bareMissingCount.Text=="1 game needs artwork.","Missing artwork list names the games that still need covers");

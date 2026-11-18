@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -14,6 +14,15 @@ public static class MonitorTests {
     [STAThread] public static int Main() {
         Launcher window=null;
         try {
+            foreach(double scaling in new[]{1.0,1.25,1.5,2.0}) {
+                var work=new System.Windows.Rect(0,0,1920,1040);
+                var logical=SettingsWindowSizing.AvailableSize(work,scaling);
+                Check(logical.Height*scaling<=1040.01 && logical.Width*scaling<=1920.01,"Settings constraints account for FHD at "+(scaling*100)+"% scaling");
+                var fitted=SettingsWindowSizing.FitBounds(new System.Windows.Rect(200,-100,830*scaling,1040*scaling),work);
+                Check(work.Contains(fitted),"Tall settings bounds and title bar stay in the work area at "+(scaling*100)+"%");
+            }
+            var secondaryWork=new System.Windows.Rect(-1920,120,1920,1000);
+            Check(secondaryWork.Contains(SettingsWindowSizing.FitBounds(new System.Windows.Rect(-2100,0,1400,1500),secondaryWork)),"Settings fit negative-coordinate monitors and taskbar offsets");
             window=new Launcher(true,false);
             var handle=new WindowInteropHelper(window).EnsureHandle();
             var place=typeof(Launcher).GetMethod("PlaceOnMonitor",BindingFlags.Instance|BindingFlags.NonPublic);
@@ -35,7 +44,7 @@ public static class MonitorTests {
             Check(Launcher.ResolveMonitor("disconnected-display",monitors,cursorMonitor).DeviceName==cursorMonitor.DeviceName,"Missing saved monitor falls back to the cursor's display");
             place.Invoke(window,new object[]{cursorMonitor});
             Check(System.Windows.Forms.Screen.FromHandle(handle).DeviceName==cursorMonitor.DeviceName,"Overlay can be placed on the monitor containing the cursor");
-            Check(Prompts.Buttons(new Settings())[5]=="□" && Prompts.Buttons(new Settings{ButtonPrompts="Xbox"})[5]=="X" && Prompts.Buttons(new Settings{ButtonPrompts="Nintendo"})[5]=="Y","Monitor button labels match PlayStation, Xbox and Nintendo positions");
+            Check(Prompts.Buttons(new Settings())[5]=="◻" && Prompts.Buttons(new Settings{ButtonPrompts="Xbox"})[5]=="X" && Prompts.Buttons(new Settings{ButtonPrompts="Nintendo"})[5]=="Y","Monitor button labels match PlayStation, Xbox and Nintendo positions");
             Console.WriteLine(checks+" monitor checks passed."); return 0;
         } catch(Exception e) { Console.Error.WriteLine(e); return 1; }
         finally { if(window!=null) window.ExitApp(); }

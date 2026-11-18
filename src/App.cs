@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.4.7")]
-[assembly: System.Reflection.AssemblyFileVersion("0.4.7")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.4.7")]
+[assembly: System.Reflection.AssemblyVersion("0.5.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.0")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -141,9 +141,14 @@ namespace PadLauncher {
             }
             if (args.Contains("--quit")) { instance.ReleaseMutex(); return; }
             var app = new Application();
+            bool reportingError=false;
             app.DispatcherUnhandledException += (s,e) => {
+                e.Handled=true;
                 try { Directory.CreateDirectory(Storage.Root); File.AppendAllText(System.IO.Path.Combine(Storage.Root, "error.log"), DateTime.Now + " " + e.Exception + Environment.NewLine); } catch { }
-                ThemedMessage.Show(e.Exception.Message, "Pad Launcher"); e.Handled = true;
+                if(reportingError) return;
+                reportingError=true;
+                try {ThemedMessage.Show(e.Exception.Message, "Pad Launcher");} catch { }
+                finally {reportingError=false;}
             };
             var window = new Launcher(args.Contains("--demo") || (args.Contains("--render-preview") && !args.Contains("--live-preview")), args.Contains("--render-preview"));
             RegisteredWaitHandle showWait=null,exitWait=null;
@@ -231,10 +236,11 @@ namespace PadLauncher {
         readonly LinkedList<string> imageRecency=new LinkedList<string>();
         const long ImageCacheLimit=32L*1024*1024;
         long imageCacheBytes;
-        readonly Dictionary<string,bool> missingGameCache=new Dictionary<string,bool>();
+        readonly Dictionary<string,string> missingGameCache=new Dictionary<string,string>();
         DateTime missingGameCacheUntil;
         readonly Dictionary<string,FrameworkElement> cards = new Dictionary<string,FrameworkElement>();
         readonly List<FrameworkElement> guideCards = new List<FrameworkElement>();
+        StackPanel guideActions;
         readonly DispatcherTimer controllerTimer = new DispatcherTimer(DispatcherPriority.Input);
         readonly DispatcherTimer noticeTimer = new DispatcherTimer();
         readonly DispatcherTimer navigationSaveTimer=new DispatcherTimer(DispatcherPriority.Background);
@@ -265,6 +271,12 @@ namespace PadLauncher {
             demo = demoMode; preview = renderPreview;
             freshProfile=!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json")) && !File.Exists(System.IO.Path.Combine(Storage.Root,"library.json"));
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
+            ControlBindings.UpgradeSearchDefaults(settings);
+            var beforeShortcutCleanup=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            if(SteamShortcutIdentity.Normalize(settings)) {
+                Storage.Write("settings.before-shortcut-unification.json",beforeShortcutCleanup);
+                Storage.Write("settings.json",settings);
+            }
             Title = Entry.AppName; Foreground = white;
             using(var iconStream=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PadLauncher.ico")) {
                 if(iconStream!=null) { var decoder=new IconBitmapDecoder(iconStream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad); Icon=decoder.Frames[decoder.Frames.Count-1]; }
@@ -283,9 +295,10 @@ namespace PadLauncher {
             ApplyCarouselScale();
             SizeChanged+=(s,e) => { if(ActiveLayout=="grid") Render(false); };
             PreviewKeyDown += OnKey;
-            MouseWheel += (s,e) => { Move(e.Delta < 0 ? 1 : -1); };
+            PreviewTextInput+=(s,e) => HandleSearchText(e);
             Closed += (s,e) => { updateCancellation.Cancel(); controllerTimer.Stop(); noticeTimer.Stop(); navigationSaveTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
+                if(gameSearchWindow!=null) gameSearchWindow.Close();
                 if (!exiting) {
                     e.Cancel=true; controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
                     notice.Visibility=Visibility.Collapsed; exitButton.Reset(); previousButtons=0; navigation.Reset();
@@ -302,7 +315,14 @@ namespace PadLauncher {
             if (demo) { library = Demo(); settings.SelectedId="4"; ApplyLibrary(true); }
             else {
                 var cached = Storage.Read<Library>("library.json");
-                if (cached != null && (String.IsNullOrEmpty(settings.SteamPath) || String.Equals(cached.SteamPath, settings.SteamPath, StringComparison.OrdinalIgnoreCase)) && (String.IsNullOrEmpty(settings.UserId) || cached.UserId == settings.UserId)) { library = cached; ApplyLibrary(true); }
+                if (cached != null && (String.IsNullOrEmpty(settings.SteamPath) || String.Equals(cached.SteamPath, settings.SteamPath, StringComparison.OrdinalIgnoreCase)) && (String.IsNullOrEmpty(settings.UserId) || cached.UserId == settings.UserId)) {
+                    library=cached;
+                    var previousArtwork=library.Games.Where(game => game.Source=="custom").GroupBy(game => game.Id).ToDictionary(group => group.Key,group => group.First());
+                    CustomGameLibrary.Apply(library,settings);
+                    library.Games=library.Games.OrderBy(game => game.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+                    foreach(var game in library.Games.Where(entry => entry.Source=="custom")) {Game previous; previousArtwork.TryGetValue(game.Id,out previous); ArtworkService.RestoreStartupArtwork(game,previous,settings);}
+                    ApplyLibrary(true);
+                }
                 else { SetFilters(); Render(false); }
             }
         }
@@ -321,17 +341,34 @@ namespace PadLauncher {
         }
         public void ShowOverlay() {
             if (exiting) return;
-            if (IsVisible) { Activate(); Focus(); return; }
+            if (IsVisible) { FocusOverlayInput(); return; }
             launching=false; exitButton.Reset(); previousButtons=0; navigation.Reset();
+            suppressSearchRelease=false; bindingLeftTriggerDown=bindingRightTriggerDown=false; testLayoutTriggerDown=false;
             ApplyLibrary(true);
             var monitor=preview ? null : ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
             if(monitor!=null) PlaceOnMonitor(monitor);
             Show();
             if(monitor!=null) PlaceOnMonitor(monitor);
-            Activate(); Focus();
             if (!preview) { Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle()); controllerTimer.Start(); }
+            FocusOverlayInput();
             // Paint retained artwork first, then reread Steam's saved changes.
             if (!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
+        }
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        void FocusOverlayInput() {
+            IntPtr handle=new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+            IntPtr previousForeground=GetForegroundWindow();
+            Activate(); SetForegroundWindow(handle); Focus();
+            // Tray activation can finish after Show returns. Retry once before
+            // background refresh, without reclaiming focus from another app.
+            Dispatcher.BeginInvoke(DispatcherPriority.Input,new Action(() => {
+                if(exiting || !IsVisible || GameSearchOpen || OwnedWindows.Cast<Window>().Any(window => window.IsVisible)) return;
+                IntPtr foreground=GetForegroundWindow();
+                if(foreground!=handle && foreground!=previousForeground) return;
+                if(!IsActive) {Activate(); SetForegroundWindow(handle);}
+                Focus();
+            }));
         }
         public void SetDefaultCollection(string id) {
             if(id!="remember" && !CollectionOptions().Any(c => c.Id==id && CollectionEnabled(id))) throw new ArgumentException("Choose an available list.");
@@ -361,11 +398,11 @@ namespace PadLauncher {
         }
         public void SetCarouselScale(double scale) {
             if(Double.IsNaN(scale) || Double.IsInfinity(scale) || scale<0.6 || scale>1.4) throw new ArgumentOutOfRangeException("scale","Choose a size between 60% and 140%.");
-            double previous=settings.CarouselScale;
-            try { settings.CarouselScale=scale; Storage.Write("settings.json",settings); }
-            catch { settings.CarouselScale=previous; throw; }
+            double previous=settings.CarouselScale,previousRetro=settings.RetroPanelScale;
+            try { settings.CarouselScale=scale; if(settings.PanelSizesLocked) settings.RetroPanelScale=scale; Storage.Write("settings.json",settings); }
+            catch { settings.CarouselScale=previous; settings.RetroPanelScale=previousRetro; throw; }
             ApplyCarouselScale();
-            if(ActiveLayout=="grid") Render(false);
+            Render(false);
         }
         public void SetCarouselLayout(string layout) {
             StopListTransition();
@@ -382,18 +419,30 @@ namespace PadLauncher {
             catch { settings.AngledPanelSizing=previous; throw; }
             if(ActiveLayout!="grid" && ActiveLayout!="rectangular") { cards.Clear(); carousel.Children.Clear(); Render(false); }
         }
-        ListLayout ActiveListLayout {
-            get {
-                ListLayout layout;
-                return settings.ListLayouts!=null && filters.Count>0 && collectionIndex>=0 && collectionIndex<filters.Count &&
-                    settings.ListLayouts.TryGetValue(filters[collectionIndex].Id,out layout) ? layout : null;
-            }
+        ListLayout activeListLayout;
+        ListLayout ActiveListLayout {get {return activeListLayout;}}
+        readonly Dictionary<string,string> testLayoutOverrides=new Dictionary<string,string>();
+        readonly Dictionary<string,string> testPreviousCarouselLayouts=new Dictionary<string,string>();
+        bool testLayoutTriggerDown;
+        string ActiveLayout { get {string value; return filters.Count>collectionIndex && testLayoutOverrides.TryGetValue(filters[collectionIndex].Id,out value) ? value : ActiveListLayout==null ? settings.CarouselLayout : ActiveListLayout.Layout;}}
+        internal bool HandleTestLayoutTrigger(PadState pad) {
+            bool previous=testLayoutTriggerDown;
+            if(pad.RT<80) testLayoutTriggerDown=false; else if(pad.RT>=160) testLayoutTriggerDown=true;
+            if(previous || !testLayoutTriggerDown || launching || filters.Count==0) return false;
+            string id=filters[collectionIndex].Id,layout=ActiveLayout;
+            if(layout=="grid") {
+                if(!testPreviousCarouselLayouts.TryGetValue(id,out layout)) layout=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled";
+            } else {testPreviousCarouselLayouts[id]=layout; layout="grid";}
+            testLayoutOverrides[id]=layout;
+            StopListTransition(); navigation.Reset(); exitButton.Reset(); gridScrollPage=-1;
+            cards.Clear(); carousel.Children.Clear(); ApplyCarouselScale(); Render(false); return true;
         }
-        string ActiveLayout { get {return ActiveListLayout==null ? settings.CarouselLayout : ActiveListLayout.Layout;}}
+        bool ActivePanelOutlines {get {var layout=ActiveListLayout; return layout!=null && layout.ShowPanelOutlines.HasValue ? layout.ShowPanelOutlines.Value : settings.ShowPanelOutlines;}}
         double ActivePanelScale { get {return ActiveListLayout==null ? settings.CarouselScale : ActiveListLayout.PanelScale;}}
-        string ActiveAngledSizing { get {return ActiveListLayout==null ? settings.AngledPanelSizing : ActiveListLayout.AngledSizing;}}
-        int GridColumns { get {int value=ActiveListLayout==null ? settings.GridColumns : ActiveListLayout.Columns; return value>=2 && value<=10 ? value : 5;} }
-        int GridRows { get {int value=ActiveListLayout==null ? settings.GridRows : ActiveListLayout.Rows; return value>=1 && value<=5 ? value : 2;} }
+        string ActiveAngledSizing { get {return GameSearchOpen ? "fit" : ActiveListLayout==null ? settings.AngledPanelSizing : ActiveListLayout.AngledSizing;}}
+        bool TestGridLayout {get {string layout; return filters.Count>collectionIndex && testLayoutOverrides.TryGetValue(filters[collectionIndex].Id,out layout) && layout=="grid";}}
+        int GridColumns { get {if(TestGridLayout) return 5; int value=ActiveListLayout==null ? settings.GridColumns : ActiveListLayout.Columns; return value>=2 && value<=10 ? value : 5;} }
+        int GridRows { get {if(TestGridLayout) return 3; int value=ActiveListLayout==null ? settings.GridRows : ActiveListLayout.Rows; return value>=1 && value<=5 ? value : 3;} }
         public void SetGridRows(int rows) {
             if(rows<1 || rows>5) throw new ArgumentOutOfRangeException("rows","Choose between 1 and 5 rows.");
             int previous=settings.GridRows;
@@ -428,7 +477,7 @@ namespace PadLauncher {
             }
             double windowWidth=ActualWidth>0 ? ActualWidth : Width,windowHeight=ActualHeight>0 ? ActualHeight : Height;
             if(windowWidth>0 && windowHeight>0) scene.Height=1600*windowHeight/windowWidth;
-            double top=settings.ShowCollectionName ? 56 : 16,bottom=settings.ShowGameTitle || temporaryLabels ? 72 : 16;
+            double top=settings.ShowCollectionName || GameSearchOpen ? 56 : 16,bottom=GameSearchOpen ? 104 : settings.ShowGameTitle || temporaryLabels ? 72 : 16;
             double available=Math.Max(100,scene.Height-top-bottom);
             double panelHeight=Math.Min(150,(1440.0-(GridColumns-1)*28)/GridColumns)*1.5;
             double wanted=(panelHeight*GridRows+(GridRows-1)*20)*scale;
@@ -472,7 +521,7 @@ namespace PadLauncher {
             var next=monitors[(index+1)%monitors.Length];
             PlaceOnMonitor(next); if(IsVisible) { Activate(); Focus(); }
         }
-        public void ExitApp() { StopListTransition(); exiting=true; if(helpWindow!=null) helpWindow.Close(); Close(); }
+        public void ExitApp() { StopListTransition(); exiting=true; foreach(var job in artworkRefreshJobs.Values) job.Cancel(); if(listArtworkCancellation!=null) listArtworkCancellation.Cancel(); if(helpWindow!=null) helpWindow.Close(); Close(); }
         public void ShowHelpWindow() {
             if(helpWindow!=null) { if(helpWindow.WindowState==WindowState.Minimized) helpWindow.WindowState=WindowState.Normal; helpWindow.Activate(); return; }
             helpWindow=CreateHelpWindow();
@@ -534,8 +583,8 @@ namespace PadLauncher {
             count.Text=missing.Count==0 ? "Every game has artwork." : missing.Count+" game"+(missing.Count==1 ? "" : "s")+" need"+(missing.Count==1 ? "s" : "")+" artwork.";
             foreach(var game in missing) {
                 var picked=game;
-                var button=new Button {Content=picked.Name,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,8),ToolTip="Choose artwork for "+picked.Name};
-                button.Click+=(s,e) => ShowArtworkPicker(dialog,picked);
+                var button=new Button {Content=picked.EmulatorId=="retroarch" ? picked.Name+" · "+GameSourceLabel(picked) : picked.Name,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,8),ToolTip="Choose artwork for "+picked.Name};
+                button.Click+=(s,e) => ShowPreferredArtworkPicker(dialog,picked);
                 list.Children.Add(button);
             }
         }
@@ -548,17 +597,21 @@ namespace PadLauncher {
         }
         public Window CreateHelpWindow() {
             var dialog=new Window {
-                Title="Pad Launcher · Settings",Width=660,Height=920,MinWidth=660,MinHeight=500,
+                Title="Pad Launcher · Settings",Width=700,Height=920,MinWidth=700,MinHeight=500,
                 WindowStartupLocation=WindowStartupLocation.CenterScreen,ResizeMode=ResizeMode.CanResize,
                 Background=new SolidColorBrush(Color.FromRgb(13,25,34)),Foreground=white,FontFamily=FontFamily,
                 ShowInTaskbar=true,Topmost=true,Icon=Icon
             };
             ApplySettingsTheme(dialog);
+            SettingsWindowSizing.Attach(dialog);
+            dialog.Closed+=(s,e) => CleanupSettingsContent(dialog);
             var layout=new StackPanel { Margin=new Thickness(28) };
             var listsLayout=new StackPanel {Margin=new Thickness(28)};
             var listsScroll=new ScrollViewer {Content=listsLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var helpLayout=new StackPanel {Margin=new Thickness(28)};
             var systemLayout=new StackPanel {Margin=new Thickness(28)};
+            var artworkLayout=new StackPanel {Name="ArtworkSettingsPanel",Margin=new Thickness(28)};
+            var artworkScroll=new ScrollViewer {Content=artworkLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var integrationsLayout=new StackPanel {Margin=new Thickness(28)};
             var integrationsScroll=new ScrollViewer {Content=integrationsLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var emulatorLayout=new StackPanel {Margin=new Thickness(28)};
@@ -570,23 +623,26 @@ namespace PadLauncher {
             var settingsScroll=new ScrollViewer {Content=layout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var tabs=new TabControl {Name="HelpSettingsTabs",Background=dialog.Background,BorderThickness=new Thickness(0),Foreground=white,Margin=new Thickness(12,12,12,0)};
             tabs.ItemContainerStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabItem}'>
-                <Setter Property='Background' Value='#22333F'/><Setter Property='Foreground' Value='#ECF3F2'/><Setter Property='FontSize' Value='15'/>
+                <Setter Property='Background' Value='#22333F'/><Setter Property='Foreground' Value='#ECF3F2'/><Setter Property='FontSize' Value='14'/>
                 <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type TabItem}'>
-                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='8,11' Margin='0,0,6,0'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
+                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='7,11' Margin='0,0,4,0'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
                     <ControlTemplate.Triggers><Trigger Property='IsSelected' Value='True'><Setter TargetName='TabBorder' Property='Background' Value='#A3F0CD'/><Setter Property='Foreground' Value='#0D1922'/></Trigger></ControlTemplate.Triggers>
                 </ControlTemplate></Setter.Value></Setter>
             </Style>");
-            tabs.Items.Add(new TabItem {Header="Controls",Content=helpScroll});
             tabs.Items.Add(new TabItem {Header="Overlay",Content=settingsScroll});
             tabs.Items.Add(new TabItem {Header="Lists",Content=listsScroll});
             tabs.Items.Add(new TabItem {Header="Launchers",Content=integrationsScroll});
             tabs.Items.Add(new TabItem {Header="Custom games",Content=customScroll});
             tabs.Items.Add(new TabItem {Header="Emulators",Content=emulatorScroll});
+            tabs.Items.Add(new TabItem {Header="Controls",Content=helpScroll});
+            tabs.Items.Add(new TabItem {Header="Artwork",Content=artworkScroll});
             tabs.Items.Add(new TabItem {Header="System",Content=systemScroll});
             tabs.SelectedIndex=0;
             helpTabs=tabs;
             Action rebuild=null;
             rebuild=() => {
+            CleanupSettingsContent(dialog);
+            artworkLayout.Children.Clear(); var artworkHeading=Label("Artwork",26,white); artworkHeading.FontWeight=FontWeights.SemiBold; artworkLayout.Children.Add(artworkHeading);
             layout.Children.Clear(); helpLayout.Children.Clear(); systemLayout.Children.Clear(); integrationsLayout.Children.Clear(); listsLayout.Children.Clear();
             customLayout.Children.Clear(); customLayout.Children.Add(CreateCustomGamesPanel(dialog,rebuild));
             emulatorLayout.Children.Clear(); emulatorLayout.Children.Add(CreateEmulatorsPanel(dialog,rebuild));
@@ -609,59 +665,21 @@ namespace PadLauncher {
                 styles.Children.Add(choice);
             }
             helpLayout.Children.Add(styles);
-            TextBlock leftGuide=null,rightGuide=null;
-            string[][] rows={
-                new[]{"Left stick",BrowseGuide(true)},
-                new[]{"D-pad",BrowseGuide(false)},
-                new[]{"Right stick","Browse games at "+settings.RightStickSpeed.ToString("0.#")+"× speed"},
-                new[]{names[0],"Launch selected game"},
-                new[]{"Tap "+names[1],"Dismiss overlay"},
-                new[]{"Hold "+names[1]+" · 1 sec","Exit app completely"},
-                new[]{names[2],"Switch lists"},
-                new[]{names[5],"Move overlay to the next monitor"},
-                new[]{"Tap "+names[3],"Refresh games and lists"},
-                new[]{names[4],"Briefly show controls and game title"}
-            };
-            foreach(var row in rows) {
-                var grid=new Grid { Margin=new Thickness(0,0,0,15) };
-                grid.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(145)});
-                grid.ColumnDefinitions.Add(new ColumnDefinition());
-                var key=Label(row[0],15,mint); key.FontWeight=FontWeights.SemiBold; grid.Children.Add(key);
-                if(row[1]=="Launch selected game") key.Name="LaunchButtonGuide";
-                var description=Label(row[1],14,white); description.TextWrapping=TextWrapping.Wrap; Grid.SetColumn(description,1); grid.Children.Add(description);
-                if(row[0]=="Left stick") leftGuide=description; if(row[0]=="Right stick") rightGuide=description;
-                helpLayout.Children.Add(grid);
-            }
-            var keyboard=Label("Keyboard: ← / → browse · ↑ / ↓ grid rows\nEnter play · Esc dismiss · Page Up / Down lists\nM next monitor · F5 refresh · F1 hints",12,muted);
-            keyboard.TextWrapping=TextWrapping.Wrap; keyboard.Margin=new Thickness(0,8,0,12); helpLayout.Children.Add(keyboard);
+            var changeControls=new Button {Name="ChangeControls",Content="Show/Change controls",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,8,0,18)};
+            changeControls.Click+=(s,e) => ShowControlSettings(dialog,rebuild); helpLayout.Children.Add(changeControls);
             var leftSpeedCaption=Label("Left stick speed",14,mint); leftSpeedCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(leftSpeedCaption);
             var leftSpeedValue=Label(settings.LeftStickSpeed.ToString("0.#")+"×",13,white); helpLayout.Children.Add(leftSpeedValue);
             var leftSpeedPicker=new Slider {Name="LeftStickSpeedSetting",Minimum=1,Maximum=10,Value=settings.LeftStickSpeed,TickFrequency=.5,IsSnapToTickEnabled=true,SmallChange=.5,LargeChange=1,Margin=new Thickness(0,4,0,10)};
-            leftSpeedPicker.ValueChanged+=(s,e) => {settings.LeftStickSpeed=leftSpeedPicker.Value; leftSpeedValue.Text=settings.LeftStickSpeed.ToString("0.#")+"×"; if(leftGuide!=null) leftGuide.Text=BrowseGuide(true); navigation.Reset(); QueueSave();}; helpLayout.Children.Add(leftSpeedPicker);
+            leftSpeedPicker.ValueChanged+=(s,e) => {settings.LeftStickSpeed=leftSpeedPicker.Value; leftSpeedValue.Text=settings.LeftStickSpeed.ToString("0.#")+"×"; navigation.Reset(); QueueSave();}; helpLayout.Children.Add(leftSpeedPicker);
             var speedCaption=Label("Right stick speed",14,mint); speedCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(speedCaption);
             var speedValue=Label(settings.RightStickSpeed.ToString("0.#")+"×",13,white); helpLayout.Children.Add(speedValue);
             var speedPicker=new Slider {Name="RightStickSpeedSetting",Minimum=1,Maximum=10,Value=settings.RightStickSpeed,TickFrequency=.5,IsSnapToTickEnabled=true,SmallChange=.5,LargeChange=1,Margin=new Thickness(0,4,0,10)};
-            speedPicker.ValueChanged+=(s,e) => {settings.RightStickSpeed=speedPicker.Value; speedValue.Text=settings.RightStickSpeed.ToString("0.#")+"×"; if(rightGuide!=null) rightGuide.Text="Browse games at "+settings.RightStickSpeed.ToString("0.#")+"× speed"; navigation.Reset(); QueueSave();}; helpLayout.Children.Add(speedPicker);
+            speedPicker.ValueChanged+=(s,e) => {settings.RightStickSpeed=speedPicker.Value; speedValue.Text=settings.RightStickSpeed.ToString("0.#")+"×"; navigation.Reset(); QueueSave();}; helpLayout.Children.Add(speedPicker);
             var jumpCaption=Label("Jump to list",14,mint); jumpCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(jumpCaption);
-            var jumpButtons=new List<KeyValuePair<string,string>> {
-                new KeyValuePair<string,string>("off","Off"),
-                new KeyValuePair<string,string>("left","Left stick click (L3)"),
-
-            };
-            var jumpButton=new SettingsComboBox {ItemsSource=jumpButtons,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.JumpListButton=="left" ? "left" : "off",Padding=new Thickness(8)};
-            helpLayout.Children.Add(jumpButton);
             var jumpLists=CollectionOptions().Where(list => CollectionEnabled(list.Id)).Select(list => new KeyValuePair<string,string>(list.Id,ListLabel(list))).ToList();
-            var jumpDestination=new SettingsComboBox {ItemsSource=jumpLists,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.JumpListId,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0),IsEnabled=settings.JumpListButton=="left"};
+            var jumpDestination=new SettingsComboBox {ItemsSource=jumpLists,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.JumpListId,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0),IsEnabled=ControlBindings.HasJump(settings)};
             helpLayout.Children.Add(jumpDestination);
-            var jumpNote=Label("Choose a list, then click the selected stick to jump to it.",12,muted); jumpNote.TextWrapping=TextWrapping.Wrap; jumpNote.Margin=new Thickness(0,8,0,0); helpLayout.Children.Add(jumpNote);
-            var favouriteCaption=Label("Favourites",14,mint); favouriteCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(favouriteCaption);
-            var favouriteNote=Label("R3 adds or removes the selected game from Favourites. Show or hide the Favourites list under Lists → Overlay lists. Keyboard: F.",12,muted);
-            favouriteNote.TextWrapping=TextWrapping.Wrap; helpLayout.Children.Add(favouriteNote);
-            jumpButton.SelectionChanged+=(s,e) => {
-                settings.JumpListButton=jumpButton.SelectedValue as string;
-                jumpDestination.IsEnabled=settings.JumpListButton=="left";
-                QueueSave();
-            };
+            var jumpNote=Label("Assign Jump to configured list in Change controls, then choose its destination here.",12,muted); jumpNote.TextWrapping=TextWrapping.Wrap; jumpNote.Margin=new Thickness(0,8,0,0); helpLayout.Children.Add(jumpNote);
             jumpDestination.SelectionChanged+=(s,e) => {settings.JumpListId=jumpDestination.SelectedValue as string; QueueSave();};
             var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,12)};
             titleToggle.Click+=(s,e) => {
@@ -836,6 +854,10 @@ namespace PadLauncher {
             var listLayoutSection=new Expander {Header="Per-list layout",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listLayoutExpanded};
             listLayoutSection.Expanded+=(s,e) => listLayoutExpanded=true; listLayoutSection.Collapsed+=(s,e) => listLayoutExpanded=false;
             listLayoutSection.Content=CreateListLayoutSettings(dialog,rebuild); listsLayout.Children.Add(listLayoutSection);
+            var retroArchListsSection=new Expander {Name="RetroArchListsSettingsSection",Header="RetroArch lists settings",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=retroArchListSettingsExpanded};
+            retroArchListsSection.Expanded+=(s,e) => retroArchListSettingsExpanded=true; retroArchListsSection.Collapsed+=(s,e) => retroArchListSettingsExpanded=false;
+            retroArchListsSection.Content=CreateListLayoutSettings(dialog,rebuild,true); listsLayout.Children.Add(retroArchListsSection);
+
             var customListSection=new Expander {Name="CustomListsSection",Header="Combine lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0)};
             var customListPanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             var customListOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new list")};
@@ -843,14 +865,15 @@ namespace PadLauncher {
             foreach(var item in settings.CustomLists ?? new List<CustomList>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
             foreach(var item in settings.CombinedCollections ?? new List<CombinedCollection>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
             foreach(var item in CollectionOptions().Where(c => c.Id.StartsWith("source:emulator:",StringComparison.Ordinal))) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(item)));
-            var customListPicker=new SettingsComboBox {Name="CustomListPicker",ItemsSource=customListOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
+            var customListPicker=new SettingsComboBox {Name="CustomListPicker",ItemsSource=customListOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,14)};
             var individualNote=Label("Create a list, edit its games and name, duplicate it, or delete it.",12,muted);
             individualNote.TextWrapping=TextWrapping.Wrap; individualNote.Margin=new Thickness(0,0,0,8); customListPanel.Children.Add(individualNote);
             customListPanel.Children.Add(customListPicker);
-            var customNameCaption=Label("List name",12,muted); customListPanel.Children.Add(customNameCaption);
-            var customListName=new TextBox {Name="CustomListName",Margin=new Thickness(0,8,0,12),Padding=new Thickness(8),MaxLength=80}; customListPanel.Children.Add(customListName);
-            var gameSearch=new TextBox {Padding=new Thickness(8),Margin=new Thickness(0,0,0,8)};
-            customListPanel.Children.Add(Label("Filter games by name",12,muted)); customListPanel.Children.Add(gameSearch);
+            var customNameCaption=Label("List name",12,muted); customNameCaption.Margin=new Thickness(0,0,0,8); customListPanel.Children.Add(customNameCaption);
+            var customListName=new TextBox {Name="CustomListName",Margin=new Thickness(0,0,0,14),Padding=new Thickness(8),MaxLength=80}; customListPanel.Children.Add(customListName);
+            var gameSearch=new TextBox {Padding=new Thickness(8),Margin=new Thickness(0,0,0,10)};
+            var gameSearchCaption=Label("Filter games by name",12,muted); gameSearchCaption.Margin=new Thickness(0,0,0,8);
+            customListPanel.Children.Add(gameSearchCaption); customListPanel.Children.Add(gameSearch);
             var gameChoices=new StackPanel();
             var gameBoxes=new Dictionary<string,CheckBox>();
             var gameChoiceRows=new Dictionary<string,FrameworkElement>();
@@ -864,12 +887,13 @@ namespace PadLauncher {
 
             selectionActions.Children.Add(selectGames);  customListPanel.Children.Add(selectionActions);
             customListPanel.Children.Add(new ScrollViewer {Content=gameChoices,MaxHeight=260,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
-            var customListActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,0)};
+            var customListActions=new WrapPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,0)};
             var saveCustomList=new Button {Name="SaveCustomList",Content="Create list",Padding=new Thickness(12,7,12,7)};
             var deleteCustomList=new Button {Content="Delete list",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
+            var deleteListGames=new Button {Name="DeleteListAndGames",Content="Delete list and unregister its games",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed};
             var duplicateCustomList=new Button {Name="DuplicateCustomList",Content="Duplicate list",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
             var automaticListNote=Label("Automatic emulator lists can be renamed or duplicated. Manage their games under Emulators, or hide their list under Overlay lists.",12,new SolidColorBrush(Color.FromRgb(255,218,106)));
-            automaticListNote.TextWrapping=TextWrapping.Wrap; automaticListNote.Margin=new Thickness(0,8,0,0);
+            automaticListNote.TextWrapping=TextWrapping.Wrap; automaticListNote.Margin=new Thickness(0,12,0,0);
             Action loadCustomList=() => {
                 var membershipOptions=CollectionOptions();
                 var item=membershipOptions.FirstOrDefault(c => c.Id==customListPicker.SelectedValue as string);
@@ -883,22 +907,7 @@ namespace PadLauncher {
                 var selected=new HashSet<string>(item==null ? new List<string>() : item.Games ?? new List<string>());
                 unavailableGames=selected.Except(library.Games.Select(g => g.Id)).ToList();
                 foreach(var game in library.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).GroupBy(g => g.Id).Select(g => g.First())) {
-                    string source=String.IsNullOrEmpty(game.Source) ? "Steam" : game.Source;
-                    switch(source) {
-                        case "steam": source="Steam"; break;
-                        case "epic": source="Epic"; break;
-                        case "ea": source="EA"; break;
-                        case "gog": source="GOG"; break;
-                        case "ubisoft": source="Ubisoft Connect"; break;
-                        case "rockstar": source="Rockstar Games Launcher"; break;
-                        case "battlenet": source="Battle.net"; break;
-                    case "xbox": source="Xbox app"; break;
-                        case "custom": source=CustomGameLibrary.EntrySourceLabel(settings,game); break;
-                    }
-                    if(source=="emulator") {
-                        var preset=EmulatorLibrary.Presets.FirstOrDefault(candidate => candidate.Id==game.EmulatorId);
-                        if(preset!=null) source=preset.Name;
-                    }
+                    string source=GameSourceLabel(game);
                     var box=new CheckBox {Content=game.Name+" · "+source,Tag=game.Name,Foreground=white,IsChecked=selected.Contains(game.Id),Margin=new Thickness(0,4,0,4)};
                     var gameRow=new StackPanel {Margin=new Thickness(0,0,0,6)}; gameRow.Children.Add(box);
                     var membershipHint=Label(CustomLists.MembershipReason(settings,membershipOptions,item==null ? null : item.Id,game.Id),12,muted);
@@ -911,6 +920,7 @@ namespace PadLauncher {
                     updateHint(); gameBoxes[game.Id]=box; gameChoiceRows[game.Id]=gameRow; gameChoices.Children.Add(gameRow);
                 }
                 saveCustomList.Content=item==null ? "Create list" : "Save changes"; deleteCustomList.Visibility=item==null || item.Id=="source:custom" || automatic ? Visibility.Collapsed : Visibility.Visible; updateCount();
+                deleteListGames.Visibility=deleteCustomList.Visibility;
             };
             gameSearch.TextChanged+=(s,e) => {foreach(var pair in gameBoxes) {var visibility=((string)pair.Value.Tag).IndexOf(gameSearch.Text.Trim(),StringComparison.CurrentCultureIgnoreCase)>=0 ? Visibility.Visible : Visibility.Collapsed; pair.Value.Visibility=visibility; gameChoiceRows[pair.Key].Visibility=visibility;}};
             customListPicker.SelectionChanged+=(s,e) => loadCustomList(); loadCustomList();
@@ -939,7 +949,20 @@ namespace PadLauncher {
                 CustomLists.Save(next,library,null,name,selected.Games ?? new List<string>());
                 Storage.Write("settings.json",next); settings=next; ApplyLibrary(); rebuild();
             } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
-            customListActions.Children.Add(saveCustomList); customListActions.Children.Add(duplicateCustomList); customListActions.Children.Add(deleteCustomList); customListPanel.Children.Add(customListActions); customListPanel.Children.Add(automaticListNote);
+            deleteListGames.Click+=(s,e) => {try {
+                if(scanning) throw new InvalidOperationException("Please wait for the library refresh to finish.");
+                string id=customListPicker.SelectedValue as string;
+                var selectedList=CollectionOptions().First(list => list.Id==id);
+                int count=(selectedList.Games ?? new List<string>()).Distinct().Count();
+                if(!ConfirmEmulatorRemoval(dialog,"Delete list and games","Delete “"+selectedList.Name+"” and unregister "+count+" games?","These game entries will also disappear from all other Pad Launcher lists. ROMs, installed games and artwork files stay on disk. Launcher games stay removed on refresh; restoring their launcher games can add them again.","Delete list and unregister games")) return;
+                var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                var removed=new HashSet<string>(CustomLists.DeleteAndUnregisterGames(next,library,id));
+                Storage.Write("settings.json",next); settings=next;
+                library.Games.RemoveAll(game => removed.Contains(game.Id));
+                foreach(var list in library.Collections) if(list.Games!=null) list.Games.RemoveAll(removed.Contains);
+                cards.Clear(); carousel.Children.Clear(); ApplyLibrary(); rebuild();
+            } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
+            customListActions.Children.Add(saveCustomList); customListActions.Children.Add(duplicateCustomList); customListActions.Children.Add(deleteCustomList); customListActions.Children.Add(deleteListGames); customListPanel.Children.Add(customListActions); customListPanel.Children.Add(automaticListNote);
             listsLayout.Children.Add(customListSection);
             var combinePanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             var combinedOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new list")};
@@ -1077,27 +1100,31 @@ namespace PadLauncher {
             columnsControls.Children.Add(rowsPicker);
             var rowsTip=Label("Rows keep their panel size. The grid scrolls to keep the selected row visible.",12,muted); rowsTip.TextWrapping=TextWrapping.Wrap; rowsTip.Margin=new Thickness(0,7,0,0); columnsControls.Children.Add(rowsTip);
             layout.Children.Add(columnsControls);
-            var sizeCaption=Label("Panel size",14,mint); sizeCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(sizeCaption);
-            double scale=settings.CarouselScale>=.6 && settings.CarouselScale<=1.4 ? settings.CarouselScale : 1;
-            var sizeLabel=Label(Math.Round(scale*100)+"%",13,white);
-            var sizePicker=new Slider {Minimum=.6,Maximum=1.4,Value=scale,TickFrequency=.05,SmallChange=.05,LargeChange=.1,IsSnapToTickEnabled=true,Margin=new Thickness(0,4,0,8)};
-            bool restoringSize=false;
-            sizePicker.ValueChanged+=(s,e) => {
-                if(restoringSize) return;
-                double previous=settings.CarouselScale;
-                try { SetCarouselScale(sizePicker.Value); sizeLabel.Text=Math.Round(sizePicker.Value*100)+"%"; }
-                catch(Exception error) { restoringSize=true; sizePicker.Value=previous; restoringSize=false; ThemedMessage.Show(dialog,error.Message,"Settings"); }
+            AddPanelSizeControls(layout,dialog);
+            var gapCaption=Label("Artwork gap",14,mint); gapCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(gapCaption);
+            var gapValue=Label(settings.ArtworkGap.ToString("0")+" px",13,white); layout.Children.Add(gapValue);
+            var gapPicker=new Slider {Name="ArtworkGapSetting",Minimum=0,Maximum=64,Value=LibretroPanelGap,TickFrequency=2,SmallChange=2,LargeChange=8,IsSnapToTickEnabled=true,Margin=new Thickness(0,4,0,8)};
+            bool restoringGap=false;
+            gapPicker.ValueChanged+=(s,e) => {
+                if(restoringGap) return;
+                double previous=LibretroPanelGap;
+                try {SetArtworkGap(gapPicker.Value); gapValue.Text=gapPicker.Value.ToString("0")+" px";}
+                catch(Exception error) {restoringGap=true; gapPicker.Value=previous; restoringGap=false; ThemedMessage.Show(dialog,error.Message,"Settings");}
             };
-            layout.Children.Add(sizeLabel); layout.Children.Add(sizePicker);
-            var artworkCaption=Label("Game artwork",14,mint); artworkCaption.Margin=new Thickness(0,16,0,8); layout.Children.Add(artworkCaption);
-            var artworkGames=new SettingsComboBox {ItemsSource=library.Games,DisplayMemberPath="Name",SelectedValuePath="Id",SelectedValue=settings.SelectedId,Padding=new Thickness(8)};
-            layout.Children.Add(artworkGames);
-            var artworkActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,12)};
+            layout.Children.Add(gapPicker);
+            var listArtworkSection=new Expander {Name="PerListArtworkSection",Header="Per-list artwork",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),Content=CreateListLayoutSettings(dialog,rebuild,false,true)}; artworkLayout.Children.Add(listArtworkSection);
+            artworkLayout.Children.Add(CreateEmulatorArtworkSettings(dialog,rebuild));
+            var artworkCaption=Label("Game artwork",14,mint); artworkCaption.Margin=new Thickness(0,16,0,8); artworkLayout.Children.Add(artworkCaption);
+            var artworkGames=new SettingsComboBox {Name="ArtworkGamePicker",ItemsSource=library.Games.Select(game => new KeyValuePair<string,string>(game.Id,game.Name+" · "+GameSourceLabel(game))).ToList(),DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.SelectedId,Padding=new Thickness(8)};
+            artworkLayout.Children.Add(artworkGames);
+            var artworkActions=new WrapPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,4)};
             var pickArtwork=new Button {Content="Choose SGDB image…",Padding=new Thickness(12,7,12,7)};
-            pickArtwork.Click+=(s,e) => {var game=artworkGames.SelectedItem as Game; if(game!=null) ShowArtworkPicker(dialog,game);};
+            pickArtwork.Click+=(s,e) => {var game=library.Games.FirstOrDefault(entry => entry.Id==artworkGames.SelectedValue as string); if(game!=null) ShowArtworkPicker(dialog,game);};
+            var libretroArtworkButton=new Button {Name="ArtworkChooseLibretroImage",Content="Choose Libretro image…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
+            libretroArtworkButton.Click+=(s,e) => {var game=library.Games.FirstOrDefault(entry => entry.Id==artworkGames.SelectedValue as string); if(game!=null) ShowLibretroArtworkPicker(dialog,game);};
             var localArtwork=new Button {Content="Choose local image…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
             localArtwork.Click+=(s,e) => {
-                var game=artworkGames.SelectedItem as Game; if(game==null) return;
+                var game=library.Games.FirstOrDefault(entry => entry.Id==artworkGames.SelectedValue as string); if(game==null) return;
                 if(scanning) {ThemedMessage.Show(dialog,"Please wait for the current refresh to finish.","Artwork"); return;}
                 var file=new Microsoft.Win32.OpenFileDialog {Filter="Artwork|*.png;*.jpg;*.jpeg;*.bmp",CheckFileExists=true};
                 if(file.ShowDialog(dialog)!=true) return;
@@ -1108,20 +1135,20 @@ namespace PadLauncher {
                     Storage.Write("settings.json",next); settings=next;
                     if(artworkCancellation!=null) artworkCancellation.Cancel();
                     foreach(var entry in library.Games.Where(entry => entry.Id==game.Id)) ArtworkService.ApplyCached(entry,settings);
-                    cards.Clear(); carousel.Children.Clear(); Render(false); RefreshMissingArtworkList();
+                    RefreshArtworkPresentation();
                 } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Artwork");}
             };
             var resetArtwork=new Button {Content="Reset artwork",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
             resetArtwork.Click+=(s,e) => {
-                var game=artworkGames.SelectedItem as Game; if(game==null) return;
+                var game=library.Games.FirstOrDefault(entry => entry.Id==artworkGames.SelectedValue as string); if(game==null) return;
                 if(scanning) {ThemedMessage.Show(dialog,"Please wait for the current refresh to finish.","Artwork"); return;}
-                try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); if(next.ArtworkOverrides!=null) next.ArtworkOverrides.Remove(game.Id); Storage.Write("settings.json",next); settings=next; RefreshLibrary(true);}
+                try {ResetGameArtwork(game);}
                 catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Artwork");}
             };
-            artworkActions.Children.Add(pickArtwork); artworkActions.Children.Add(localArtwork); artworkActions.Children.Add(resetArtwork); layout.Children.Add(artworkActions);
-            var missingCaption=Label("Games without artwork",14,mint); missingCaption.Margin=new Thickness(0,12,0,8); layout.Children.Add(missingCaption);
-            var missingCount=Label("",12,muted); missingCount.Name="MissingArtworkCount"; layout.Children.Add(missingCount);
-            var missingList=new WrapPanel {Name="MissingArtworkList",Orientation=Orientation.Horizontal,Margin=new Thickness(0,4,0,12)}; layout.Children.Add(missingList);
+            foreach(var button in new[] {pickArtwork,libretroArtworkButton,localArtwork,resetArtwork}) {button.Margin=new Thickness(0,0,8,8); artworkActions.Children.Add(button);} artworkLayout.Children.Add(artworkActions);
+            var missingCaption=Label("Games without artwork",14,mint); missingCaption.Margin=new Thickness(0,12,0,8); artworkLayout.Children.Add(missingCaption);
+            var missingCount=Label("",12,muted); missingCount.Name="MissingArtworkCount"; artworkLayout.Children.Add(missingCount);
+            var missingList=new WrapPanel {Name="MissingArtworkList",Orientation=Orientation.Horizontal,Margin=new Thickness(0,4,0,12)}; artworkLayout.Children.Add(missingList);
             missingArtworkCount=missingCount; missingArtworkList=missingList;
             UpdateMissingArtworkList(missingCount,missingList,dialog);
             bool startupEnabled=false; try {startupEnabled=StartupSetting.Enabled;} catch {}
@@ -1183,8 +1210,9 @@ namespace PadLauncher {
             userPicker.Margin=new Thickness(0,0,0,24);
             steamIntegration.Children.Add(userPicker);
             var steamShortcuts=new CheckBox {Name="SteamShortcutsSetting",Content="Include non-Steam games",IsChecked=settings.IncludeSteamShortcuts,Margin=new Thickness(0,0,0,8)}; steamIntegration.Children.Add(steamShortcuts);
-            var steamShortcutMode=new SettingsComboBox {Name="SteamShortcutModeSetting",ItemsSource=new[]{new KeyValuePair<string,string>("steam","Through Steam"),new KeyValuePair<string,string>("direct","Direct launch")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.SteamShortcutLaunchMode=="direct" ? "direct" : "steam",Padding=new Thickness(8),Margin=new Thickness(0,0,0,12)}; steamIntegration.Children.Add(steamShortcutMode);
-            Action updateSteamChoices=() => {steamShortcuts.IsEnabled=steamEnabled.IsChecked==true; steamShortcutMode.IsEnabled=steamShortcuts.IsEnabled && steamShortcuts.IsChecked==true; steamShortcutMode.Visibility=steamShortcuts.IsChecked==true ? Visibility.Visible : Visibility.Collapsed;};
+            steamIntegration.Children.Add(Label("Non-Steam game launch mode",14,mint));
+            var steamShortcutMode=new SettingsComboBox {Name="SteamShortcutModeSetting",ItemsSource=new[]{new KeyValuePair<string,string>("steam","Through Steam"),new KeyValuePair<string,string>("direct","Direct launch")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.SteamShortcutLaunchMode=="direct" ? "direct" : "steam",Padding=new Thickness(8),Margin=new Thickness(0,8,0,12)}; steamIntegration.Children.Add(steamShortcutMode);
+            Action updateSteamChoices=() => {steamShortcuts.IsEnabled=steamEnabled.IsChecked==true; steamShortcutMode.IsEnabled=true; steamShortcutMode.Visibility=Visibility.Visible;};
             bool savingSteamChoices=false;
             Action saveSteamChoices=() => {
                 if(savingSteamChoices) return; savingSteamChoices=true;
@@ -1282,7 +1310,7 @@ namespace PadLauncher {
             SetLauncherDetectionNote(ubisoftStatus,"Ubisoft Connect",settings.UbisoftLauncherPath ?? UbisoftLibrary.DetectClient());
             SetLauncherDetectionNote(rockstarStatus,"Rockstar Games Launcher",settings.RockstarLauncherPath ?? RockstarLibrary.DetectClient());
             AddLauncherReimport(steamIntegration,"steam","Steam",() => settings.SteamEnabled);
-            var importSteam=new Button {Name="ImportSteamShortcuts",Content="Import Steam shortcuts",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,12,0,0)};
+            var importSteam=new Button {Name="ImportSteamShortcuts",Content="Import Steam shortcuts",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0)};
             importSteam.Click+=(s,e) => ShowSteamShortcutImport(dialog,rebuild); steamIntegration.Children.Add(importSteam);
             AddLauncherReimport(gogIntegration,"gog","GOG Galaxy",() => settings.GogEnabled);
             AddLauncherReimport(epicIntegration,"epic","Epic Games Store",() => settings.EpicEnabled);
@@ -1334,11 +1362,26 @@ namespace PadLauncher {
             return dialog;
         }
         TextBlock Label(string text, double size, Brush color) { return new TextBlock { Text = text, FontSize = size, Foreground = color, VerticalAlignment = VerticalAlignment.Center }; }
+        internal string PreferredArtworkPickerSource(Game game) {
+            var current=filters.Count>collectionIndex ? filters[collectionIndex] : null;
+            if(current!=null && (current.Id=="all" || (current.Games ?? new List<string>()).Contains(game.Id))) return ArtworkService.GameListSource(settings,game,current.Id);
+            foreach(var list in CollectionOptions().Where(item => (item.Games ?? new List<string>()).Contains(game.Id))) {
+                string source=ArtworkService.GameListSource(settings,game,list.Id);
+                if(source!="auto") return source;
+            }
+            return ArtworkService.GameListSource(settings,game,null);
+        }
+        void ShowPreferredArtworkPicker(Window owner,Game game) {
+            if(ArtworkService.PrimaryArtworkSource(PreferredArtworkPickerSource(game))=="libretro") ShowLibretroArtworkPicker(owner,game);
+            else ShowArtworkPicker(owner,game);
+        }
         async void ShowArtworkPicker(Window owner,Game game,Action<string> onChoose=null) {
             string key=ArtworkKey.Load();
             var chooser=new Window {Title="Artwork · "+game.Name,Owner=owner,Width=660,Height=600,MinWidth=400,MinHeight=350,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,Topmost=true};
             chooser.Resources.MergedDictionaries.Add(owner.Resources);
             var root=new DockPanel {Margin=new Thickness(20)};
+            var switchSource=new Button {Name="ArtworkSwitchToLibretro",Content="Choose from Libretro instead…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,12)};
+            switchSource.Click+=(s,e) => {chooser.Close(); ShowLibretroArtworkPicker(owner,game,onChoose);}; DockPanel.SetDock(switchSource,Dock.Top); root.Children.Add(switchSource);
             var status=Label("Finding covers…",14,white); status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,0,0,14); DockPanel.SetDock(status,Dock.Top); root.Children.Add(status);
             var original=new Button {Content="Use original grid artwork",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,14)};
             DockPanel.SetDock(original,Dock.Top); root.Children.Add(original);
@@ -1359,7 +1402,7 @@ namespace PadLauncher {
                     if(next.ArtworkOverrides==null) next.ArtworkOverrides=new Dictionary<string,string>(); next.ArtworkOverrides[game.Id]=path;
                     Storage.Write("settings.json",next); settings=next;
                     foreach(var entry in library.Games.Where(g => g.Id==game.Id)) ArtworkService.ApplyCached(entry,settings);
-                    cards.Clear(); carousel.Children.Clear(); Render(false); RefreshMissingArtworkList();
+                    RefreshArtworkPresentation();
                 } else onChoose(path);
                 chooser.Close();
             };
@@ -1428,7 +1471,11 @@ namespace PadLauncher {
             restoreNote.Margin=new Thickness(0,6,0,4);
             panel.Children.Add(restoreNote);
             button.Margin=new Thickness(0,6,0,8);
-            panel.Children.Add(button); panel.Children.Add(result);
+            if(source=="steam") {
+                var row=new DockPanel {Margin=new Thickness(0,6,0,0)};
+                button.Margin=new Thickness(0,0,12,0); DockPanel.SetDock(button,Dock.Left); row.Children.Add(button);
+                result.VerticalAlignment=VerticalAlignment.Center; row.Children.Add(result); panel.Children.Add(row);
+            } else {panel.Children.Add(button); panel.Children.Add(result);}
             button.Click+=async (sender,args) => {
                 if(scanning) {result.Text="Please wait for the current refresh to finish."; return;}
                 if(!enabled()) {result.Text="Enable "+name+" games above before restoring."; return;}
@@ -1448,149 +1495,97 @@ namespace PadLauncher {
             };
         }
         void ShowSteamShortcutImport(Window owner,Action rebuild) {
-            var dialog=new Window {Title="Import Steam shortcuts",Owner=owner,Width=940,Height=680,MinWidth=760,MinHeight=450,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,Topmost=true}; dialog.Resources.MergedDictionaries.Add(owner.Resources);
+            var dialog=new Window {Name="SteamShortcutImportWindow",Title="Import Steam shortcuts",Owner=owner,Width=820,Height=680,MinWidth=620,MinHeight=450,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,Topmost=true};
+            dialog.Resources.MergedDictionaries.Add(owner.Resources);
             var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
             var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
-            var heading=Label("Import Steam shortcuts",24,white); heading.FontWeight=FontWeights.SemiBold; heading.Margin=new Thickness(0,0,0,12); header.Children.Add(heading);
-            var note=Label("",13,muted); note.TextWrapping=TextWrapping.Wrap;
-            note.Inlines.Add(new System.Windows.Documents.Run("Uses the Steam folder and user selected in Launchers. "));
-            note.Inlines.Add(new System.Windows.Documents.Run("Reimporting updates existing entries. Choosing Both keeps separate Steam and direct-launch entries.") {Foreground=new SolidColorBrush(Color.FromRgb(255,218,106))});
-            note.Inlines.Add(new System.Windows.Documents.Run(" Matching names with different launch targets or actions are reviewed before import, so you can choose which entries to keep. Direct launch bypasses Steam; choose Steam for Steam Input or special launch behaviour. Both keeps separate direct-launch and Steam entries. Original shortcuts stay untouched."));
-            note.Margin=new Thickness(0,0,0,14); header.Children.Add(note);
-            var controls=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,12)};
-            var read=new Button();
-            var select=new Button {Content="Select all",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; controls.Children.Add(select);
-            header.Children.Add(controls);
+            header.Children.Add(Label("Import Steam shortcuts",24,white));
+            var note=Label("Select shortcuts and their destination lists. Reimporting updates the same games without creating duplicates.\nYou can change the launch mode for non-Steam games under Launchers → Steam settings.",13,new SolidColorBrush(Color.FromRgb(255,218,106)));
+            note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,12,0,16); header.Children.Add(note);
+            var select=new Button {Content="Select all",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,12)}; header.Children.Add(select);
+            var destinations=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("source:custom","Custom games"),new KeyValuePair<string,string>("","Keep existing lists")};
+            destinations.AddRange(CollectionOptions().Where(c => c.Id!="all" && c.Id!="recent" && !c.Id.StartsWith("source:")).Select(c => new KeyValuePair<string,string>(c.Id,c.Name)));
+            var bulkOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("bulk","Add all to list…")}; bulkOptions.AddRange(destinations);
+            bulkOptions.Add(new KeyValuePair<string,string>("create","Create new list…"));
+            var bulk=new SettingsComboBox {Name="SteamShortcutBulkList",ItemsSource=bulkOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue="bulk",Width=220,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,0,0,12)}; header.Children.Add(bulk);
             var footer=new StackPanel(); DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
             var status=Label("Reading shortcuts…",12,muted); status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,12,0,12); footer.Children.Add(status);
-            var actions=new StackPanel {Orientation=Orientation.Horizontal}; var import=new Button {Content="Import selected",Padding=new Thickness(14,8,14,8),IsEnabled=false}; actions.Children.Add(import);
-            var close=new Button {Content="Close",Padding=new Thickness(14,8,14,8),Margin=new Thickness(8,0,0,0)}; close.Click+=(s,e) => dialog.Close(); actions.Children.Add(close); footer.Children.Add(actions);
+            var actions=new StackPanel {Orientation=Orientation.Horizontal}; footer.Children.Add(actions);
+            var import=new Button {Name="ImportSelectedSteamShortcuts",Content="Import selected",Padding=new Thickness(14,8,14,8),IsEnabled=false}; actions.Children.Add(import);
+            var close=new Button {Content="Close",Padding=new Thickness(14,8,14,8),Margin=new Thickness(8,0,0,0)}; actions.Children.Add(close);
             var list=new StackPanel(); root.Children.Add(new ScrollViewer {Content=list,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
-            var shortcutLists=new Dictionary<string,SettingsComboBox>();
-            var rows=new List<Tuple<SteamShortcutRecord,CheckBox,SettingsComboBox>>(); var shortcutStatusUpdates=new List<Action>(); bool busy=false,closed=false;
-            Action updateShortcutCount=() => {if(!busy && !closed) status.Text=rows.Count+" shortcuts. "+rows.Count(row => row.Item2.IsChecked==true)+" selected";};
-            dialog.Closed+=(s,e) => closed=true; dialog.Closing+=(s,e) => {if(busy) e.Cancel=true;};
-            BindSelectionToggle(select,() => rows.Select(row => row.Item2),updateShortcutCount);
-            var bulkMode=new SettingsComboBox {Margin=new Thickness(0,0,0,12),HorizontalAlignment=HorizontalAlignment.Stretch,VerticalAlignment=VerticalAlignment.Center,DisplayMemberPath="Value",SelectedValuePath="Key",
-                ItemsSource=new[]{new KeyValuePair<string,string>("","Launch mode…"),new KeyValuePair<string,string>("direct","Direct launch all"),new KeyValuePair<string,string>("steam","All through Steam"),new KeyValuePair<string,string>("both","All both")},SelectedValue=""};
-            var bulkLists=new SettingsComboBox {Margin=new Thickness(0,0,8,12),DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue="bulk"};
-            var bulkListOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("bulk","Add all to list…"),new KeyValuePair<string,string>("source:custom","Custom games"),new KeyValuePair<string,string>("","Keep existing lists")};
-            bulkListOptions.AddRange(CollectionOptions().Where(c => c.Id!="all" && c.Id!="recent" && !c.Id.StartsWith("source:")).Select(c => new KeyValuePair<string,string>(c.Id,c.Name)));
-            bulkListOptions.Add(new KeyValuePair<string,string>("create","Create new list…"));
-            bulkLists.ItemsSource=bulkListOptions; bulkLists.SelectedValue="bulk";
-            var bulkControls=new Grid {HorizontalAlignment=HorizontalAlignment.Left};
-            bulkControls.ColumnDefinitions.Add(new ColumnDefinition()); bulkControls.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(180)}); bulkControls.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(160)});
-            Grid.SetColumn(bulkLists,1); Grid.SetColumn(bulkMode,2);
-            list.SizeChanged+=(s,e) => bulkControls.Width=list.ActualWidth;
-            bulkControls.Children.Add(bulkLists); bulkControls.Children.Add(bulkMode); header.Children.Add(bulkControls);
-            bulkLists.SelectionChanged+=(s,e) => {
-                string value=bulkLists.SelectedValue as string;
-                if(value==null || value=="bulk") return;
+            var rows=new List<Tuple<SteamShortcutRecord,CheckBox,SettingsComboBox>>(); bool busy=false,closed=false;
+            Action count=() => status.Text=rows.Count+" shortcuts. "+rows.Count(row => row.Item2.IsChecked==true)+" selected";
+            BindSelectionToggle(select,() => rows.Select(row => row.Item2),count);
+            close.Click+=(s,e) => dialog.Close(); dialog.Closed+=(s,e) => closed=true; dialog.Closing+=(s,e) => {if(busy) e.Cancel=true;};
+            bulk.SelectionChanged+=(s,e) => {
+                string value=bulk.SelectedValue as string; if(value==null || value=="bulk") return;
                 if(value=="create") {
-                    var create=new Window {Title="Create new list",Owner=dialog,Width=440,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=dialog.Background,Foreground=white,FontFamily=FontFamily,Topmost=true}; create.Resources.MergedDictionaries.Add(dialog.Resources);
-                    var body=new StackPanel {Margin=new Thickness(24)}; create.Content=body;
-                    body.Children.Add(Label("List name",14,mint));
+                    var create=new Window {Title="Create new list",Owner=dialog,Width=440,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner,Background=dialog.Background,Foreground=white,FontFamily=FontFamily}; create.Resources.MergedDictionaries.Add(dialog.Resources);
+                    var body=new StackPanel {Margin=new Thickness(24)}; create.Content=body; body.Children.Add(Label("List name",14,mint));
                     var name=new TextBox {Margin=new Thickness(0,10,0,16),MaxLength=80}; body.Children.Add(name);
                     var error=Label("",12,new SolidColorBrush(Color.FromRgb(255,113,113))); error.TextWrapping=TextWrapping.Wrap; body.Children.Add(error);
                     var buttons=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right}; body.Children.Add(buttons);
-                    var cancel=new Button {Content="Cancel",IsCancel=true,Margin=new Thickness(0,8,8,0),Padding=new Thickness(12,7,12,7)}; buttons.Children.Add(cancel);
-                    var save=new Button {Content="Create list",IsDefault=true,Margin=new Thickness(0,8,0,0),Padding=new Thickness(12,7,12,7)}; buttons.Children.Add(save);
+                    var cancel=new Button {Content="Cancel",IsCancel=true,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0)}; buttons.Children.Add(cancel);
+                    var save=new Button {Content="Create list",IsDefault=true,Padding=new Thickness(12,7,12,7)}; buttons.Children.Add(save);
                     string createdId=null;
-                    save.Click+=(sender,args) => {
+                    save.Click+=(sender,args) => {try {
                         string title=name.Text.Trim();
-                        if(title.Length==0) {error.Text="Enter a list name."; return;}
-                        if(CollectionOptions().Any(c => String.Equals(c.Name,title,StringComparison.CurrentCultureIgnoreCase))) {error.Text="A list with that name already exists."; return;}
-                        try {
-                            var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                            if(next.CustomLists==null) next.CustomLists=new List<CustomList>();
-                            string id="list:"+Guid.NewGuid().ToString("N"); next.CustomLists.Add(new CustomList {Id=id,Name=title,Games=new List<string>()});
-                            Storage.Write("settings.json",next); settings=next; createdId=id; create.DialogResult=true;
-                        } catch(Exception ex) {error.Text=ex.Message;}
-                    };
-                    create.Loaded+=(sender,args) => name.Focus();
-                    if(create.ShowDialog()!=true) {bulkLists.SelectedValue="bulk"; return;}
+                        if(title.Length==0) throw new ArgumentException("Enter a list name.");
+                        if(CollectionOptions().Any(c => String.Equals(c.Name,title,StringComparison.CurrentCultureIgnoreCase))) throw new ArgumentException("A list with that name already exists.");
+                        var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                        if(next.CustomLists==null) next.CustomLists=new List<CustomList>();
+                        createdId="list:"+Guid.NewGuid().ToString("N"); next.CustomLists.Add(new CustomList {Id=createdId,Name=title,Games=new List<string>()});
+                        Storage.Write("settings.json",next); settings=next; create.DialogResult=true;
+                    } catch(Exception failure) {error.Text=failure.Message;}};
+                    if(create.ShowDialog()!=true) {bulk.SelectedValue="bulk"; return;}
                     value=createdId;
-                    var option=new KeyValuePair<string,string>(value,name.Text.Trim());
-                    bulkListOptions.Insert(bulkListOptions.Count-1,option);
-                    bulkLists.ItemsSource=null; bulkLists.ItemsSource=bulkListOptions;
-                    foreach(var destination in shortcutLists.Values) {
-                        var choices=((IEnumerable<KeyValuePair<string,string>>)destination.ItemsSource).ToList(); choices.Add(option);
-                        destination.ItemsSource=choices;
-                    }
-                    rebuild();
+                    var option=new KeyValuePair<string,string>(value,name.Text.Trim()); destinations.Add(option); bulkOptions.Insert(bulkOptions.Count-1,option);
+                    foreach(var row in rows) {object previous=row.Item3.SelectedValue; row.Item3.ItemsSource=null; row.Item3.ItemsSource=destinations.ToList(); row.Item3.SelectedValue=previous;}
+                    bulk.ItemsSource=null; bulk.ItemsSource=bulkOptions; rebuild();
                 }
-                foreach(var destination in shortcutLists.Values) destination.SelectedValue=value;
-                bulkLists.SelectedValue="bulk";
+                foreach(var row in rows) row.Item3.SelectedValue=value;
+                bulk.SelectedValue="bulk";
             };
-            bulkMode.SelectionChanged+=(s,e) => {
-                string value=bulkMode.SelectedValue as string;
-                if(String.IsNullOrEmpty(value)) return;
-                foreach(var row in rows) row.Item3.SelectedValue=value=="steam" || row.Item1.CanLaunchDirect ? value : "steam";
-                bulkMode.SelectedValue="";
-            };
-            read.Click+=async (s,e) => {
-                read.IsEnabled=false; import.IsEnabled=false; status.Text="Reading Steam shortcuts…";
+            dialog.Loaded+=async (s,e) => {
                 try {
                     var snapshot=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                     var records=await Task.Run(() => SteamShortcutImport.Read(snapshot)); if(closed) return;
-                    rows.Clear(); shortcutLists.Clear(); shortcutStatusUpdates.Clear(); list.Children.Clear();
                     foreach(var record in records) {
-                        var previous=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.SteamShortcutKey==record.Key);
-                        var line=new Grid {Margin=new Thickness(0,0,0,12)}; line.ColumnDefinitions.Add(new ColumnDefinition()); line.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(180)}); line.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(160)});
-                        var text=new StackPanel {Margin=new Thickness(0,0,12,0)};
-                        var shortcutCaption=new TextBlock {TextWrapping=TextWrapping.Wrap,Foreground=white};
-                        var box=new CheckBox {Content=shortcutCaption,IsChecked=true}; text.Children.Add(box);
-                        var detail=Label(record.CanLaunchDirect ? record.Target : record.DirectWarning,12,muted); detail.TextWrapping=TextWrapping.Wrap; detail.Margin=new Thickness(29,5,0,0); text.Children.Add(detail); line.Children.Add(text);
-                        var options=new List<KeyValuePair<string,string>>(); if(record.CanLaunchDirect) {options.Add(new KeyValuePair<string,string>("direct","Direct launch")); options.Add(new KeyValuePair<string,string>("both","Both"));} options.Add(new KeyValuePair<string,string>("steam","Through Steam"));
-                        var listOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("source:custom","Custom games"),new KeyValuePair<string,string>("","Keep existing lists")};
-                        listOptions.AddRange(CollectionOptions().Where(c => c.Id!="all" && c.Id!="recent" && !c.Id.StartsWith("source:")).Select(c => new KeyValuePair<string,string>(c.Id,c.Name)));
-                        bool entryExists=previous!=null || library.Games.Any(g => g.Shortcut && g.LaunchId==record.SteamLaunchId) || SteamShortcutImport.ExistingStatus(settings,library,record,false)=="already added for direct launch";
-                        var destination=new SettingsComboBox {ItemsSource=listOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=entryExists ? "" : "source:custom",Margin=new Thickness(0,0,8,0),VerticalAlignment=VerticalAlignment.Top};
-                        shortcutLists[record.Key]=destination; Grid.SetColumn(destination,1); line.Children.Add(destination);
-                        var mode=new SettingsComboBox {ItemsSource=options,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=!record.CanLaunchDirect ? "steam" : ((settings.CustomGames ?? new List<CustomGame>()).Where(g => g.SteamShortcutKey==record.Key).Select(g => g.LaunchViaSteam).Distinct().Count()==2 ? "both" : (previous!=null && previous.LaunchViaSteam ? "steam" : "direct")),VerticalAlignment=VerticalAlignment.Top}; Grid.SetColumn(mode,2); line.Children.Add(mode); list.Children.Add(line);
-                        Action updateStatus=() => {
-                            string selectedMode=mode.SelectedValue as string;
-                            string state=SteamShortcutImport.ImportStatus(settings,library,record,selectedMode);
-                            shortcutCaption.Inlines.Clear();
-                            shortcutCaption.Inlines.Add(new System.Windows.Documents.Run(record.Name));
-                            if(!String.IsNullOrEmpty(state)) shortcutCaption.Inlines.Add(new System.Windows.Documents.Run(" · "+state) {
-                                Foreground=state.IndexOf("not added",StringComparison.OrdinalIgnoreCase)>=0 ? new SolidColorBrush(Color.FromRgb(240,195,112)) : mint
-                            });
-                        };
-                        shortcutStatusUpdates.Add(updateStatus);
-                        mode.SelectionChanged+=(sender,args) => updateStatus(); updateStatus();
-                        rows.Add(Tuple.Create(record,box,mode));
-                        box.Checked+=(sender,args) => updateShortcutCount(); box.Unchecked+=(sender,args) => updateShortcutCount();
+                        var previous=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(game => game.SteamShortcutKey==record.Key)
+                            ?? SteamShortcutImport.FindDirectMatch(settings,new CustomGame {Target=record.Target,Arguments=record.Arguments,WorkingDirectory=record.WorkingDirectory});
+                        var line=new Grid {Margin=new Thickness(0,0,0,14)}; line.ColumnDefinitions.Add(new ColumnDefinition()); line.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(220)});
+                        var text=new StackPanel {Margin=new Thickness(0,0,12,0)}; line.Children.Add(text);
+                        var box=new CheckBox {Content=record.Name,IsChecked=true}; text.Children.Add(box);
+                        string availability=previous!=null ? "Already added · updates existing entry" : library.Games.Any(game => game.Shortcut && game.LaunchId==record.SteamLaunchId) ? "Available from Steam · one entry will be kept" : "New shortcut";
+                        var detail=Label(availability+"\n"+record.Target+(!record.CanLaunchDirect ? "\n"+record.DirectWarning : ""),12,muted); detail.TextWrapping=TextWrapping.Wrap; detail.Margin=new Thickness(29,5,0,0); text.Children.Add(detail);
+                        var destination=new SettingsComboBox {ItemsSource=destinations.ToList(),DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=previous!=null || library.Games.Any(game => game.Shortcut && game.LaunchId==record.SteamLaunchId) ? "" : "source:custom",VerticalAlignment=VerticalAlignment.Top}; Grid.SetColumn(destination,1); line.Children.Add(destination);
+                        rows.Add(Tuple.Create(record,box,destination)); box.Checked+=(sender,args) => count(); box.Unchecked+=(sender,args) => count(); list.Children.Add(line);
                     }
-                    import.IsEnabled=rows.Count>0; updateShortcutCount();
+                    import.IsEnabled=rows.Count>0; count();
                 } catch(Exception error) {if(!closed) status.Text="Could not read shortcuts. "+error.Message;}
-                finally {if(!closed) read.IsEnabled=true;}
             };
             import.Click+=async (s,e) => {
                 if(scanning) {status.Text="Please wait for the current library refresh to finish."; return;}
-                var selected=rows.Where(row => row.Item2.IsChecked==true).Select(row => Tuple.Create(row.Item1,row.Item3.SelectedValue as string)).ToList();
+                var selected=rows.Where(row => row.Item2.IsChecked==true).ToList();
                 if(selected.Count==0) {status.Text="Select at least one shortcut."; return;}
-                busy=true; header.IsEnabled=false; list.IsEnabled=false; import.IsEnabled=false; close.IsEnabled=false; status.Text="Preparing shortcuts and copying artwork…";
+                busy=true; header.IsEnabled=list.IsEnabled=import.IsEnabled=close.IsEnabled=false; status.Text="Importing shortcuts…";
                 try {
-                    var prepared=await Task.Run(() => selected.SelectMany(row => SteamShortcutImport.PrepareModes(row.Item1,row.Item2)).ToList());
-                    if(closed) return;
-                    var conflicts=GameImport.Conflicts(settings,library,prepared);
-                    SteamShortcutImport.SelectLaunchModes(settings,conflicts);
-                    if(conflicts.Count>0 && !ReviewImportConflicts(dialog,conflicts,"Steam shortcuts")) {status.Text="Import cancelled. No entries were changed."; return;}
-                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); int count=GameImport.ApplyChoices(next,prepared,conflicts);
-                    SteamShortcutImport.PreserveLists(next,library,prepared,shortcutLists.ToDictionary(pair => pair.Key,pair => pair.Value.SelectedValue as string));
-                    Storage.Write("settings.json",next); settings=next;
-                    if(artworkCancellation!=null) artworkCancellation.Cancel();
-                    CustomGameLibrary.Apply(library,settings); if(settings.ReplacedGameIds!=null) library.Games.RemoveAll(g => settings.ReplacedGameIds.Contains(g.Id)); foreach(var game in library.Games) ArtworkService.ApplyCached(game,settings);
-                    library.Games=library.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList(); ApplyLibrary(); rebuild(); DownloadArtwork(library);
-                    foreach(var updateStatus in shortcutStatusUpdates) updateStatus();
-                    status.Text="Imported or updated "+count+" shortcuts. Find them under Added Games.";
+                    var prepared=await Task.Run(() => selected.Select(row => SteamShortcutImport.Prepare(row.Item1)).ToList());
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    foreach(var game in prepared) SteamShortcutImport.Merge(next,game);
+                    SteamShortcutImport.PreserveLists(next,library,prepared,selected.ToDictionary(row => row.Item1.Key,row => row.Item3.SelectedValue as string));
+                    var updated=Storage.Json().Deserialize<Library>(Storage.Json().Serialize(library)); CustomGameLibrary.Apply(updated,next);
+                    foreach(var game in updated.Games) ArtworkService.ApplyCached(game,next);
+                    Storage.Write("settings.json",next); Storage.Write("library.json",updated);
+                    settings=next; library=updated; ApplyLibrary(); rebuild(); DownloadArtwork(library);
                     busy=false; dialog.Close();
-                } catch(Exception error) {if(!closed) status.Text="Import failed. "+error.Message;}
-                finally {busy=false; if(!closed) {header.IsEnabled=true; list.IsEnabled=true; close.IsEnabled=true; import.IsEnabled=rows.Count>0;}}
+                } catch(Exception error) {status.Text="Import failed. "+error.Message;}
+                finally {busy=false; if(!closed) header.IsEnabled=list.IsEnabled=import.IsEnabled=close.IsEnabled=true;}
             };
-            dialog.Show(); read.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            dialog.Show();
         }
+
         static void BindSelectionToggle(Button button,Func<IEnumerable<CheckBox>> items,Action changed=null,string suffix="",string selectText=null,string unselectText=null) {
             Action update=() => {
                 var boxes=items().Where(b => b.IsEnabled).ToList();
@@ -1604,69 +1599,6 @@ namespace PadLauncher {
                 if(changed!=null) changed(); update();
             };
             button.LayoutUpdated+=(s,e) => update();
-        }
-        bool ReviewImportConflicts(Window owner,List<GameImport.Conflict> conflicts,string importSource="Steam shortcuts") {
-            var dialog=new Window {Title="Review matching game names",Owner=owner,Width=820,Height=680,MinWidth=540,MinHeight=400,Background=owner.Background,Foreground=white,FontFamily=FontFamily,Topmost=true,WindowStartupLocation=WindowStartupLocation.CenterOwner}; dialog.Resources.MergedDictionaries.Add(owner.Resources);
-            var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
-            var note=Label("",14,white); note.TextWrapping=TextWrapping.Wrap;
-            note.Inlines.Add(new System.Windows.Documents.Run("Those names have different launch targets or actions."));
-            note.Inlines.Add(new System.Windows.Documents.LineBreak());
-            note.Inlines.Add(new System.Windows.Documents.Run("Check the entries to keep; select both if you want both.") {Foreground=new SolidColorBrush(Color.FromRgb(255,218,106))});
-            note.Inlines.Add(new System.Windows.Documents.LineBreak());
-            note.Inlines.Add(new System.Windows.Documents.Run("Unchecked existing entries are removed from Pad Launcher when you apply.") {Foreground=new SolidColorBrush(Color.FromRgb(255,113,113)),FontWeight=FontWeights.SemiBold});
-
-            note.Margin=new Thickness(0,0,0,16); DockPanel.SetDock(note,Dock.Top); root.Children.Add(note);
-            var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,16,0,0)};
-            var cancel=new Button {Content="Cancel import",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0)}; cancel.Click+=(s,e) => dialog.DialogResult=false; actions.Children.Add(cancel);
-            var apply=new Button {Content="Apply choices & import",Padding=new Thickness(14,8,14,8)};
-            apply.Click+=(s,e) => {
-                var duplicates=conflicts.Where(group => group.Alternatives.Count(choice => choice.Keep)>1).Select(group => group.Name).Distinct().ToList();
-                if(duplicates.Count>0 && !ShowEmulatorMessage(dialog,"Confirm duplicate entries","Keep multiple launch entries?",
-                    "Your choices will keep more than one entry for these games, such as both direct launch and launch through Steam:\n\n"+String.Join("\n",duplicates)+"\n\nThese will appear as separate game entries in Pad Launcher.","Keep entries & import")) return;
-                dialog.DialogResult=true;
-            }; actions.Children.Add(apply); DockPanel.SetDock(actions,Dock.Bottom); root.Children.Add(actions);
-            var reviewBoxes=new Dictionary<GameImport.Alternative,CheckBox>();
-            var reviewTools=new WrapPanel {Margin=new Thickness(0,0,0,14)};
-            Func<GameImport.Alternative,bool> steamEntry=choice => {
-                if(choice.Existing==null) return choice.Incoming.LaunchViaSteam;
-                if(choice.Existing.Source=="custom") {
-                    var custom=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==choice.Existing.Id);
-                    return custom!=null && custom.LaunchViaSteam;
-                }
-                return String.IsNullOrEmpty(choice.Existing.Source) || choice.Existing.Source=="steam" || (choice.Existing.LaunchId ?? "").StartsWith("steam://rungameid/",StringComparison.OrdinalIgnoreCase);
-            };
-            foreach(bool steam in new[]{true,false}) {
-                bool category=steam;
-                var select=new Button {Content=steam ? "Select Steam entries" : "Select direct launch entries",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,6)};
-                BindSelectionToggle(select,() => reviewBoxes.Where(pair => steamEntry(pair.Key)==category).Select(pair => pair.Value),
-                    () => {foreach(var pair in reviewBoxes) pair.Key.Keep=pair.Value.IsChecked==true;},"",
-                    category ? "Select Steam entries" : "Select direct launch entries",
-                    category ? "Unselect Steam entries" : "Unselect direct launch entries");
-                reviewTools.Children.Add(select);
-            }
-            var removeSelected=new Button {Content="Unselect all",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,6)};
-            removeSelected.Click+=(s,e) => {foreach(var pair in reviewBoxes.Where(p => p.Value.IsChecked==true).ToList()) {pair.Key.Keep=false; pair.Value.IsChecked=false;}};
-            reviewTools.Children.Add(removeSelected); DockPanel.SetDock(reviewTools,Dock.Top); root.Children.Add(reviewTools);
-            var groups=new StackPanel(); root.Children.Add(new ScrollViewer {Content=groups,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
-            foreach(var conflict in conflicts) {
-                var group=new StackPanel {Margin=new Thickness(14)};
-                var heading=Label(conflict.Name,17,mint); heading.TextWrapping=TextWrapping.Wrap; heading.Margin=new Thickness(0,0,0,12); group.Children.Add(heading);
-                foreach(var alternative in conflict.Alternatives) {
-                    var choice=alternative;
-                    string source=(choice.Existing!=null ? "Existing" : "New")+" · "+(steamEntry(choice) ? "Through Steam" : "Direct launch");
-                    var box=new CheckBox {Content=source,IsChecked=choice.Keep,Margin=new Thickness(0,0,0,6)}; box.Click+=(s,e) => choice.Keep=box.IsChecked==true; reviewBoxes[choice]=box; group.Children.Add(box);
-                    string target=choice.Existing!=null ? choice.Existing.LaunchId : choice.Incoming.Target;
-                    if(choice.Existing!=null && choice.Existing.Source!="custom") {try {target=GameLaunch.UriFor(choice.Existing);} catch {}}
-                    string arguments=choice.Existing!=null ? choice.Existing.Arguments : choice.Incoming.Arguments;
-                    string folder=choice.Existing!=null ? choice.Existing.WorkingDirectory : choice.Incoming.WorkingDirectory;
-                    string action=choice.Existing!=null ? choice.Existing.ImportedActionInfo : choice.Incoming.PlayniteActionInfo;
-                    var detail=Label(target+(String.IsNullOrWhiteSpace(arguments) ? "" : "\n"+arguments)+(String.IsNullOrWhiteSpace(folder) ? "" : "\nFolder: "+folder),12,muted);
-                    if(!String.IsNullOrWhiteSpace(action)) detail.Inlines.Add(new System.Windows.Documents.Run("\nImported action:\n"+action) {Foreground=new SolidColorBrush(Color.FromRgb(255,218,106))});
-                    detail.FontFamily=new FontFamily("Consolas"); detail.TextWrapping=TextWrapping.Wrap; detail.Margin=new Thickness(28,0,0,16); group.Children.Add(detail);
-                }
-                groups.Children.Add(new Border {Child=group,Background=new SolidColorBrush(Color.FromRgb(23,43,55)),CornerRadius=new CornerRadius(8),Margin=new Thickness(0,0,0,12)});
-            }
-            return dialog.ShowDialog()==true;
         }
         int customGamesTabIndex;
         string selectedCustomGameId;
@@ -1746,6 +1678,7 @@ namespace PadLauncher {
             var gameName=field("Game name","CustomGameName"); gameName.MaxLength=120;
             var target=field("Executable or shortcut","CustomGameTarget");
             var steamMode=new CheckBox {Content="Launch through Steam",Margin=new Thickness(0,10,0,0),Visibility=Visibility.Collapsed}; panel.Children.Add(steamMode);
+            var linkedSteamNote=Label("Launch mode is managed under Launchers → Steam settings.",12,muted); linkedSteamNote.TextWrapping=TextWrapping.Wrap; linkedSteamNote.Margin=new Thickness(0,8,0,0); linkedSteamNote.Visibility=Visibility.Collapsed; panel.Children.Add(linkedSteamNote);
             var missingFiles=Label("",12,new SolidColorBrush(Color.FromRgb(255,172,153))); missingFiles.TextWrapping=TextWrapping.Wrap; missingFiles.Margin=new Thickness(0,8,0,0); panel.Children.Add(missingFiles);
             var browse=new Button {Content="Browse…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(browse);
             browse.Click+=(s,e) => {
@@ -1760,22 +1693,11 @@ namespace PadLauncher {
                     if(file.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) folder.Text=file.SelectedPath;
                 }
             };
-            var art=field("Artwork (optional)","CustomGameArtwork");
             Action checkFiles=() => {
-                var messages=new List<string>();
-                if(steamMode.IsChecked!=true && !String.IsNullOrWhiteSpace(target.Text) && !File.Exists(target.Text.Trim().Trim('"'))) messages.Add("Game file missing — update the path.");
-                if(!String.IsNullOrWhiteSpace(art.Text) && !File.Exists(CustomGameLibrary.ArtworkPath(art.Text.Trim().Trim('"')))) messages.Add("Artwork file missing — choose another image or clear it.");
-                missingFiles.Text=String.Join("\n",messages);
+                missingFiles.Text=steamMode.IsChecked!=true && !String.IsNullOrWhiteSpace(target.Text) && !File.Exists(target.Text.Trim().Trim('"')) ? "Game file missing — update the path." : "";
             };
-            target.TextChanged+=(s,e) => checkFiles(); art.TextChanged+=(s,e) => checkFiles();
+            target.TextChanged+=(s,e) => checkFiles();
             steamMode.Checked+=(s,e) => checkFiles(); steamMode.Unchecked+=(s,e) => checkFiles();
-            art.ToolTip="Leave artwork empty to use SteamGridDB fallback when enabled.";
-            panel.Children.Remove(art);
-            var artworkField=new Grid(); artworkField.Children.Add(art);
-            var artworkHint=Label("Leave empty to use SteamGridDB automatically",12,muted); artworkHint.Margin=new Thickness(19,0,9,0); artworkHint.IsHitTestVisible=false;
-            artworkField.Children.Add(artworkHint); panel.Children.Add(artworkField);
-            Action updateArtworkHint=() => artworkHint.Visibility=String.IsNullOrEmpty(art.Text) ? Visibility.Visible : Visibility.Collapsed;
-            art.TextChanged+=(s,e) => updateArtworkHint(); updateArtworkHint();
             Action<Settings> commit=next => {
                 Storage.Write("settings.json",next); settings=next;
                 if(artworkCancellation!=null) artworkCancellation.Cancel();
@@ -1784,56 +1706,17 @@ namespace PadLauncher {
                 library.Games=library.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
                 ApplyLibrary(); rebuild(); DownloadArtwork(library);
             };
-            var artActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
-            var browseArt=new Button {Content="Choose local image…",Padding=new Thickness(12,6,12,6),Margin=new Thickness(8,0,0,0)};
-            browseArt.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Artwork|*.png;*.jpg;*.jpeg;*.bmp",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) art.Text=file.FileName;};
-            var pickSgdb=new Button {Content="Choose SGDB image…",Padding=new Thickness(12,6,12,6)};
-            pickSgdb.Click+=(s,e) => {
-                Game game;
-                if(editing) {
-                    string id=picker.SelectedValue as string;
-                    game=library.Games.FirstOrDefault(g => g.Id==id && g.Source=="custom");
-                    if(game==null) {ThemedMessage.Show(dialog,"Select a custom game first.","Custom games"); return;}
-                } else {
-                    if(String.IsNullOrWhiteSpace(gameName.Text)) {ThemedMessage.Show(dialog,"Enter a game name first, then choose an SGDB image.","Custom games"); return;}
-                    game=new Game {Id="custom:new",Name=gameName.Text.Trim(),Source="custom"};
-                }
-                if(scanning) {ThemedMessage.Show(dialog,"Please wait for the current library refresh to finish.","Custom games"); return;}
-                string selectedId=picker.SelectedValue as string,selectedName=gameName.Text;
-                ShowArtworkPicker(dialog,game,path => {
-                    if(editing ? (picker.SelectedValue as string)!=selectedId : gameName.Text!=selectedName)
-                        throw new InvalidOperationException("Return to the game you were editing before choosing its artwork.");
-                    art.Text=path;
-                });
-            };
-            var clearArt=new Button {Name="ClearCustomGameImage",Content="Clear image",Padding=new Thickness(12,6,12,6),Margin=new Thickness(8,0,0,0)};
-            clearArt.Click+=(s,e) => {
-                try {
-                    if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
-                    if(!editing) {art.Clear(); return;}
-                    string id=picker.SelectedValue as string;
-                    if(id==null) return;
-                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                    if(next.ArtworkOverrides!=null) next.ArtworkOverrides.Remove(id);
-                    var entry=(next.CustomGames ?? new List<CustomGame>()).FirstOrDefault(game => game.Id==id);
-                    if(entry!=null) entry.Artwork="";
-                    Storage.Write("settings.json",next); settings=next;
-                    if(artworkCancellation!=null) artworkCancellation.Cancel();
-                    art.Clear();
-                    CustomGameLibrary.Apply(library,settings);
-                    foreach(var game in library.Games) ArtworkService.ApplyCached(game,settings);
-                    cards.Clear(); carousel.Children.Clear(); Render(false); RefreshMissingArtworkList();
-                } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom games");}
-            };
-            artActions.Children.Add(pickSgdb); artActions.Children.Add(browseArt); artActions.Children.Add(clearArt); panel.Children.Add(artActions);
             var actions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,32,0,0)};
             var save=new Button {Name="SaveCustomGame",Content="Add game",Padding=new Thickness(14,7,14,7)};
             var remove=new Button {Content="Remove game",Padding=new Thickness(14,7,14,7),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed}; actions.Children.Add(save); actions.Children.Add(remove); panel.Children.Add(actions);
             var removalHint=Label("Removing an entry keeps your game files.",12,muted); removalHint.TextWrapping=TextWrapping.Wrap; removalHint.Margin=new Thickness(0,8,0,0); removalHint.Visibility=editing ? Visibility.Visible : Visibility.Collapsed; panel.Children.Add(removalHint);
             Action loadEntry=() => {
                 var entry=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==(picker.SelectedValue as string));
-                steamMode.Visibility=entry!=null && !String.IsNullOrEmpty(entry.SteamLaunchId) ? Visibility.Visible : Visibility.Collapsed; steamMode.IsChecked=entry!=null && entry.LaunchViaSteam;
-                gameName.Text=entry==null ? "" : entry.Name; target.Text=entry==null ? "" : entry.Target; arguments.Text=entry==null ? "" : entry.Arguments; folder.Text=entry==null ? "" : entry.WorkingDirectory; art.Text=entry==null ? "" : CustomGameLibrary.ArtworkPath(entry.Artwork);
+                bool imported=entry!=null && SteamShortcutIdentity.IsImported(entry);
+                steamMode.Visibility=entry!=null && !String.IsNullOrEmpty(entry.SteamLaunchId) && !imported ? Visibility.Visible : Visibility.Collapsed;
+                steamMode.IsChecked=entry!=null && SteamShortcutIdentity.ThroughSteam(settings,entry);
+                linkedSteamNote.Visibility=imported ? Visibility.Visible : Visibility.Collapsed;
+                gameName.Text=entry==null ? "" : entry.Name; target.Text=entry==null ? "" : entry.Target; arguments.Text=entry==null ? "" : entry.Arguments; folder.Text=entry==null ? "" : entry.WorkingDirectory;
                 save.Content=entry==null ? "Add game" : "Save changes"; remove.Visibility=entry==null ? Visibility.Collapsed : Visibility.Visible;
                 if(entry==null) {
                     gameList.SelectedValue=settings.DefaultCustomGameListId ?? "";
@@ -1857,7 +1740,7 @@ namespace PadLauncher {
                     var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                     string id=picker.SelectedValue as string;
                     var old=(settings.CustomGames ?? new List<CustomGame>()).FirstOrDefault(g => g.Id==id);
-                    var draft=new CustomGame {Id=String.IsNullOrEmpty(id) ? null : id,Name=gameName.Text,Target=target.Text,Arguments=arguments.Text,WorkingDirectory=folder.Text,Artwork=art.Text,SteamShortcutKey=old==null ? null : old.SteamShortcutKey,SteamLaunchId=old==null ? null : old.SteamLaunchId,LaunchViaSteam=steamMode.IsChecked==true};
+                    var draft=new CustomGame {Id=String.IsNullOrEmpty(id) ? null : id,Name=gameName.Text,Target=target.Text,Arguments=arguments.Text,WorkingDirectory=folder.Text,Artwork=old==null ? null : old.Artwork,SteamShortcutKey=old==null ? null : old.SteamShortcutKey,SteamLaunchId=old==null ? null : old.SteamLaunchId,LaunchViaSteam=steamMode.IsChecked==true};
                     if(!String.IsNullOrEmpty(draft.SteamLaunchId)) draft.PlayniteActionInfo=SteamShortcutImport.Describe(draft);
                     string gameId=CustomGameLibrary.Save(next,draft);
                     string destination=gameList.SelectedValue as string;
@@ -1938,6 +1821,8 @@ namespace PadLauncher {
             RefreshLibrary(feedback);
         }
         async void RefreshLibrary(bool feedback = false) {
+            if(setupWindow!=null) return;
+            if(setupTemplateOnly) {if(!feedback) return; setupTemplateOnly=false;}
             if (demo) { if (feedback) ShowNotice("Preview library · refresh is available with your Steam library."); return; }
             if (scanning) {
                 pendingLibraryRefresh=true;
@@ -2004,6 +1889,7 @@ namespace PadLauncher {
                     Storage.Write("settings.json",cleaned); settings=cleaned;
                     Storage.Write("library.json",next);
                 }
+                SteamShortcutIdentity.Reconcile(next,settings);
                 library = next; settings.SteamPath = next.SteamPath;
                 if(!String.IsNullOrEmpty(user)) settings.UserId=next.UserId;
                 if(refreshed.Item2 || feedback || removedNames.Count>0) ApplyLibrary();
@@ -2021,16 +1907,37 @@ namespace PadLauncher {
             if(artworkCancellation!=null) artworkCancellation.Cancel();
             var cancellation=new System.Threading.CancellationTokenSource(); artworkCancellation=cancellation;
             var snapshot=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            var pending=new Dictionary<string,Tuple<Game,string>>();
+            bool scheduled=false;
             try {
                 await Task.Run(() => ArtworkService.Fill(batch.Games,snapshot,cancellation.Token,(game,path) => {
+                    lock(pending) {
+                        pending[game.Id]=Tuple.Create(game,path);
+                        if(scheduled) return;
+                        scheduled=true;
+                    }
                     Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => {
+                        Tuple<Game,string>[] updates;
+                        lock(pending) {updates=pending.Values.ToArray(); pending.Clear(); scheduled=false;}
                         if(cancellation.IsCancellationRequested || library!=batch) return;
-                        game.Art=path; game.ArtworkProvider="downloaded"; cards.Clear(); carousel.Children.Clear(); Render(false); RefreshMissingArtworkList();
+                        bool redraw=false;
+                        foreach(var update in updates) {
+                            var changed=update.Item1;
+                            changed.Art=update.Item2;
+                            if(!(changed.ArtworkProvider ?? "").StartsWith("libretro",StringComparison.Ordinal)) changed.ArtworkProvider="downloaded";
+                            int index=visible.FindIndex(entry => entry.Id==changed.Id);
+                            if(index>=0 && filters.Count>0) visible[index]=ArtworkService.ForList(changed,settings,filters[collectionIndex].Id);
+                            FrameworkElement card;
+                            if(cards.TryGetValue(changed.Id,out card)) {cards.Remove(changed.Id); carousel.Children.Remove(card); redraw=true;}
+                        }
+                        if(redraw) Render(false);
+                        RefreshMissingArtworkList();
                     }));
                 },message => Dispatcher.BeginInvoke(new Action(() => {if(!cancellation.IsCancellationRequested) ShowNotice(message);} ))));
             } catch(OperationCanceledException) {} catch(Exception) {}
         }
         void ApplyLibrary(bool opening=false) {
+            if(CombinedCollections.TrackAddedGames(library,settings,DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) && !preview && !demo) QueueSave();
             missingGameCache.Clear();
             StopListTransition();
             string previousFilter=filters.Count>0 ? filters[collectionIndex].Id : null;
@@ -2050,17 +1957,23 @@ namespace PadLauncher {
             collectionIndex = Math.Max(0, filters.FindIndex(c => c.Id == settings.CollectionId));
         }
         void FilterGames(bool remember) {
+            if(GameSearchOpen && refreshSearchView!=null) {refreshSearchView(); return;}
             Collection filter = filters[collectionIndex];
+            activeListLayout=RetroArchListDefaults.Layout(settings,filter.Id);
             string oldId = remember ? settings.SelectedId : visible.Count > selected ? visible[selected].Id : null;
             string remembered;
             if(settings.SelectedGamesByList!=null && settings.SelectedGamesByList.TryGetValue(filter.Id,out remembered)) oldId=remembered;
-            if(filter.Id=="recent") oldId=null;
+            if(filter.Id=="recent" || filter.Id=="recently-added") oldId=null;
             var membership=new HashSet<string>(filter.Games ?? new List<string>());
             var hidden=new HashSet<string>(settings.HiddenGameIds ?? new List<string>());
             visible = library.Games.Where(g => !hidden.Contains(g.Id) && (filter.Id == "all" || (!filter.UnsupportedDynamic && membership.Contains(g.Id)))).ToList();
             if(filter.Id=="recent") visible=visible.OrderByDescending(g => CombinedCollections.RecentPlayed(settings,g)).ToList();
+            if(filter.Id=="recently-added") visible=visible.OrderByDescending(g => CombinedCollections.AddedAt(settings,g)).ThenBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+            string artworkSource=ArtworkService.ListDefaultSource(settings,filter.Id);
+            visible=visible.Select(game => ArtworkService.ForList(game,settings,filter.Id,artworkSource)).ToList();
             selected = Math.Max(0, visible.FindIndex(g => g.Id == oldId));
             cards.Clear(); carousel.Children.Clear(); ApplyCarouselScale(); Render(false);
+            DownloadListArtwork();
         }
         void ChangeCollection(int delta,bool vertical=false) {
             if (launching || filters.Count < 2) return;
@@ -2085,33 +1998,54 @@ namespace PadLauncher {
         void MoveGridRow(int delta) {
             if(visible.Count==0 || launching) return;
             StopListTransition();
-            int column=selected%GridColumns,next=selected+delta*GridColumns;
-            if(next>=visible.Count) next=column;
-            if(next<0) next=column+((visible.Count-1-column)/GridColumns)*GridColumns;
+            int rowCount=(visible.Count+GridColumns-1)/GridColumns;
+            int row=((selected/GridColumns+delta)%rowCount+rowCount)%rowCount;
+            int pageSize=GridColumns*GridRows,sourcePage=selected/pageSize*pageSize;
+            double ignored;
+            var sourcePositions=ArtworkPanelPositions(Math.Min(pageSize,visible.Count-sourcePage),0,sourcePage,true,out ignored);
+            Rect source=sourcePositions[selected-sourcePage];
+            double center=source.X+source.Width/2;
+            int first=row*GridColumns,last=Math.Min(first+GridColumns,visible.Count),targetPage=first/pageSize*pageSize;
+            var targets=ArtworkPanelPositions(Math.Min(pageSize,visible.Count-targetPage),0,targetPage,true,out ignored);
+            int next=first; double nearest=Double.PositiveInfinity;
+            for(int candidate=first;candidate<last;candidate++) {
+                Rect target=targets[candidate-targetPage];
+                double distance=Math.Abs(target.X+target.Width/2-center);
+                if(distance<nearest-.001) {nearest=distance; next=candidate;}
+            }
             selected=next;
             Render(false);
         }
         void Render(bool animate) {
             ConfigureViewport();
+            if(GameSearchOpen) ConfigureSearchViewport();
             RemoveGuideCards();
             if (filters.Count == 0) SetFilters();
-            collectionText.Text = settings.ShowListGameCount ? CombinedCollections.Label(filters[collectionIndex],library,settings.HiddenGameIds) : filters[collectionIndex].Name;
+            collectionText.Text = GameSearchOpen ? (String.IsNullOrEmpty(gameSearchText) ? "Search:" : "Search: "+gameSearchText) : settings.ShowListGameCount ? CombinedCollections.Label(filters[collectionIndex],library,settings.HiddenGameIds) : filters[collectionIndex].Name;
             if (visible.Count == 0) {
                 carousel.Children.Clear(); cards.Clear();
-                if(!demo && library.Games.Count==0) AddGuideCards();
-                title.Text = filters[collectionIndex].Id=="unavailable-collections" ? "Choose available lists in Settings" : filters[collectionIndex].UnsupportedDynamic ? "This list needs an unsupported filter" : library.Games.Count > 0 ? "No installed games in this list" : "Your next game starts here";
+                if(!GameSearchOpen && !demo && library.Games.Count==0) AddGuideCards();
+                if(GameSearchOpen && searchConsoleLabel!=null) searchConsoleLabel.Text="";
+                title.Text = GameSearchOpen ? "No matching games" : filters[collectionIndex].Id=="unavailable-collections" ? "Choose available lists in Settings" : filters[collectionIndex].UnsupportedDynamic ? "This list needs an unsupported filter" : library.Games.Count > 0 ? "No installed games in this list" : "Your next game starts here";
                 return;
             }
-            Game current = visible[selected]; settings.SelectedId = current.Id;
-            if(settings.SelectedGamesByList==null) settings.SelectedGamesByList=new Dictionary<string,string>();
-            if(filters[collectionIndex].Id=="recent") settings.SelectedGamesByList.Remove("recent");
-            else settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
-            title.Text = current.Name+(GameFileMissing(current) ? " · Game file missing" : "");
+            Game current = visible[selected];
+            if(!GameSearchOpen) {
+                settings.SelectedId = current.Id;
+                if(settings.SelectedGamesByList==null) settings.SelectedGamesByList=new Dictionary<string,string>();
+                if(filters[collectionIndex].Id=="recent" || filters[collectionIndex].Id=="recently-added") settings.SelectedGamesByList.Remove(filters[collectionIndex].Id);
+                else settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
+            } else if(searchConsoleLabel!=null) searchConsoleLabel.Text=SearchSourceLabel(current,settings);
+            string availabilityIssue=GameAvailabilityIssue(current);
+            title.Text = current.Name+(availabilityIssue==null ? "" : " · "+availabilityIssue);
             var keep = new HashSet<string>();
             bool gridLayout=ActiveLayout=="grid";
             int pageSize=GridColumns*GridRows,pageStart=(selected/pageSize)*pageSize;
             int count = gridLayout ? Math.Min(pageSize,visible.Count-pageStart) : Math.Min(9,visible.Count), start = -(count/2);
             double gridHeight=Math.Min(150,(1440.0-(GridColumns-1)*28)/GridColumns)*1.5;
+            double coverRowHeight;
+            var coverPositions=ArtworkPanelPositions(count,start,pageStart,gridLayout,out coverRowHeight);
+            if(gridLayout && coverPositions!=null) gridHeight=coverRowHeight;
             double gridContentHeight=gridHeight*GridRows+(GridRows-1)*20;
             if(gridLayout) {
                 if(gridScrollPage!=pageStart || cards.Count==0) gridScrollOffset=0;
@@ -2147,31 +2081,38 @@ namespace PadLauncher {
                     x=(1600-gridWidth)/2+(slot%GridColumns)*(w+28);
                     y=Math.Max(0,(gridViewportHeight-gridContentHeight)/2)+(slot/GridColumns)*(h+20)-gridScrollOffset;
                 }
+                if(coverPositions!=null) {
+                    var position=coverPositions[slot]; w=position.Width; h=position.Height; x=position.X;
+                    y=gridLayout ? Math.Max(0,(gridViewportHeight-gridContentHeight)/2)+(slot/GridColumns)*(gridHeight+20)+position.Y-gridScrollOffset : position.Y;
+                }
                 if (!cards.TryGetValue(game.Id,out card)) {
                     double pixelScale=1;
                     var source=PresentationSource.FromVisual(this);
                     if(source!=null && source.CompositionTarget!=null) pixelScale=source.CompositionTarget.TransformToDevice.M11;
                     double screenWidth=ActualWidth>0 ? ActualWidth*pixelScale : 1600;
-                    int decodeWidth=gridLayout ? Math.Min(700,Math.Max(128,(int)Math.Ceiling(w*ActivePanelScale*screenWidth/1600/64)*64)) : 700;
+                    int decodeWidth=gridLayout ? Math.Min(700,Math.Max(128,(int)Math.Ceiling(w*(ActivePanelOutlines ? 1 : 1.12)*ActivePanelScale*screenWidth/1600/64)*64)) : 700;
                     card = Card(game, i, w,h,active,decodeWidth); cards[game.Id] = card; carousel.Children.Add(card);
                     Canvas.SetLeft(card,x + (animate ? Math.Sign(offset)*45 : 0)); Canvas.SetTop(card,y); card.Width = w; card.Height = h;
                 }
                 // Geometry and artwork transform follow the animated panel size.
-                Panel.SetZIndex(card, 10-Math.Abs(offset));
+                Panel.SetZIndex(card, gridLayout ? (active ? 100 : 0) : 10-Math.Abs(offset));
+                if(gridLayout) UpdateGridSelection(card,active,animate,x,y,w,h);
                 SetAnimation(card, Canvas.LeftProperty,x,animate); SetAnimation(card, Canvas.TopProperty,y,animate);
                 SetAnimation(card, WidthProperty,w,animate); SetAnimation(card, HeightProperty,h,animate); SetAnimation(card, OpacityProperty,active ? 1 : gridLayout ? .72 : .48,animate);
                 var border = card as Grid;
                 bool missing=GameFileMissing(game);
                 var missingBadge=border.Children.OfType<Border>().FirstOrDefault(b => b.Name=="MissingGameBadge");
                 if(missingBadge!=null) missingBadge.Visibility=missing ? Visibility.Visible : Visibility.Collapsed;
-                card.ToolTip=missing ? game.Source=="emulator" ? "Emulator or game file missing. Update its path in Emulators." : "Game file missing. Update its path in Custom games." : game.Name;
+                card.ToolTip=missing ? GameAvailabilityIssue(game)+(game.Source=="emulator" ? ". Check this game's emulator, core or game path in Emulators." : ". Update its path in Custom games.") : game.Name;
                 var outline = border.Children[border.Children.Count-1] as System.Windows.Shapes.Path;
-                if (outline != null) { outline.Stroke = missing ? new SolidColorBrush(Color.FromRgb(255,172,153)) : active ? mint : new SolidColorBrush(Color.FromArgb(70,180,206,213)); outline.StrokeThickness = settings.ShowPanelOutlines ? (active ? 2 : 1) : 0; }
+                if (outline != null) { outline.Stroke = missing ? new SolidColorBrush(Color.FromRgb(255,172,153)) : active ? mint : new SolidColorBrush(Color.FromArgb(70,180,206,213)); outline.StrokeThickness = ActivePanelOutlines ? (active ? 2 : 1) : 0; }
             }
             foreach (string id in cards.Keys.Where(k => !keep.Contains(k)).ToArray()) { carousel.Children.Remove(cards[id]); cards.Remove(id); }
+            FitSearchCarouselViewport();
         }
         void RemoveGuideCards() {
             foreach(var card in guideCards) carousel.Children.Remove(card);
+            if(guideActions!=null) carousel.Children.Remove(guideActions);
         }
         void AddGuideCards() {
             if(guideCards.Count==0) {
@@ -2194,19 +2135,31 @@ namespace PadLauncher {
                     var hintLabel=Label(hints[i],14,muted); hintLabel.TextWrapping=TextWrapping.Wrap; hintLabel.Margin=new Thickness(0,12,0,0);
                     text.Children.Add(titleLabel); text.Children.Add(hintLabel);
                     body.Children.Add(text);
-                    grid.Children.Add(new Border {BorderBrush=mint,BorderThickness=new Thickness(settings.ShowPanelOutlines ? 2 : 0),Background=Brushes.Transparent,CornerRadius=new CornerRadius(8)});
+                    grid.Children.Add(new Border {BorderBrush=mint,BorderThickness=new Thickness(ActivePanelOutlines ? 2 : 0),Background=Brushes.Transparent,CornerRadius=new CornerRadius(8)});
                     grid.MouseLeftButtonUp+=(s,e) => OpenSettingsTab(tab);
                     guideCards.Add(grid);
                     Canvas.SetLeft(grid,800-150+offsets[i]*320); Canvas.SetTop(grid,(490-390)/2);
                 }
             }
             foreach(var card in guideCards) carousel.Children.Add(card);
+            if(guideActions==null) {
+                guideActions=new StackPanel {Name="TemplateActions",Orientation=Orientation.Horizontal};
+                guideActions.SizeChanged+=(s,e) => Canvas.SetLeft(guideActions,800-guideActions.ActualWidth/2);
+                var setup=new Button {Name="TemplateRunSetup",Content="Run first-launch wizard",Padding=new Thickness(16,8,16,8),FontSize=14,Background=mint,Foreground=Brushes.Black,Margin=new Thickness(0,0,12,0)};
+                setup.Click+=(s,e) => {e.Handled=true; Close(); ShowSetupWizard(true);};
+                var quit=new Button {Name="TemplateQuitApp",Content="Quit app",Padding=new Thickness(16,8,16,8),FontSize=14,Background=new SolidColorBrush(Color.FromRgb(28,48,61)),Foreground=white,BorderBrush=mint,BorderThickness=new Thickness(1)};
+                quit.Click+=(s,e) => {e.Handled=true; ExitApp();};
+                guideActions.Children.Add(setup); guideActions.Children.Add(quit);
+                Canvas.SetLeft(guideActions,600); Canvas.SetTop(guideActions,450);
+            }
+            carousel.Children.Add(guideActions);
         }
+        internal static int SettingsTabIndex(int oldIndex) {return oldIndex==0 ? 5 : oldIndex>=1 && oldIndex<=5 ? oldIndex-1 : oldIndex;}
         public void OpenSettingsTab(int tab) {
             bool created=false;
             if(helpWindow==null) { helpWindow=CreateHelpWindow(); helpWindow.Closed+=(s,e) => { helpWindow=null; helpTabs=null; missingArtworkList=null; missingArtworkCount=null; }; created=true; }
             if(helpWindow.WindowState==WindowState.Minimized) helpWindow.WindowState=WindowState.Normal;
-            if(helpTabs!=null) helpTabs.SelectedIndex=tab;
+            if(helpTabs!=null) helpTabs.SelectedIndex=SettingsTabIndex(tab);
             if(created) helpWindow.Show();
             helpWindow.Activate();
         }
@@ -2236,11 +2189,11 @@ namespace PadLauncher {
             Border artworkBackdrop=null;
             if (bitmap != null) {
                 artworkFrame=new Grid {Name="ArtworkFrame",HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Top,ClipToBounds=true};
-                if(ActiveLayout!="rectangular" && ActiveLayout!="grid") {
+                if(!GameSearchOpen && ((ActiveLayout!="rectangular" && ActiveLayout!="grid") || IsLibretroCover(game))) {
                     artworkBackdrop=new Border {Name="ArtworkBackdrop",Background=ArtworkColours.Background(bitmap),IsHitTestVisible=false};
                     artworkFrame.Children.Add(artworkBackdrop);
                 }
-                artwork=new Image {Name="GameArtwork",Source=bitmap,Stretch=Stretch.UniformToFill,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
+                artwork=new Image {Name="GameArtwork",Source=bitmap,Stretch=GameSearchOpen ? Stretch.Uniform : Stretch.UniformToFill,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
                 artworkFrame.Children.Add(artwork); body.Children.Add(artworkFrame);
             }
             else {
@@ -2250,13 +2203,13 @@ namespace PadLauncher {
             }
             body.Children.Add(new System.Windows.Shapes.Rectangle { Fill = new LinearGradientBrush(Color.FromArgb(0,0,0,0),Color.FromArgb(210,5,13,20),90) });
             grid.Children.Add(new Border {Name="MissingGameBadge",Background=new SolidColorBrush(Color.FromRgb(54,30,28)),CornerRadius=new CornerRadius(5),Padding=new Thickness(8,5,8,5),Margin=new Thickness(0,14,0,0),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top,Visibility=Visibility.Collapsed,IsHitTestVisible=false,Child=Label("File missing",11,new SolidColorBrush(Color.FromRgb(255,172,153)))});
-            var outline = new System.Windows.Shapes.Path { Fill=Brushes.Transparent,IsHitTestVisible=false,Stroke=mint,StrokeThickness=settings.ShowPanelOutlines ? 2 : 0 }; grid.Children.Add(outline);
+            var outline = new System.Windows.Shapes.Path { Fill=Brushes.Transparent,IsHitTestVisible=false,Stroke=mint,StrokeThickness=ActivePanelOutlines ? 2 : 0 }; grid.Children.Add(outline);
             Action geometry = () => {
                 double w=grid.ActualWidth,h=grid.ActualHeight;
                 double slant=ActiveLayout=="rectangular" || ActiveLayout=="grid" ? 0 : 73;
                 if(artwork!=null && h>0 && w>slant) {
                     artworkFrame.Width=w-slant; artworkFrame.Height=h;
-                    artwork.Stretch=slant>0 ? Stretch.Uniform : Stretch.UniformToFill;
+                    artwork.Stretch=GameSearchOpen || slant>0 || IsLibretroCover(game) ? Stretch.Uniform : Stretch.UniformToFill;
                     artworkFrame.RenderTransform=new MatrixTransform(1,0,-slant/h,1,slant,0);
                     if(artworkBackdrop!=null) {
                         double fittedHeight=bitmap.PixelHeight*Math.Min((w-slant)/bitmap.PixelWidth,h/bitmap.PixelHeight);
@@ -2279,6 +2232,7 @@ namespace PadLauncher {
                 bool inside=grid.Clip!=null && grid.Clip.FillContains(e.GetPosition(grid));
                 panelPressed=false; grid.ReleaseMouseCapture(); e.Handled=true;
                 if(!inside) return;
+                if(GameSearchOpen) {if(SearchGamesFocused && index==selected) LaunchSearchSelection(); else {selected=index; Render(false);} return;}
                 if (index==selected) LaunchSelected(); else { selected=index; Render(true); }
             };
             return grid;
@@ -2318,6 +2272,8 @@ namespace PadLauncher {
             }
             if (demo) { ShowNotice("Preview mode · connect your Steam library to launch games."); return; }
             var game=visible[selected];
+            string emulatorIssue=EmulatorLibrary.MissingReason(game,settings);
+            if(emulatorIssue!=null) {ShowNotice(emulatorIssue+". Check Settings → Emulators."); return;}
             launching=true;
             try {
                 Save();
@@ -2329,43 +2285,51 @@ namespace PadLauncher {
 #endif
         }
         bool GameFileMissing(Game game) {
+            return GameAvailabilityIssue(game)!=null;
+        }
+        string GameAvailabilityIssue(Game game) {
             if(DateTime.UtcNow>=missingGameCacheUntil) {
                 missingGameCache.Clear(); missingGameCacheUntil=DateTime.UtcNow.AddSeconds(2);
             }
-            bool missing;
+            string missing;
             if(!missingGameCache.TryGetValue(game.Id,out missing)) {
-                missing=(game.Source=="custom" && String.IsNullOrEmpty(game.SteamLaunchId) && !File.Exists(game.LaunchId)) || EmulatorLibrary.Missing(game,settings);
+                missing=game.Source=="custom" && String.IsNullOrEmpty(game.SteamLaunchId) && !File.Exists(game.LaunchId) ? "Game file missing" : EmulatorLibrary.MissingReason(game,settings);
                 missingGameCache[game.Id]=missing;
             }
             return missing;
         }
-        void Save() { navigationSaveTimer.Stop(); if (demo) return; try { Storage.Write("settings.json",settings); } catch { } }
+        void Save() { navigationSaveTimer.Stop(); if (demo || setupTemplateOnly) return; try { Storage.Write("settings.json",settings); } catch { } }
         void QueueSave() {
             if(demo || saveQueued) return;
             saveQueued=true;
             Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => { saveQueued=false; Save(); }));
         }
         void OnKey(object sender, System.Windows.Input.KeyEventArgs e) {
-            var key=e.Key;
-            int keyDirection=ControllerNavigation.KeyDirection(key,ActiveLayout=="grid",GridColumns,ControllerNavigation.ListSwitchEnabled(settings,ActiveLayout));
+            if(GameSearchOpen) {HandleSearchKey(e); return;}
+            string action=ControlBindings.KeyAction(settings,"overlay",e.Key==System.Windows.Input.Key.System ? e.SystemKey : e.Key,System.Windows.Input.Keyboard.Modifiers);
+            if(action==null) return;
+            var navKey=action=="left" ? System.Windows.Input.Key.Left : action=="right" ? System.Windows.Input.Key.Right : action=="up" ? System.Windows.Input.Key.Up : action=="down" ? System.Windows.Input.Key.Down : System.Windows.Input.Key.None;
             PadState pad;
-            if(keyDirection!=0 && !preview && Gamepad.Read(out pad) && TryControllerNavigationKey(key,pad)) { e.Handled=true; return; }
-            switch (key) {
-                case System.Windows.Input.Key.Left: Move(-1); break;
-                case System.Windows.Input.Key.Right: Move(1); break;
-                case System.Windows.Input.Key.Up: if(ActiveLayout=="grid") MoveGridRow(-1); break;
-                case System.Windows.Input.Key.Down: if(ActiveLayout=="grid") MoveGridRow(1); break;
-                case System.Windows.Input.Key.Enter: if (!e.IsRepeat) LaunchSelected(); break;
-                case System.Windows.Input.Key.Escape: Close(); break;
-                case System.Windows.Input.Key.PageUp: ChangeCollection(-1); break;
-                case System.Windows.Input.Key.PageDown: ChangeCollection(1); break;
-                case System.Windows.Input.Key.F5: if (!e.IsRepeat) RefreshLibrary(true); break;
-                case System.Windows.Input.Key.F1: ShowControls(); break;
-                case System.Windows.Input.Key.F: if(!e.IsRepeat) ToggleFavourite(); break;
-                case System.Windows.Input.Key.M: if(!e.IsRepeat) CycleMonitor(); break;
-                default: return;
-            }
+            if(navKey!=System.Windows.Input.Key.None && !preview && Gamepad.Read(out pad) && TryControllerNavigationKey(navKey,RemapController(pad,"overlay"))) {e.Handled=true; return;}
             e.Handled=true;
+            if(action=="left" || action=="right") {Move(action=="left" ? -1 : 1); return;}
+            if(action=="up" || action=="down") {if(ActiveLayout=="grid") MoveGridRow(action=="up" ? -1 : 1); return;}
+            if(e.IsRepeat) return;
+            switch(action) {
+                case "play": LaunchSelected(); break;
+                case "dismiss": Close(); break;
+                case "exit": ExitApp(); break;
+                case "previous": ChangeCollection(-1); break;
+                case "next": ChangeCollection(1); break;
+                case "refresh": RefreshLibrary(true); break;
+                case "hints": ShowControls(); break;
+                case "search": OpenGameSearch(); break;
+                case "favourite": ToggleFavourite(); break;
+                case "monitor": CycleMonitor(); break;
+                case "jump": JumpToConfiguredList(); break;
+                case "layout": ToggleTestLayoutFromKeyboard(); break;
+                case "settings": ShowHelpWindow(); break;
+            }
         }
         void PollController(object sender,EventArgs e) {
             if (!IsActive || preview) { exitButton.Reset(); previousButtons=0; navigation.Reset(); return; }
@@ -2374,6 +2338,14 @@ namespace PadLauncher {
             ApplyControllerState(pad,Gamepad.Source,(long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency));
         }
         internal void ApplyControllerState(PadState pad,string source,long milliseconds) {
+            if(gameSearchWindow!=null) {HandleGameSearchController(pad,milliseconds); return;}
+            pad=RemapController(pad,"overlay");
+            if(suppressSearchRelease) {
+                previousButtons=pad.Buttons; previousInputSource=source;
+                if(pad.Buttons!=0 || pad.RT>80 || pad.LT>80) return;
+                suppressSearchRelease=false;
+            }
+            if(HandleTestLayoutTrigger(pad)) return;
             if(previousInputSource!=source) {
                 previousInputSource=source; previousButtons=0;
                 exitButton.Reset();
@@ -2382,25 +2354,24 @@ namespace PadLauncher {
             ushort buttons=pad.Buttons;
             ushort pressed=(ushort)(buttons & ~previousButtons);
             previousButtons=buttons;
-            ButtonGesture exitGesture=exitButton.Update((buttons&0x2000)!=0,milliseconds);
+            ButtonGesture exitGesture=exitButton.Update((buttons&0x0400)!=0,milliseconds);
             if(exitGesture==ButtonGesture.Hold) { ExitApp(); return; }
-            if(exitGesture==ButtonGesture.Tap) {
-                Close();
-                return;
-            }
+            if(exitGesture==ButtonGesture.Tap || ((pressed&0x2000)!=0 && (buttons&0x0400)==0)) {Close(); return;}
             if ((pressed&0x1000)!=0) { LaunchSelected(); return; }
             if ((pressed&0x4000)!=0) CycleMonitor();
             if ((pressed&0x0100)!=0) ChangeCollection(-1);
             if ((pressed&0x0200)!=0) ChangeCollection(1);
-            if ((pressed&0x8000)!=0) RefreshLibrary(true);
+            if ((pressed&0x8000)!=0) {OpenGameSearch(); return;}
+            if ((pressed&0x0020)!=0 && (buttons&0x0010)==0) RefreshLibrary(true);
             if ((pressed&0x0010)!=0 && (buttons&0x0020)==0) ShowControls();
             if((pressed&0x0080)!=0) {ToggleFavourite(); return;}
-            int jumpMask=settings.JumpListButton=="left" ? 0x0040 : 0;
-            if((pressed&jumpMask)!=0) {
-                int target=filters.FindIndex(list => list.Id==settings.JumpListId);
-                if(target<0) ShowNotice("Choose an available, non-empty jump list in Controls.");
-                else if(target!=collectionIndex) ChangeCollection(target-collectionIndex);
-            }
+            if((pressed&0x0040)!=0) JumpToConfiguredList();
+            if((pressed&0x0800)!=0) ShowHelpWindow();
+        }
+        void JumpToConfiguredList() {
+            int target=filters.FindIndex(list => list.Id==settings.JumpListId);
+            if(target<0) ShowNotice("Choose an available, non-empty jump list in Controls.");
+            else if(target!=collectionIndex) ChangeCollection(target-collectionIndex);
         }
         internal bool TryControllerNavigationKey(System.Windows.Input.Key key,PadState pad) {
             bool fast,grid=ActiveLayout=="grid";
@@ -2565,12 +2536,14 @@ namespace PadLauncher {
         [DllImport("xinput9_1_0.dll",EntryPoint="XInputGetState")] static extern uint Read91(uint index,out PadState state);
         static int version;
         static readonly PlayStationInput sony=new PlayStationInput();
+        static readonly SwitchProInput nintendo=new SwitchProInput();
         static readonly ControllerRouter router=new ControllerRouter();
         public static string Source { get; private set; }
-        public static void StartNative(IntPtr window) { sony.Start(window); }
-        public static void StopNative() { sony.Stop(); router.Reset(); Source=null; }
+        public static void StartNative(IntPtr window) { sony.Start(window); nintendo.Start(); }
+        public static void StopNative() { sony.Stop(); nintendo.Stop(); router.Reset(); Source=null; }
         public static bool Read(out PadState state) {
             var pads=sony.ReadAll();
+            pads.AddRange(nintendo.ReadAll());
             for(uint i=0;i<4;i++) { PadState pad; if(ReadXbox(i,out pad)) pads.Add(new KeyValuePair<string,PadState>("xinput:"+i,pad)); }
             string identity; bool found=router.Select(pads,out state,out identity); Source=identity; return found;
         }

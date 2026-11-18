@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -22,13 +22,14 @@ namespace PadLauncher {
         public static bool AllowedImageUrl(string value) {
             Uri uri;
             if(!Uri.TryCreate(value,UriKind.Absolute,out uri) || uri.Scheme!="https") return false;
-            return uri.Host.EndsWith(".epicgames.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamgriddb.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamstatic.com",StringComparison.OrdinalIgnoreCase);
+            return uri.Host=="thumbnails.libretro.com" || uri.Host.EndsWith(".epicgames.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamgriddb.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamstatic.com",StringComparison.OrdinalIgnoreCase);
         }
         public static byte[] Get(string url,string key,CancellationToken token) {
             ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
             var request=(HttpWebRequest)WebRequest.Create(url);
             request.Timeout=12000; request.ReadWriteTimeout=12000; request.AllowAutoRedirect=false;
-            request.UserAgent="PadLauncher/0.4.7";
+            request.UserAgent="PadLauncher/0.4.8";
+            request.CachePolicy=new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
             if(!String.IsNullOrEmpty(key)) {
                 if(new Uri(url).Host!="www.steamgriddb.com") throw new InvalidOperationException("Invalid API host.");
                 request.Headers["Authorization"]="Bearer "+key;
@@ -58,7 +59,8 @@ namespace PadLauncher {
         }
         public static void Clear() {if(File.Exists(PathName)) File.Delete(PathName);}
     }
-    public static class ArtworkService {
+    public static partial class ArtworkService {
+        internal static readonly object CacheWriteGate=new object();
         public static Func<string,string,CancellationToken,byte[]> Fetch=ArtworkNetwork.Get;
         static string Cache(Game game) {
             using(var hash=SHA256.Create()) return Path.Combine(Storage.Root,"artwork",BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(game.Id+"|"+game.ArtworkUrl+((game.Source=="custom" || game.Source=="emulator") ? "|"+game.Name : "")))).Replace("-","")+".img");
@@ -80,6 +82,8 @@ namespace PadLauncher {
             return relative;
         }
         public static bool KeepArtwork(Game game) {
+            if((game.ArtworkProvider=="chosen" || game.ArtworkProvider=="libretro-chosen") && File.Exists(game.Art)) return true;
+            if(game.ArtworkProvider=="libretro" && LibretroArtwork.Usable(game.Art)) return true;
             // Steam's own artwork and user-selected shortcut art take priority,
             // regardless of their dimensions. Provider cache files remain replaceable.
             bool steam=String.IsNullOrEmpty(game.Source) || game.Source=="steam" || game.Source=="custom";
@@ -89,16 +93,39 @@ namespace PadLauncher {
             }
             return Portrait(game.Art);
         }
-        public static void ApplyCached(Game game,Settings settings) {
+        static bool ApplyManualOverride(Game game,Settings settings) {
             string custom;
             if(settings.ArtworkOverrides!=null && settings.ArtworkOverrides.TryGetValue(game.Id,out custom)) {
                 string root=Path.GetFullPath(Storage.Root)+Path.DirectorySeparatorChar;
                 string chosen=Path.GetFullPath(Path.Combine(Storage.Root,custom));
-                if(chosen.StartsWith(root,StringComparison.OrdinalIgnoreCase) && File.Exists(chosen)) {game.Art=chosen; game.ArtworkProvider="chosen"; return;}
+                if(chosen.StartsWith(root,StringComparison.OrdinalIgnoreCase) && File.Exists(chosen)) {game.Art=chosen; game.ArtworkProvider=LibretroArtwork.IsChosenPath(chosen) ? "libretro-chosen" : "chosen"; return true;}
+            }
+            return false;
+        }
+        public static void RestoreStartupArtwork(Game game,Game previous,Settings settings) {
+            if(ApplyManualOverride(game,settings) || File.Exists(game.Art)) return;
+            // These references were already validated when cached. Avoid decoding
+            // the entire library just to display the first handful of panels.
+            if(previous!=null && previous.Name==game.Name && previous.ArtworkProvider!="chosen" && previous.ArtworkProvider!="libretro-chosen" && File.Exists(previous.Art)) {
+                game.Art=previous.Art; game.ArtworkProvider=previous.ArtworkProvider; return;
+            }
+            string path=Cache(game);
+            if(File.Exists(path)) {game.Art=path; game.ArtworkProvider="cached"; return;}
+            path=LibretroArtwork.CachePath(game);
+            if(File.Exists(path)) {game.Art=path; game.ArtworkProvider="libretro";}
+        }
+        public static void ApplyCached(Game game,Settings settings) {
+            if(ApplyManualOverride(game,settings)) return;
+            if(PreferLibretroForRetroArch(settings) && game.Source=="emulator" && game.EmulatorId=="retroarch" && !HasManualArtwork(game,settings)) {
+                string retro=LibretroArtwork.CachePath(game); if(LibretroArtwork.Usable(retro)) {game.Art=retro; game.ArtworkProvider="libretro"; return;}
             }
             if(KeepArtwork(game)) return;
             string path=Cache(game);
-            if(Portrait(path)) {game.Art=path; game.ArtworkProvider="cached";}
+            if(Portrait(path)) {game.Art=path; game.ArtworkProvider="cached"; return;}
+            if(game.Source=="emulator") {
+                path=LibretroArtwork.CachePath(game);
+                if(LibretroArtwork.Usable(path)) {game.Art=path; game.ArtworkProvider="libretro";}
+            }
         }
         static object ApiData(string route,string key,CancellationToken token) {
             object value=Storage.Json().DeserializeObject(Encoding.UTF8.GetString(Fetch("https://www.steamgriddb.com/api/v2/"+route,key,token)));
@@ -145,7 +172,7 @@ namespace PadLauncher {
             var matches=candidates.Where(v => Normalize(v.Name)==Normalize(name)).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
             return matches.Length==1 ? matches[0].Id : 0;
         }
-        static string EmulatorArtworkTitle(string name) {
+        public static string EmulatorArtworkTitle(string name) {
             string title=Regex.Replace(name ?? "",@"\s*(?:\((?:disc|disk|cd)\s*\d+\)|\b(?:disc|disk|cd)\s*\d+)\s*(?=\(|$)"," ",RegexOptions.IgnoreCase).Trim();
             switch(Normalize(title)) {
                 case "crashbandicoot1": return "Crash Bandicoot";
@@ -233,22 +260,36 @@ namespace PadLauncher {
         }
         public static void Fill(IEnumerable<Game> games,Settings settings,CancellationToken token,Action<Game,string> ready,Action<string> status) {
             string key=settings.SteamGridDbEnabled ? ArtworkKey.Load() : null;
+            var libretro=new LibretroArtwork(); bool providerPaused=false,libretroWarning=false;
             foreach(var game in games) {
                 token.ThrowIfCancellationRequested();
+                if(game.Source=="emulator" && GameListSource(settings,game,null)!="auto" && !HasManualArtwork(game,settings)) {
+                    FillList(new[]{game},settings,null,token,id => {},status);
+                    var preferredGame=ForList(game,settings,null);
+                    game.Art=preferredGame.Art; game.ArtworkProvider=preferredGame.ArtworkProvider;
+                    if(File.Exists(game.Art)) ready(game,game.Art);
+                    continue;
+                }
                 if(KeepArtwork(game)) continue;
                 string path=Cache(game),retry=path+(game.Source=="emulator" ? (Normalize(game.Name)=="crashbandicoot3" || Normalize(game.Name)=="crashbandicootwarped" ? ".crash3-v3.retry" : ".emulator-v2.retry") : ".retry");
-                if(File.Exists(retry) && File.GetLastWriteTimeUtc(retry)>DateTime.UtcNow.AddHours(-6)) continue;
-                try {
-                    string url=game.ArtworkUrl;
-                    bool saved=false;
-                    try {saved=Download(url,path,token);} catch(WebException) {token.ThrowIfCancellationRequested();}
-                    if(!saved && !String.IsNullOrEmpty(key)) saved=Download(FindGrid(game,key,token),path,token);
-                    if(saved) ready(game,path);
-                    else {Directory.CreateDirectory(Path.GetDirectoryName(path)); File.WriteAllText(retry,"");}
-                } catch(Exception) {
-                    token.ThrowIfCancellationRequested();
-                    status("Artwork download paused. Check your connection or SteamGridDB key, then refresh.");
-                    break;
+                bool saved=false;
+                if(!providerPaused && !(File.Exists(retry) && File.GetLastWriteTimeUtc(retry)>DateTime.UtcNow.AddHours(-6))) {
+                    try {
+                        try {saved=Download(game.ArtworkUrl,path,token);} catch(WebException) {token.ThrowIfCancellationRequested();}
+                        if(!saved && !String.IsNullOrEmpty(key)) saved=Download(FindGrid(game,key,token),path,token);
+                        if(!saved) {Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllText(retry,"");}}
+                    } catch(Exception) {
+                        token.ThrowIfCancellationRequested(); providerPaused=true;
+                        status("Artwork provider paused. Check your connection or SteamGridDB key, then refresh.");
+                    }
+                }
+                if(saved) {game.ArtworkProvider="downloaded"; ready(game,path); continue;}
+                if(settings.LibretroArtworkEnabled && game.Source=="emulator") {
+                    try {if(libretro.Download(game,settings,token)) ready(game,LibretroArtwork.CachePath(game));}
+                    catch(Exception) {
+                        token.ThrowIfCancellationRequested();
+                        if(!libretroWarning) {status("Some Libretro artwork could not be loaded. Check your connection and refresh later."); libretroWarning=true;}
+                    }
                 }
             }
         }
@@ -262,7 +303,7 @@ namespace PadLauncher {
             } catch(ArgumentException) {return false;}
               catch(OutOfMemoryException) {return false;} // GDI+ also reports invalid image data this way.
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            File.WriteAllBytes(path,data); return true;
+            lock(CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllBytes(path,data);} return true;
         }
     }
 }

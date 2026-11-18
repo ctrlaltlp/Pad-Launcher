@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -29,6 +29,8 @@ namespace PadLauncher {
         }
     }
     public class Game {
+        internal Game ArtworkCopy() {return (Game)MemberwiseClone();}
+        internal string PreferredArtworkSource;
         public string Id { get; set; }
         public string Name { get; set; }
         public string LaunchId { get; set; }
@@ -36,6 +38,8 @@ namespace PadLauncher {
         public string EmulatorId {get;set;}
         public string ArtworkUrl { get; set; }
         public string ArtworkProvider { get; set; }
+        public string ArtworkSystem {get;set;}
+        public string ArtworkTitle {get;set;}
         public string Arguments {get;set;}
         public string WorkingDirectory {get;set;}
         public string ImportedActionInfo {get;set;}
@@ -205,7 +209,38 @@ namespace PadLauncher {
                 if(list.Id==listId) {list.AddedGames.Add(gameId); list.ExcludedGames.RemoveAll(id => id==gameId);}
             }
         }
+        public static List<string> DeleteAndUnregisterGames(Settings settings,Library library,string id) {
+            if(!(settings.CustomLists ?? new List<CustomList>()).Any(list => list.Id==id) && !(settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => list.Id==id)) throw new ArgumentException("Choose a custom or combined list to delete.");
+            var listToDelete=CombinedCollections.Options(library,settings).First(list => list.Id==id);
+            var ids=new HashSet<string>(listToDelete.Games ?? new List<string>());
+            if(settings.CustomGames!=null) settings.CustomGames.RemoveAll(game => ids.Contains(game.Id));
+            foreach(var config in settings.Emulators ?? new List<EmulatorConfig>()) {
+                if(config.Games!=null) config.Games.RemoveAll(game => ids.Contains(game.Id));
+            }
+            foreach(var list in settings.CustomLists ?? new List<CustomList>()) if(list.Games!=null) list.Games.RemoveAll(ids.Contains);
+            foreach(var list in settings.CombinedCollections ?? new List<CombinedCollection>()) {
+                if(list.AddedGames!=null) list.AddedGames.RemoveAll(ids.Contains);
+                if(list.ExcludedGames!=null) list.ExcludedGames.RemoveAll(ids.Contains);
+            }
+            foreach(var import in settings.EmulatorImports ?? new List<EmulatorImportDefinition>()) if(import.ImportedGames!=null) import.ImportedGames.RemoveAll(ids.Contains);
+            foreach(var additions in (settings.ListGameAdditions ?? new Dictionary<string,List<string>>()).Values) if(additions!=null) additions.RemoveAll(ids.Contains);
+            if(settings.FavouriteGameIds!=null) settings.FavouriteGameIds.RemoveAll(ids.Contains);
+            if(settings.HiddenGameIds!=null) settings.HiddenGameIds.RemoveAll(ids.Contains);
+            foreach(string gameId in ids) {
+                if(settings.ArtworkOverrides!=null) settings.ArtworkOverrides.Remove(gameId);
+                if(settings.LaunchHistory!=null) settings.LaunchHistory.Remove(gameId);
+            }
+            if(settings.SelectedGamesByList!=null) foreach(string key in settings.SelectedGamesByList.Where(pair => ids.Contains(pair.Value)).Select(pair => pair.Key).ToArray()) settings.SelectedGamesByList.Remove(key);
+            if(ids.Contains(settings.SelectedId)) settings.SelectedId=null;
+            // Keep automatically discovered launcher entries removed on subsequent refreshes.
+            settings.ReplacedGameIds=(settings.ReplacedGameIds ?? new List<string>()).Concat(ids).Distinct().ToList();
+            Delete(settings,id);
+            return ids.ToList();
+        }
         public static void Delete(Settings settings,string id) {
+            if(settings.ListLayouts!=null) settings.ListLayouts.Remove(id);
+            if(settings.ListGameAdditions!=null) settings.ListGameAdditions.Remove(id);
+            if(settings.ListArtworkSources!=null) settings.ListArtworkSources.Remove(id);
             if(settings.CustomLists!=null) settings.CustomLists.RemoveAll(c => c.Id==id);
             if(settings.CombinedCollections!=null) {
                 settings.CombinedCollections.RemoveAll(list => list.Id==id);
@@ -218,6 +253,17 @@ namespace PadLauncher {
         }
     }
     public static class CombinedCollections {
+        public static bool TrackAddedGames(Library library,Settings settings,long now) {
+            bool baseline=settings.GameAddedAt==null,changed=baseline;
+            if(baseline) settings.GameAddedAt=new Dictionary<string,long>();
+            foreach(var game in library.Games) if(!String.IsNullOrEmpty(game.Id) && !settings.GameAddedAt.ContainsKey(game.Id)) {
+                settings.GameAddedAt[game.Id]=baseline ? 0 : now; changed=true;
+            }
+            return changed;
+        }
+        public static long AddedAt(Settings settings,Game game) {
+            long added=0; if(settings.GameAddedAt!=null) settings.GameAddedAt.TryGetValue(game.Id,out added); return added;
+        }
         public static string Label(Collection list,Library library) {
             return Label(list,library,null);
         }
@@ -247,6 +293,8 @@ namespace PadLauncher {
             var customSource=options.FirstOrDefault(list => list.Id=="source:custom");
             if(customSource!=null) customSource.Games=CustomGameLibrary.CustomListGameIds(library,settings);
             options.Add(new Collection {Id="recent",Name="Recently played",Games=library.Games.Where(g => RecentPlayed(settings,g)>0).OrderByDescending(g => RecentPlayed(settings,g)).Select(g => g.Id).ToList()});
+            bool addedNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Recently added",StringComparison.OrdinalIgnoreCase)) || (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => String.Equals(list.Name,"Recently added",StringComparison.OrdinalIgnoreCase));
+            options.Add(new Collection {Id="recently-added",Name=addedNameUsed ? "Recently added (automatic)" : "Recently added",Games=library.Games.Where(g => AddedAt(settings,g)>0).OrderByDescending(g => AddedAt(settings,g)).ThenBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).Select(g => g.Id).ToList()});
             bool favouriteNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Favourites",StringComparison.OrdinalIgnoreCase)) ||
                 (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => String.Equals(list.Name,"Favourites",StringComparison.OrdinalIgnoreCase));
             options.Add(new Collection {Id="favourites",Name=favouriteNameUsed ? "Favourites (R3)" : "Favourites",Games=(settings.FavouriteGameIds ?? new List<string>()).Distinct().ToList()});
@@ -295,11 +343,15 @@ namespace PadLauncher {
         }
     }
     public class ListLayout {
+        public bool? ShowPanelOutlines {get;set;}
+        public double? RetroPanelScale {get;set;}
+        public bool? PanelSizesLocked {get;set;}
         public string Layout {get;set;}
         public double PanelScale {get;set;}
         public int Columns {get;set;}
         public int Rows {get;set;}
-        public string AngledSizing {get;set;}
+        string angledSizing;
+        public string AngledSizing {get {return angledSizing;} set {angledSizing=value=="mixed" ? "fit" : value;}}
     }
     public class Settings {
         public bool SteamEnabled {get;set;}
@@ -311,7 +363,17 @@ namespace PadLauncher {
         public List<string> HiddenGameIds {get;set;}
         public bool AutoUpdate {get;set;}
         public Dictionary<string,ListLayout> ListLayouts {get;set;}
+        public Dictionary<string,string> EmulatorArtworkSources {get;set;}
+        public Dictionary<string,string> ListArtworkSources {get;set;}
+        public bool? RetroArchPreferLibretro {get;set;}
+        public ListLayout RetroArchListLayout {get;set;}
+        public string RetroArchListArtworkSource {get;set;}
         public Dictionary<string,string> SelectedGamesByList {get;set;}
+        public Dictionary<string,long> GameAddedAt {get;set;}
+        public Dictionary<string,string> ControlButtons {get;set;}
+        public Dictionary<string,List<string>> ControlButtonAlternates {get;set;}
+        public int ControlBindingVersion {get;set;}
+        public Dictionary<string,string> ControlKeys {get;set;}
         public List<string> FavouriteGameIds {get;set;}
         public List<string> ReplacedGameIds {get;set;}
         public double RightStickSpeed {get;set;}
@@ -337,8 +399,12 @@ namespace PadLauncher {
         public string DefaultCollectionId { get; set; }
         public List<string> EnabledCollectionIds { get; set; }
         public double CarouselScale { get; set; }
+        public double RetroPanelScale {get;set;}
+        public bool PanelSizesLocked {get;set;}
+        public double ArtworkGap {get;set;}
         public string CarouselLayout { get; set; }
-        public string AngledPanelSizing { get; set; }
+        string angledPanelSizing;
+        public string AngledPanelSizing { get {return angledPanelSizing;} set {angledPanelSizing=value=="mixed" ? "fit" : value;}}
         public int GridColumns { get; set; }
         public int GridRows { get; set; }
         public bool EpicEnabled { get; set; }
@@ -361,7 +427,8 @@ namespace PadLauncher {
         public string UbisoftLauncherPath {get;set;}
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
-        public Settings() { ShowPanelOutlines=true; SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=false; RemoveMissingEmulatorGames=false; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=2; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
+        public bool LibretroArtworkEnabled {get;set;}
+        public Settings() { RetroPanelScale=1; PanelSizesLocked=true; ArtworkGap=16; ShowPanelOutlines=false; SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=false; RemoveMissingEmulatorGames=false; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=3; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {
@@ -373,13 +440,15 @@ namespace PadLauncher {
             switch(Style(settings)) {
                 case "Xbox": return new[]{"A","B","LB / RB","Y","Start","X"};
                 case "Nintendo": return new[]{"B","A","L / R","X","+","Y"};
-                default: return new[]{"×","○","L1 / R1","△","Options","□"};
+                default: return new[]{"✕","○","L1 / R1","△","Options","◻"};
             }
         }
         public static string Help(Settings settings) {
             var names=Buttons(settings);
-            return names[0]+"  Play     Tap "+names[1]+"  Dismiss     Hold "+names[1]+"  Exit app     "+names[2]+"  Lists     Tap "+names[3]+"  Refresh     "+names[5]+"  Next monitor     Left Stick  Cycle games & lists     Right stick  Cycle games "+settings.RightStickSpeed.ToString("0.#")+"× speed"+"     R3  Toggle favourite";
+            return ControlBindings.Label(settings,"overlay.play")+"  Play     Tap "+ControlBindings.Label(settings,"overlay.dismiss")+"  Dismiss     Hold "+ControlBindings.Label(settings,"overlay.exit")+"  Exit app     "+ControlBindings.Label(settings,"overlay.previous")+" / "+ControlBindings.Label(settings,"overlay.next")+"  Lists     "+ControlBindings.Label(settings,"overlay.layout")+"  Toggle Grid 5×3     "+ControlBindings.Label(settings,"overlay.search")+"  Search     "+ControlBindings.Label(settings,"overlay.refresh")+"  Refresh     "+ControlBindings.Label(settings,"overlay.monitor")+"  Next monitor     Left Stick  Cycle games & lists     Right stick  Cycle games "+settings.RightStickSpeed.ToString("0.#")+"× speed     "+ControlBindings.Label(settings,"overlay.favourite")+"  Toggle favourite"+(ControlBindings.HasJump(settings) ? "     "+ControlBindings.Label(settings,"overlay.jump")+"  Jump to chosen list" : "");
         }
+        public static string RightTrigger(Settings settings) {return Style(settings)=="Xbox" ? "RT" : Style(settings)=="Nintendo" ? "ZR" : "R2";}
+        public static string SelectButton(Settings settings) {return Style(settings)=="Xbox" ? "Back / View" : Style(settings)=="Nintendo" ? "−" : "Select / Create";}
     }
     public enum ButtonGesture { None, Tap, Hold }
     public class HoldButton {

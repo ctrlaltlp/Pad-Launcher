@@ -1,0 +1,4328 @@
+{
+  "measured": "2026-11-17",
+  "source": "https://thumbnails.libretro.com/",
+  "units": "width / height",
+  "profiles": {
+    "Amstrad - CPC": 0.719,
+    "Atari - 2600": 0.733,
+    "Atari - 5200": 0.733,
+    "Atari - 7800": 0.723,
+    "Atari - 8-bit": 0.716,
+    "Atari - 8-bit Family": 0.716,
+    "Atari - Jaguar": 0.724,
+    "Atari - Lynx": 0.815,
+    "Atari - ST": 0.833,
+    "Atomiswave": 0.731,
+    "Bandai - WonderSwan": 0.823,
+    "Bandai - WonderSwan Color": 0.693,
+    "Cannonball": 1.0,
+    "Casio - Loopy": 0.635,
+    "Casio - PV-1000": 0.658,
+    "Cave Story": 0.799,
+    "ChaiLove": 1.977,
+    "Coleco - ColecoVision": 0.732,
+    "Commodore - 64": 0.704,
+    "Commodore - Amiga": 0.833,
+    "Commodore - CD32": 1.0,
+    "Commodore - CDTV": 1.01,
+    "Commodore - Plus-4": 0.79,
+    "Commodore - VIC-20": 0.702,
+    "DOOM": 0.802,
+    "DOS": 0.829,
+    "Dinothawr": 0.749,
+    "Emerson - Arcadia 2001": 0.75,
+    "Entex - Adventure Vision": 0.714,
+    "Epoch - Super Cassette Vision": 1.293,
+    "FBNeo - Arcade Games": 0.707,
+    "Fairchild - Channel F": 0.742,
+    "Flashback": 0.777,
+    "Funtech - Super Acan": 0.571,
+    "GCE - Vectrex": 0.743,
+    "GamePark - GP32": 1.429,
+    "Handheld Electronic Game": 1.503,
+    "Hartung - Game Master": 0.728,
+    "LeapFrog - Leapster Learning Game System": 0.708,
+    "LowRes NX": 1.333,
+    "MAME": 0.716,
+    "Magnavox - Odyssey2": 0.734,
+    "Mattel - Intellivision": 0.722,
+    "Microsoft - MSX": 0.712,
+    "Microsoft - MSX2": 0.712,
+    "Microsoft - Xbox": 0.714,
+    "Microsoft - Xbox 360": 0.709,
+    "MrBoom": 1.6,
+    "NEC - PC Engine - TurboGrafx 16": 1.0,
+    "NEC - PC Engine CD - TurboGrafx-CD": 1.008,
+    "NEC - PC Engine SuperGrafx": 1.125,
+    "NEC - PC-8001 - PC-8801": 0.711,
+    "NEC - PC-88": 0.711,
+    "NEC - PC-98": 0.87,
+    "NEC - PC-FX": 1.014,
+    "Nintendo - Family Computer Disk System": 0.987,
+    "Nintendo - Game Boy": 0.996,
+    "Nintendo - Game Boy Advance": 1.0,
+    "Nintendo - Game Boy Color": 1.0,
+    "Nintendo - GameCube": 0.715,
+    "Nintendo - Nintendo 3DS": 1.123,
+    "Nintendo - Nintendo 3DS (Digital)": 1.264,
+    "Nintendo - Nintendo 64": 1.365,
+    "Nintendo - Nintendo 64DD": 1.158,
+    "Nintendo - Nintendo DS": 1.111,
+    "Nintendo - Nintendo DSi": 1.111,
+    "Nintendo - Nintendo Entertainment System": 0.701,
+    "Nintendo - Pokemon Mini": 0.985,
+    "Nintendo - Satellaview": 0.551,
+    "Nintendo - Sufami Turbo": 0.463,
+    "Nintendo - Super Nintendo Entertainment System": 1.384,
+    "Nintendo - Virtual Boy": 1.006,
+    "Nintendo - Wii": 0.714,
+    "Nintendo - Wii U": 0.714,
+    "Philips - CD-i": 1.0,
+    "Philips - Videopac+": 0.724,
+    "Quake": 0.839,
+    "Quake II": 0.846,
+    "Quake III": 0.782,
+    "RCA - Studio II": 1.31,
+    "RPG Maker": 1.333,
+    "Rick Dangerous": 0.826,
+    "SNK - Neo Geo": 0.7,
+    "SNK - Neo Geo CD": 1.0,
+    "SNK - Neo Geo Pocket": 0.883,
+    "SNK - Neo Geo Pocket Color": 0.986,
+    "ScummVM": 1.154,
+    "Sega - 32X": 0.706,
+    "Sega - Dreamcast": 1.008,
+    "Sega - Game Gear": 0.711,
+    "Sega - Master System - Mark III": 0.706,
+    "Sega - Mega Drive - Genesis": 0.71,
+    "Sega - Mega-CD - Sega CD": 0.707,
+    "Sega - Naomi": 0.712,
+    "Sega - Naomi 2": 0.77,
+    "Sega - PICO": 1.02,
+    "Sega - SG-1000": 0.735,
+    "Sega - Saturn": 0.648,
+    "Sharp - X1": 0.755,
+    "Sharp - X68000": 0.722,
+    "Sinclair - ZX 81": 0.638,
+    "Sinclair - ZX Spectrum": 0.836,
+    "Sony - PlayStation": 1.0,
+    "Sony - PlayStation 2": 0.715,
+    "Sony - PlayStation 3": 0.862,
+    "Sony - PlayStation 3 (Downloadable)": 0.802,
+    "Sony - PlayStation 4": 0.799,
+    "Sony - PlayStation Portable": 0.579,
+    "Sony - PlayStation Vita": 0.786,
+    "Spectravideo - SVI-318 - SVI-328": 0.731,
+    "TIC-80": 1.765,
+    "The 3DO Company - 3DO": 0.981,
+    "Thomson - MOTO": 0.712,
+    "Tiger - Game.com": 0.7,
+    "Tomb Raider": 1.01,
+    "VTech - CreatiVision": 0.721,
+    "VTech - V.Smile": 0.735,
+    "Vircon32": 1.442,
+    "Watara - Supervision": 0.764,
+    "Wolfenstein 3D": 0.852
+  },
+  "regionalOverrides": {
+    "Nintendo - Game Boy|Japan": 0.794,
+    "Nintendo - Game Boy Advance|Japan": 0.553,
+    "Nintendo - Game Boy Color|Japan": 0.791,
+    "Nintendo - Nintendo 64|Japan": 0.716,
+    "Nintendo - Nintendo Entertainment System|Japan": 1.43,
+    "Nintendo - Super Nintendo Entertainment System|Japan": 0.55,
+    "Sega - Game Gear|Japan": 0.868,
+    "Sega - Mega-CD - Sega CD|Japan": 1.0,
+    "Sega - Saturn|Japan": 1.0
+  },
+  "platforms": [
+    {
+      "system": "Amstrad - CPC",
+      "median": 0.7191,
+      "samples": [
+        {
+          "file": "NBA in the Zone (USA).png",
+          "width": 494,
+          "height": 750,
+          "ratio": 0.6587
+        },
+        {
+          "file": "Bride of Frankenstein (1988)(39 Steps).png",
+          "width": 320,
+          "height": 411,
+          "ratio": 0.7786
+        },
+        {
+          "file": "Hawk Storm.png",
+          "width": 320,
+          "height": 502,
+          "ratio": 0.6375
+        },
+        {
+          "file": "Playbox (1985)(Norsoft)(fr).png",
+          "width": 320,
+          "height": 445,
+          "ratio": 0.7191
+        },
+        {
+          "file": "Tiger Road.png",
+          "width": 320,
+          "height": 412,
+          "ratio": 0.7767
+        }
+      ]
+    },
+    {
+      "system": "Amstrad - GX4000",
+      "median": null,
+      "samples": []
+    },
+    {
+      "system": "Arduboy Inc - Arduboy",
+      "median": null,
+      "samples": []
+    },
+    {
+      "system": "Atari - 2600",
+      "median": 0.7333,
+      "samples": [
+        {
+          "file": "Meltdown (USA) (Proto).png",
+          "width": 500,
+          "height": 680,
+          "ratio": 0.7353
+        },
+        {
+          "file": "Commando Raid (Europe).png",
+          "width": 498,
+          "height": 680,
+          "ratio": 0.7324
+        },
+        {
+          "file": "Berzerk (Japan, USA) (En).png",
+          "width": 440,
+          "height": 600,
+          "ratio": 0.7333
+        },
+        {
+          "file": "Bachelorette Party (USA).png",
+          "width": 451,
+          "height": 600,
+          "ratio": 0.7517
+        },
+        {
+          "file": "Crazy Climber (1983)(Atari)(NTSC)[Atari Fan Club Exclusive].png",
+          "width": 498,
+          "height": 680,
+          "ratio": 0.7324
+        }
+      ]
+    },
+    {
+      "system": "Atari - 5200",
+      "median": 0.7325,
+      "samples": [
+        {
+          "file": "Kangaroo (USA).png",
+          "width": 512,
+          "height": 699,
+          "ratio": 0.7325
+        },
+        {
+          "file": "Bounty Bob Strikes Back! (USA).png",
+          "width": 512,
+          "height": 699,
+          "ratio": 0.7325
+        },
+        {
+          "file": "Jr. Pac-Man (1984)(Atari)(US)(proto)[a][CX5251].png",
+          "width": 498,
+          "height": 680,
+          "ratio": 0.7324
+        },
+        {
+          "file": "Pitfall! (1984)(Activision)(US)[FZ-004].png",
+          "width": 498,
+          "height": 680,
+          "ratio": 0.7324
+        },
+        {
+          "file": "Super Breakout (USA).png",
+          "width": 512,
+          "height": 699,
+          "ratio": 0.7325
+        }
+      ]
+    },
+    {
+      "system": "Atari - 7800",
+      "median": 0.7232,
+      "samples": [
+        {
+          "file": "Mat Mania Challenge (USA).png",
+          "width": 512,
+          "height": 714,
+          "ratio": 0.7171
+        },
+        {
+          "file": "Impossible Mission (Europe).png",
+          "width": 512,
+          "height": 708,
+          "ratio": 0.7232
+        },
+        {
+          "file": "Beef Drop (2004-11-20)(Siders, Ken)(FW)(beta).png",
+          "width": 498,
+          "height": 680,
+          "ratio": 0.7324
+        },
+        {
+          "file": "Donkey Kong Junior (USA).png",
+          "width": 512,
+          "height": 712,
+          "ratio": 0.7191
+        },
+        {
+          "file": "Meltdown (1990)(Atari)(NTSC)[b].png",
+          "width": 498,
+          "height": 680,
+          "ratio": 0.7324
+        }
+      ]
+    },
+    {
+      "system": "Atari - 8-bit",
+      "median": 0.7161,
+      "samples": [
+        {
+          "file": "Marauder (1982) (Sierra On-Line) (USA).png",
+          "width": 512,
+          "height": 715,
+          "ratio": 0.7161
+        },
+        {
+          "file": "Bounty Bob Strikes Back! (1985)(Aackosoft)(NL)(en)[Req 64k].png",
+          "width": 320,
+          "height": 437,
+          "ratio": 0.7323
+        },
+        {
+          "file": "Genetic Drift (1982)(Broderbund)(US).png",
+          "width": 320,
+          "height": 437,
+          "ratio": 0.7323
+        },
+        {
+          "file": "One Man and his Droid (1986)(Mastertronic)(GB)[cr Atari Sysops Alliance][k-file].png",
+          "width": 320,
+          "height": 511,
+          "ratio": 0.6262
+        },
+        {
+          "file": "Tanium (1988)(Players)(GB)[h Homesoft].png",
+          "width": 320,
+          "height": 497,
+          "ratio": 0.6439
+        }
+      ]
+    },
+    {
+      "system": "Atari - 8-bit Family",
+      "median": 0.7161,
+      "samples": [
+        {
+          "file": "Marauder (1982) (Sierra On-Line) (USA).png",
+          "width": 512,
+          "height": 715,
+          "ratio": 0.7161
+        },
+        {
+          "file": "Bounty Bob Strikes Back! (1985)(Aackosoft)(NL)(en)[Req 64k].png",
+          "width": 320,
+          "height": 437,
+          "ratio": 0.7323
+        },
+        {
+          "file": "Genetic Drift (1982)(Broderbund)(US).png",
+          "width": 320,
+          "height": 437,
+          "ratio": 0.7323
+        },
+        {
+          "file": "One Man and his Droid (1986)(Mastertronic)(GB)[cr Atari Sysops Alliance][k-file].png",
+          "width": 320,
+          "height": 511,
+          "ratio": 0.6262
+        },
+        {
+          "file": "Tanium (1988)(Players)(GB)[h Homesoft].png",
+          "width": 320,
+          "height": 497,
+          "ratio": 0.6439
+        }
+      ]
+    },
+    {
+      "system": "Atari - Jaguar",
+      "median": 0.7242,
+      "samples": [
+        {
+          "file": "Pitfall - The Mayan Adventure (USA, Europe).png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Breakout 2000 (USA, Europe).png",
+          "width": 512,
+          "height": 713,
+          "ratio": 0.7181
+        },
+        {
+          "file": "Fight for Life (USA, Europe).png",
+          "width": 512,
+          "height": 707,
+          "ratio": 0.7242
+        },
+        {
+          "file": "Raiden Rev A (1994)(Atari)[J9005E 700705-2].png",
+          "width": 512,
+          "height": 707,
+          "ratio": 0.7242
+        },
+        {
+          "file": "Troy Aikman NFL Football (1995)(Atari).png",
+          "width": 496,
+          "height": 680,
+          "ratio": 0.7294
+        }
+      ]
+    },
+    {
+      "system": "Atari - Lynx",
+      "median": 0.8153,
+      "samples": [
+        {
+          "file": "Dracula - The Undead (USA, Europe).png",
+          "width": 512,
+          "height": 628,
+          "ratio": 0.8153
+        },
+        {
+          "file": "Lynx Casino (USA, Europe).png",
+          "width": 512,
+          "height": 628,
+          "ratio": 0.8153
+        },
+        {
+          "file": "Chip's Challenge (World).png",
+          "width": 512,
+          "height": 628,
+          "ratio": 0.8153
+        },
+        {
+          "file": "Malibu Bikini Volleyball (USA, Europe).png",
+          "width": 512,
+          "height": 628,
+          "ratio": 0.8153
+        }
+      ]
+    },
+    {
+      "system": "Atari - ST",
+      "median": 0.8325,
+      "samples": [
+        {
+          "file": "Lock-On (USA).png",
+          "width": 399,
+          "height": 600,
+          "ratio": 0.665
+        },
+        {
+          "file": "Mach 3 (Europe).png",
+          "width": 256,
+          "height": 252,
+          "ratio": 1.0159
+        },
+        {
+          "file": "Boston Bomb Club (1991)(Silmarils)[cr Vmax][a].png",
+          "width": 512,
+          "height": 622,
+          "ratio": 0.8232
+        },
+        {
+          "file": "Gods (1991)(Renegade)(Disk 1 of 2)[cr Elite][t +3][a3].png",
+          "width": 512,
+          "height": 615,
+          "ratio": 0.8325
+        },
+        {
+          "file": "Oo-Topos (1986)(Softkill Int.).png",
+          "width": 512,
+          "height": 600,
+          "ratio": 0.8533
+        }
+      ]
+    },
+    {
+      "system": "Atomiswave",
+      "median": 0.7305,
+      "samples": [
+        {
+          "file": "The King of Fighters Neowave (Japan).png",
+          "width": 222,
+          "height": 314,
+          "ratio": 0.707
+        },
+        {
+          "file": "Dolphin Blue.png",
+          "width": 361,
+          "height": 512,
+          "ratio": 0.7051
+        },
+        {
+          "file": "Maximum Speed.png",
+          "width": 374,
+          "height": 512,
+          "ratio": 0.7305
+        },
+        {
+          "file": "Sega Bass Fishing Challenge Version A.png",
+          "width": 512,
+          "height": 662,
+          "ratio": 0.7734
+        },
+        {
+          "file": "The Rumble Fish (prototype).png",
+          "width": 222,
+          "height": 287,
+          "ratio": 0.7735
+        }
+      ]
+    },
+    {
+      "system": "Bandai - WonderSwan",
+      "median": 0.8232,
+      "samples": [
+        {
+          "file": "Glocal Hexcite (Japan).png",
+          "width": 512,
+          "height": 622,
+          "ratio": 0.8232
+        },
+        {
+          "file": "MobileWonderGate (Japan) (Rev 1).png",
+          "width": 512,
+          "height": 348,
+          "ratio": 1.4713
+        },
+        {
+          "file": "Soccer Yarou! - Challenge the World (Japan).png",
+          "width": 512,
+          "height": 630,
+          "ratio": 0.8127
+        },
+        {
+          "file": "Digimon Adventure - Anode Tamer (Japan) (Rev 1).png",
+          "width": 512,
+          "height": 622,
+          "ratio": 0.8232
+        },
+        {
+          "file": "Langrisser Millennium WS - The Last Century (Japan) (Rev 1).png",
+          "width": 512,
+          "height": 610,
+          "ratio": 0.8393
+        }
+      ]
+    },
+    {
+      "system": "Bandai - WonderSwan Color",
+      "median": 0.6928,
+      "samples": [
+        {
+          "file": "Flash Masta Firmware (USA) (2016-05-13).png",
+          "width": 512,
+          "height": 422,
+          "ratio": 1.2133
+        },
+        {
+          "file": "Flash Koibito-kun (Japan).png",
+          "width": 512,
+          "height": 748,
+          "ratio": 0.6845
+        },
+        {
+          "file": "Kidou Senshi Gundam - Giren no Yabou - Tokubetsu Hen - Aoki Hoshi no Hasha (Japan).png",
+          "width": 512,
+          "height": 751,
+          "ratio": 0.6818
+        },
+        {
+          "file": "SD Gundam Eiyuu Den - Kishi Densetsu (Japan).png",
+          "width": 512,
+          "height": 731,
+          "ratio": 0.7004
+        },
+        {
+          "file": "Digital Monster - D-Project (Japan) (Rev 2).png",
+          "width": 512,
+          "height": 739,
+          "ratio": 0.6928
+        }
+      ]
+    },
+    {
+      "system": "Cannonball",
+      "median": 1.0,
+      "samples": [
+        {
+          "file": "OutRun.png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        }
+      ]
+    },
+    {
+      "system": "Casio - Loopy",
+      "median": 0.6352,
+      "samples": [
+        {
+          "file": "Lupiton no Wonder Palette (Japan).png",
+          "width": 512,
+          "height": 806,
+          "ratio": 0.6352
+        },
+        {
+          "file": "Dream Change - Kogane-chan no Fashion Party (Japan).png",
+          "width": 512,
+          "height": 799,
+          "ratio": 0.6408
+        },
+        {
+          "file": "Loopy Town no Oheya ga Hoshii! (Japan).png",
+          "width": 178,
+          "height": 281,
+          "ratio": 0.6335
+        },
+        {
+          "file": "Magical Shop (Japan).png",
+          "width": 512,
+          "height": 806,
+          "ratio": 0.6352
+        },
+        {
+          "file": "Wanwan Aijou Monogatari (Japan).png",
+          "width": 512,
+          "height": 798,
+          "ratio": 0.6416
+        }
+      ]
+    },
+    {
+      "system": "Casio - PV-1000",
+      "median": 0.6583,
+      "samples": [
+        {
+          "file": "Pachinko-UFO (Japan).png",
+          "width": 395,
+          "height": 600,
+          "ratio": 0.6583
+        },
+        {
+          "file": "Dirty Chameleon (Japan).png",
+          "width": 395,
+          "height": 600,
+          "ratio": 0.6583
+        },
+        {
+          "file": "Nauty Boy (Japan).png",
+          "width": 395,
+          "height": 600,
+          "ratio": 0.6583
+        },
+        {
+          "file": "Space Panic (Japan).png",
+          "width": 395,
+          "height": 600,
+          "ratio": 0.6583
+        },
+        {
+          "file": "Warp Warp (Japan).png",
+          "width": 395,
+          "height": 600,
+          "ratio": 0.6583
+        }
+      ]
+    },
+    {
+      "system": "Cave Story",
+      "median": 0.7988,
+      "samples": [
+        {
+          "file": "Cave Story (De).png",
+          "width": 512,
+          "height": 641,
+          "ratio": 0.7988
+        },
+        {
+          "file": "Cave Story (En).png",
+          "width": 512,
+          "height": 641,
+          "ratio": 0.7988
+        },
+        {
+          "file": "Doukutsu Monogatari (Ja).png",
+          "width": 512,
+          "height": 641,
+          "ratio": 0.7988
+        }
+      ]
+    },
+    {
+      "system": "ChaiLove",
+      "median": 1.9768,
+      "samples": [
+        {
+          "file": "Floppy Bird.png",
+          "width": 512,
+          "height": 259,
+          "ratio": 1.9768
+        }
+      ]
+    },
+    {
+      "system": "Coleco - ColecoVision",
+      "median": 0.7324,
+      "samples": [
+        {
+          "file": "Motocross Racer (USA) (Alt 1).png",
+          "width": 372,
+          "height": 500,
+          "ratio": 0.744
+        },
+        {
+          "file": "Strike It! (Europe).png",
+          "width": 498,
+          "height": 680,
+          "ratio": 0.7324
+        },
+        {
+          "file": "Cosmic Avenger (1982)(Coleco).png",
+          "width": 512,
+          "height": 699,
+          "ratio": 0.7325
+        },
+        {
+          "file": "Jumpman Junior (1984)(Epyx)[b].png",
+          "width": 512,
+          "height": 782,
+          "ratio": 0.6547
+        },
+        {
+          "file": "Robin Hood (1984)(Xonox)[b].png",
+          "width": 498,
+          "height": 680,
+          "ratio": 0.7324
+        }
+      ]
+    },
+    {
+      "system": "Commodore - 64",
+      "median": 0.7043,
+      "samples": [
+        {
+          "file": "Master of the Lamps (USA, Europe).png",
+          "width": 512,
+          "height": 647,
+          "ratio": 0.7913
+        },
+        {
+          "file": "Legend of Sinbad, The (Europe).png",
+          "width": 512,
+          "height": 752,
+          "ratio": 0.6809
+        },
+        {
+          "file": "Omega Race (Japan) (v02) (MAX).png",
+          "width": 512,
+          "height": 727,
+          "ratio": 0.7043
+        },
+        {
+          "file": "California Goldrush (Europe).png",
+          "width": 512,
+          "height": 806,
+          "ratio": 0.6352
+        },
+        {
+          "file": "How to Be a Complete Bastard (Europe).png",
+          "width": 512,
+          "height": 647,
+          "ratio": 0.7913
+        }
+      ]
+    },
+    {
+      "system": "Commodore - Amiga",
+      "median": 0.8333,
+      "samples": [
+        {
+          "file": "Police Quest - In Pursuit of the Death Angel (USA) (v2.0B 2.22.89).png",
+          "width": 512,
+          "height": 639,
+          "ratio": 0.8013
+        },
+        {
+          "file": "Rolling Ronny (Europe) (Coverdisk).png",
+          "width": 400,
+          "height": 480,
+          "ratio": 0.8333
+        },
+        {
+          "file": "Bug Bomber.png",
+          "width": 512,
+          "height": 650,
+          "ratio": 0.7877
+        },
+        {
+          "file": "Games, The - Winter Edition.png",
+          "width": 512,
+          "height": 542,
+          "ratio": 0.9446
+        },
+        {
+          "file": "OutRun (Europe) (1987).png",
+          "width": 400,
+          "height": 480,
+          "ratio": 0.8333
+        }
+      ]
+    },
+    {
+      "system": "Commodore - CD32",
+      "median": 1.0,
+      "samples": [
+        {
+          "file": "Sleepwalker _ Pinball Fantasies (USA).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Kid Chaos (Europe).png",
+          "width": 512,
+          "height": 650,
+          "ratio": 0.7877
+        },
+        {
+          "file": "Big 6, The (Europe).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Flink (Europe) (fake jewel).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Now That's What I Call Games (Europe).png",
+          "width": 320,
+          "height": 320,
+          "ratio": 1.0
+        }
+      ]
+    },
+    {
+      "system": "Commodore - CDTV",
+      "median": 1.0095,
+      "samples": [
+        {
+          "file": "Garden Fax - Trees, Shrubs, Roses & Conifers (USA).png",
+          "width": 320,
+          "height": 320,
+          "ratio": 1.0
+        },
+        {
+          "file": "Insight - Technology (Europe).png",
+          "width": 320,
+          "height": 284,
+          "ratio": 1.1268
+        },
+        {
+          "file": "Chaos in Andromeda - Eyes of the Eagle (Europe).png",
+          "width": 320,
+          "height": 317,
+          "ratio": 1.0095
+        },
+        {
+          "file": "Hutchinson Encyclopedia, The (Europe).png",
+          "width": 320,
+          "height": 314,
+          "ratio": 1.0191
+        },
+        {
+          "file": "Raffles (Sweden).png",
+          "width": 320,
+          "height": 318,
+          "ratio": 1.0063
+        }
+      ]
+    },
+    {
+      "system": "Commodore - PET",
+      "median": null,
+      "samples": []
+    },
+    {
+      "system": "Commodore - Plus-4",
+      "median": 0.7901,
+      "samples": [
+        {
+          "file": "Pirate Adventure (USA, Europe).png",
+          "width": 201,
+          "height": 286,
+          "ratio": 0.7028
+        },
+        {
+          "file": "Blockbusters C16 (19xx)(-).png",
+          "width": 512,
+          "height": 648,
+          "ratio": 0.7901
+        },
+        {
+          "file": "Harbour Attack (1984)(Mr Micro).png",
+          "width": 512,
+          "height": 647,
+          "ratio": 0.7913
+        },
+        {
+          "file": "Panic Penguin (1984)(Colosoft).png",
+          "width": 512,
+          "height": 648,
+          "ratio": 0.7901
+        },
+        {
+          "file": "Thai Boxing (19xx)(Anco)(Side B).png",
+          "width": 512,
+          "height": 648,
+          "ratio": 0.7901
+        }
+      ]
+    },
+    {
+      "system": "Commodore - VIC-20",
+      "median": 0.7022,
+      "samples": [
+        {
+          "file": "Miner 2049'er (Europe) (Alt).png",
+          "width": 339,
+          "height": 512,
+          "ratio": 0.6621
+        },
+        {
+          "file": "Mole Attack (Japan, USA).png",
+          "width": 372,
+          "height": 512,
+          "ratio": 0.7266
+        },
+        {
+          "file": "Blue Star (2008)(Kweepa).png",
+          "width": 502,
+          "height": 680,
+          "ratio": 0.7382
+        },
+        {
+          "file": "Frantic (1983)(Imagine)[a].png",
+          "width": 472,
+          "height": 680,
+          "ratio": 0.6941
+        },
+        {
+          "file": "Money Wars (Japan, USA) (Alt 3).png",
+          "width": 500,
+          "height": 712,
+          "ratio": 0.7022
+        }
+      ]
+    },
+    {
+      "system": "DOOM",
+      "median": 0.802,
+      "samples": [
+        {
+          "file": "Doom (v1.8) (Demo).png",
+          "width": 512,
+          "height": 772,
+          "ratio": 0.6632
+        },
+        {
+          "file": "Doom II - Hell on Earth (v1.9).png",
+          "width": 512,
+          "height": 647,
+          "ratio": 0.7913
+        },
+        {
+          "file": "Hexen - Beyond Heretic (v1.0).png",
+          "width": 512,
+          "height": 600,
+          "ratio": 0.8533
+        },
+        {
+          "file": "SIGIL (v1.21).png",
+          "width": 512,
+          "height": 630,
+          "ratio": 0.8127
+        }
+      ]
+    },
+    {
+      "system": "DOS",
+      "median": 0.829,
+      "samples": [
+        {
+          "file": "Chex Quest.png",
+          "width": 320,
+          "height": 323,
+          "ratio": 0.9907
+        },
+        {
+          "file": "In Pursuit of Greed.png",
+          "width": 320,
+          "height": 388,
+          "ratio": 0.8247
+        },
+        {
+          "file": "Professional Tennis Simulator.png",
+          "width": 320,
+          "height": 384,
+          "ratio": 0.8333
+        },
+        {
+          "file": "Trolls.png",
+          "width": 320,
+          "height": 411,
+          "ratio": 0.7786
+        }
+      ]
+    },
+    {
+      "system": "Dinothawr",
+      "median": 0.7485,
+      "samples": [
+        {
+          "file": "Dinothawr.png",
+          "width": 256,
+          "height": 342,
+          "ratio": 0.7485
+        }
+      ]
+    },
+    {
+      "system": "Emerson - Arcadia 2001",
+      "median": 0.7496,
+      "samples": [
+        {
+          "file": "Missile War (USA, Europe).png",
+          "width": 512,
+          "height": 683,
+          "ratio": 0.7496
+        },
+        {
+          "file": "Horse Racing (Europe).png",
+          "width": 512,
+          "height": 683,
+          "ratio": 0.7496
+        },
+        {
+          "file": "Basketball (Europe).png",
+          "width": 512,
+          "height": 683,
+          "ratio": 0.7496
+        },
+        {
+          "file": "Funky Fish (Europe).png",
+          "width": 512,
+          "height": 683,
+          "ratio": 0.7496
+        },
+        {
+          "file": "Pleiades (Europe).png",
+          "width": 512,
+          "height": 683,
+          "ratio": 0.7496
+        }
+      ]
+    },
+    {
+      "system": "Entex - Adventure Vision",
+      "median": 0.7141,
+      "samples": [
+        {
+          "file": "Super Cobra (USA, Europe).png",
+          "width": 512,
+          "height": 730,
+          "ratio": 0.7014
+        },
+        {
+          "file": "Defender (USA, Europe).png",
+          "width": 512,
+          "height": 717,
+          "ratio": 0.7141
+        },
+        {
+          "file": "Space Force (USA, Europe).png",
+          "width": 512,
+          "height": 717,
+          "ratio": 0.7141
+        },
+        {
+          "file": "Turtles (USA, Europe).png",
+          "width": 512,
+          "height": 717,
+          "ratio": 0.7141
+        }
+      ]
+    },
+    {
+      "system": "Epoch - Super Cassette Vision",
+      "median": 1.2931,
+      "samples": [
+        {
+          "file": "Nebula (Japan).png",
+          "width": 450,
+          "height": 348,
+          "ratio": 1.2931
+        },
+        {
+          "file": "Comic Circus (Japan).png",
+          "width": 464,
+          "height": 347,
+          "ratio": 1.3372
+        },
+        {
+          "file": "Milky Princess (Japan) (En).png",
+          "width": 320,
+          "height": 252,
+          "ratio": 1.2698
+        },
+        {
+          "file": "Real Graphic Mahjongg (Japan).png",
+          "width": 512,
+          "height": 375,
+          "ratio": 1.3653
+        },
+        {
+          "file": "Ton Ton Ball (Japan) (En).png",
+          "width": 320,
+          "height": 252,
+          "ratio": 1.2698
+        }
+      ]
+    },
+    {
+      "system": "FBNeo - Arcade Games",
+      "median": 0.707,
+      "samples": [
+        {
+          "file": "Marvel Vs. Capcom_ Clash of Super Heroes (USA 980123 Phoenix Edition) (bootleg).png",
+          "width": 512,
+          "height": 713,
+          "ratio": 0.7181
+        },
+        {
+          "file": "Hoops '96 (Europe_Asia 2.0).png",
+          "width": 222,
+          "height": 314,
+          "ratio": 0.707
+        },
+        {
+          "file": "Manhattan (DECO Cassette) (Japan).png",
+          "width": 512,
+          "height": 725,
+          "ratio": 0.7062
+        },
+        {
+          "file": "Come-Cocos (Ms. Pac-Man) ('Made in Greece' Tecnausa bootleg).png",
+          "width": 512,
+          "height": 662,
+          "ratio": 0.7734
+        },
+        {
+          "file": "JuJu Densetsu (Japan).png",
+          "width": 222,
+          "height": 314,
+          "ratio": 0.707
+        }
+      ]
+    },
+    {
+      "system": "Fairchild - Channel F",
+      "median": 0.7415,
+      "samples": [
+        {
+          "file": "Math Quiz II - Multiplication + Division (USA).png",
+          "width": 350,
+          "height": 473,
+          "ratio": 0.74
+        },
+        {
+          "file": "Channel F Multi-Cart (Older) [Homebrew].png",
+          "width": 410,
+          "height": 462,
+          "ratio": 0.8874
+        },
+        {
+          "file": "Magic Numbers - Mind Reader + Nim (USA).png",
+          "width": 350,
+          "height": 472,
+          "ratio": 0.7415
+        },
+        {
+          "file": "Pinball Challenge (USA) (Alt).png",
+          "width": 350,
+          "height": 472,
+          "ratio": 0.7415
+        },
+        {
+          "file": "Spitfire.png",
+          "width": 350,
+          "height": 472,
+          "ratio": 0.7415
+        }
+      ]
+    },
+    {
+      "system": "Flashback",
+      "median": 0.7769,
+      "samples": [
+        {
+          "file": "Flashback_ The Quest for Identity.png",
+          "width": 512,
+          "height": 659,
+          "ratio": 0.7769
+        }
+      ]
+    },
+    {
+      "system": "Funtech - Super Acan",
+      "median": 0.5714,
+      "samples": [
+        {
+          "file": "Formosa Duel (Taiwan).png",
+          "width": 512,
+          "height": 896,
+          "ratio": 0.5714
+        },
+        {
+          "file": "Magical Pool (Taiwan).png",
+          "width": 512,
+          "height": 896,
+          "ratio": 0.5714
+        },
+        {
+          "file": "Speedy Dragon (Taiwan).png",
+          "width": 512,
+          "height": 896,
+          "ratio": 0.5714
+        },
+        {
+          "file": "Super Taiwanese Baseball League (Taiwan).png",
+          "width": 512,
+          "height": 896,
+          "ratio": 0.5714
+        }
+      ]
+    },
+    {
+      "system": "GCE - Vectrex",
+      "median": 0.7426,
+      "samples": [
+        {
+          "file": "Mine Storm II (USA) (Rev 2).png",
+          "width": 505,
+          "height": 680,
+          "ratio": 0.7426
+        },
+        {
+          "file": "Star Ship (Europe).png",
+          "width": 505,
+          "height": 680,
+          "ratio": 0.7426
+        },
+        {
+          "file": "Bedlam (USA, Europe).png",
+          "width": 505,
+          "height": 680,
+          "ratio": 0.7426
+        },
+        {
+          "file": "Mail Plane (USA) (Proto) (05838962).png",
+          "width": 505,
+          "height": 680,
+          "ratio": 0.7426
+        },
+        {
+          "file": "RA+A Spectrum I+ Stress Tester (USA) (Proto).png",
+          "width": 505,
+          "height": 680,
+          "ratio": 0.7426
+        }
+      ]
+    },
+    {
+      "system": "GamePark - GP32",
+      "median": 1.4286,
+      "samples": [
+        {
+          "file": "Her Knights - All for the Princess (Europe).png",
+          "width": 400,
+          "height": 280,
+          "ratio": 1.4286
+        },
+        {
+          "file": "Dungeon _ Guarder - Dragon Gore (Europe).png",
+          "width": 400,
+          "height": 280,
+          "ratio": 1.4286
+        },
+        {
+          "file": "Rally Pop (Korea).png",
+          "width": 400,
+          "height": 280,
+          "ratio": 1.4286
+        },
+        {
+          "file": "Wizard Slayer (Korea).png",
+          "width": 400,
+          "height": 280,
+          "ratio": 1.4286
+        }
+      ]
+    },
+    {
+      "system": "Handheld Electronic Game",
+      "median": 1.5033,
+      "samples": [
+        {
+          "file": "Condor (VTech, Time _ Fun).png",
+          "width": 562,
+          "height": 373,
+          "ratio": 1.5067
+        },
+        {
+          "file": "Explorers of Space (Elektronika).png",
+          "width": 654,
+          "height": 394,
+          "ratio": 1.6599
+        },
+        {
+          "file": "Monkey (VTech, Time _ Fun).png",
+          "width": 561,
+          "height": 374,
+          "ratio": 1.5
+        },
+        {
+          "file": "Tennis Menace (VTech, Sporty Time _ Fun).png",
+          "width": 480,
+          "height": 656,
+          "ratio": 0.7317
+        }
+      ]
+    },
+    {
+      "system": "Hartung - Game Master",
+      "median": 0.7279,
+      "samples": [
+        {
+          "file": "Kung Fu (Europe).png",
+          "width": 495,
+          "height": 680,
+          "ratio": 0.7279
+        },
+        {
+          "file": "Continental Galaxy (Europe).png",
+          "width": 495,
+          "height": 680,
+          "ratio": 0.7279
+        },
+        {
+          "file": "Fuss-ball (Germany).png",
+          "width": 495,
+          "height": 368,
+          "ratio": 1.3451
+        },
+        {
+          "file": "Kung Fu Challenge (Germany).png",
+          "width": 458,
+          "height": 303,
+          "ratio": 1.5116
+        },
+        {
+          "file": "Tennis (Europe).png",
+          "width": 495,
+          "height": 680,
+          "ratio": 0.7279
+        }
+      ]
+    },
+    {
+      "system": "Jump 'n Bump",
+      "median": null,
+      "samples": []
+    },
+    {
+      "system": "LeapFrog - Leapster Learning Game System",
+      "median": 0.7082,
+      "samples": [
+        {
+          "file": "Cars (USA).png",
+          "width": 512,
+          "height": 723,
+          "ratio": 0.7082
+        }
+      ]
+    },
+    {
+      "system": "LowRes NX",
+      "median": 1.3333,
+      "samples": [
+        {
+          "file": "Demo.png",
+          "width": 640,
+          "height": 480,
+          "ratio": 1.3333
+        },
+        {
+          "file": "LowRes_Adventure.png",
+          "width": 640,
+          "height": 480,
+          "ratio": 1.3333
+        },
+        {
+          "file": "Simple_Shooter_NX.png",
+          "width": 640,
+          "height": 480,
+          "ratio": 1.3333
+        },
+        {
+          "file": "lastbullet.png",
+          "width": 640,
+          "height": 480,
+          "ratio": 1.3333
+        }
+      ]
+    },
+    {
+      "system": "Lutro",
+      "median": null,
+      "samples": []
+    },
+    {
+      "system": "MAME",
+      "median": 0.7161,
+      "samples": [
+        {
+          "file": "Mercs (USA 900608).png",
+          "width": 512,
+          "height": 668,
+          "ratio": 0.7665
+        },
+        {
+          "file": "Mortal Kombat II (rev L3.2 (European)).png",
+          "width": 222,
+          "height": 310,
+          "ratio": 0.7161
+        },
+        {
+          "file": "Mario Bros. (Japan).png",
+          "width": 512,
+          "height": 723,
+          "ratio": 0.7082
+        },
+        {
+          "file": "Clutch Hitter (Japan) (FD1094 317-0175).png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Killer Instinct (v1.5d).png",
+          "width": 512,
+          "height": 664,
+          "ratio": 0.7711
+        }
+      ]
+    },
+    {
+      "system": "Magnavox - Odyssey2",
+      "median": 0.7335,
+      "samples": [
+        {
+          "file": "Killer Bees (USA).png",
+          "width": 512,
+          "height": 671,
+          "ratio": 0.763
+        },
+        {
+          "file": "Laser War (Europe).png",
+          "width": 512,
+          "height": 698,
+          "ratio": 0.7335
+        },
+        {
+          "file": "Blackjack (France).png",
+          "width": 512,
+          "height": 709,
+          "ratio": 0.7221
+        },
+        {
+          "file": "Frogger (Europe).png",
+          "width": 512,
+          "height": 671,
+          "ratio": 0.763
+        },
+        {
+          "file": "Neutron Star (Europe) (Proto).png",
+          "width": 512,
+          "height": 704,
+          "ratio": 0.7273
+        }
+      ]
+    },
+    {
+      "system": "Mattel - Intellivision",
+      "median": 0.7215,
+      "samples": [
+        {
+          "file": "Microsurgeon (USA, Europe).png",
+          "width": 500,
+          "height": 693,
+          "ratio": 0.7215
+        },
+        {
+          "file": "Tutankham (Europe).png",
+          "width": 500,
+          "height": 693,
+          "ratio": 0.7215
+        },
+        {
+          "file": "Carnival (USA, Europe).png",
+          "width": 500,
+          "height": 693,
+          "ratio": 0.7215
+        },
+        {
+          "file": "Loco-Motion (USA).png",
+          "width": 500,
+          "height": 693,
+          "ratio": 0.7215
+        },
+        {
+          "file": "River Raid (USA, Europe).png",
+          "width": 500,
+          "height": 693,
+          "ratio": 0.7215
+        }
+      ]
+    },
+    {
+      "system": "Microsoft - MSX",
+      "median": 0.7118,
+      "samples": [
+        {
+          "file": "Le Mans 2 (Europe).png",
+          "width": 484,
+          "height": 680,
+          "ratio": 0.7118
+        },
+        {
+          "file": "Golf Game (Japan).png",
+          "width": 484,
+          "height": 680,
+          "ratio": 0.7118
+        },
+        {
+          "file": "Boogie Woogi Jungle (Japan).png",
+          "width": 512,
+          "height": 739,
+          "ratio": 0.6928
+        },
+        {
+          "file": "Exoide-Z Area 5 (Japan).png",
+          "width": 512,
+          "height": 334,
+          "ratio": 1.5329
+        },
+        {
+          "file": "MSX Baseball (Japan).png",
+          "width": 484,
+          "height": 680,
+          "ratio": 0.7118
+        }
+      ]
+    },
+    {
+      "system": "Microsoft - MSX2",
+      "median": 0.7118,
+      "samples": [
+        {
+          "file": "Koronis Rift (Europe).png",
+          "width": 512,
+          "height": 735,
+          "ratio": 0.6966
+        },
+        {
+          "file": "Maison Ikkoku - Omoide no Photograph (Japan).png",
+          "width": 484,
+          "height": 680,
+          "ratio": 0.7118
+        },
+        {
+          "file": "Dragon Buster (Japan).png",
+          "width": 512,
+          "height": 718,
+          "ratio": 0.7131
+        },
+        {
+          "file": "Ide Yousuke Meijin no Jissen Mahjong (Japan).png",
+          "width": 484,
+          "height": 680,
+          "ratio": 0.7118
+        },
+        {
+          "file": "Professional Mahjong Gokuu (Japan).png",
+          "width": 484,
+          "height": 680,
+          "ratio": 0.7118
+        }
+      ]
+    },
+    {
+      "system": "Microsoft - Xbox",
+      "median": 0.7143,
+      "samples": [
+        {
+          "file": "Medal of Honor - Frontline (USA).png",
+          "width": 320,
+          "height": 448,
+          "ratio": 0.7143
+        },
+        {
+          "file": "Halo - Combat Evolved (Europe) (Es,It).png",
+          "width": 486,
+          "height": 690,
+          "ratio": 0.7043
+        },
+        {
+          "file": "N.U.D.E.@ Natural Ultimate Digital Experiment (Japan).png",
+          "width": 320,
+          "height": 448,
+          "ratio": 0.7143
+        },
+        {
+          "file": "Call of Duty 3 (USA).png",
+          "width": 320,
+          "height": 448,
+          "ratio": 0.7143
+        },
+        {
+          "file": "Harry Potter and the Chamber of Secrets (USA).png",
+          "width": 486,
+          "height": 680,
+          "ratio": 0.7147
+        }
+      ]
+    },
+    {
+      "system": "Microsoft - Xbox 360",
+      "median": 0.7091,
+      "samples": [
+        {
+          "file": "Dead or Alive 5 (USA).png",
+          "width": 512,
+          "height": 722,
+          "ratio": 0.7091
+        },
+        {
+          "file": "Super Street Fighter IV (Europe).png",
+          "width": 512,
+          "height": 721,
+          "ratio": 0.7101
+        },
+        {
+          "file": "Lightning Returns - Final Fantasy XIII (Japan).png",
+          "width": 512,
+          "height": 722,
+          "ratio": 0.7091
+        },
+        {
+          "file": "Biohazard 6 (Japan).png",
+          "width": 512,
+          "height": 722,
+          "ratio": 0.7091
+        },
+        {
+          "file": "Instant Brain (Limited Edition) (Japan).png",
+          "width": 512,
+          "height": 712,
+          "ratio": 0.7191
+        }
+      ]
+    },
+    {
+      "system": "MrBoom",
+      "median": 1.6,
+      "samples": [
+        {
+          "file": "Mr.Boom.png",
+          "width": 320,
+          "height": 200,
+          "ratio": 1.6
+        }
+      ]
+    },
+    {
+      "system": "NEC - PC Engine - TurboGrafx 16",
+      "median": 1.0,
+      "samples": [
+        {
+          "file": "Keith Courage in Alpha Zones (USA).png",
+          "width": 600,
+          "height": 600,
+          "ratio": 1.0
+        },
+        {
+          "file": "Mashin Eiyuuden Wataru (Japan).png",
+          "width": 600,
+          "height": 602,
+          "ratio": 0.9967
+        },
+        {
+          "file": "Busou Keiji - Cyber Cross (Japan).png",
+          "width": 400,
+          "height": 388,
+          "ratio": 1.0309
+        },
+        {
+          "file": "Idol Hanafuda Fan Club (Japan) (Unl).png",
+          "width": 600,
+          "height": 594,
+          "ratio": 1.0101
+        },
+        {
+          "file": "PC Genjin 3 - Pithecanthropus Computerurus (Japan) (Sample).png",
+          "width": 600,
+          "height": 602,
+          "ratio": 0.9967
+        }
+      ]
+    },
+    {
+      "system": "NEC - PC Engine CD - TurboGrafx-CD",
+      "median": 1.0079,
+      "samples": [
+        {
+          "file": "John Madden Duo CD Football (USA) (RE).png",
+          "width": 512,
+          "height": 397,
+          "ratio": 1.2897
+        },
+        {
+          "file": "Makai Eiyuuden - Shape Shifter (Japan).png",
+          "width": 512,
+          "height": 508,
+          "ratio": 1.0079
+        },
+        {
+          "file": "Cotton - Fantastic Night Dreams (USA).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "J. B. Harold Series 1 - Murder Club (Japan).png",
+          "width": 512,
+          "height": 397,
+          "ratio": 1.2897
+        },
+        {
+          "file": "Puyo Puyo CD (Japan).png",
+          "width": 512,
+          "height": 516,
+          "ratio": 0.9922
+        }
+      ]
+    },
+    {
+      "system": "NEC - PC Engine SuperGrafx",
+      "median": 1.125,
+      "samples": [
+        {
+          "file": "Battle Ace (Japan) (En).png",
+          "width": 648,
+          "height": 580,
+          "ratio": 1.1172
+        },
+        {
+          "file": "1941 - Counter Attack (Japan).png",
+          "width": 652,
+          "height": 580,
+          "ratio": 1.1241
+        },
+        {
+          "file": "Daimakaimura (Japan) (En).png",
+          "width": 653,
+          "height": 580,
+          "ratio": 1.1259
+        },
+        {
+          "file": "Madou King Granzort (Japan) (En).png",
+          "width": 658,
+          "height": 580,
+          "ratio": 1.1345
+        }
+      ]
+    },
+    {
+      "system": "NEC - PC-8001 - PC-8801",
+      "median": 0.7107,
+      "samples": [
+        {
+          "file": "Burai Joukan (1989)(Riverhill)(Disk 3 of 9).png",
+          "width": 320,
+          "height": 462,
+          "ratio": 0.6926
+        },
+        {
+          "file": "Laplace no Ma (1987)(Hummingbird)(Disk 2 of 3).png",
+          "width": 320,
+          "height": 416,
+          "ratio": 0.7692
+        },
+        {
+          "file": "Shiryou Sensen (1989)(Victor)(Disk 1 of 2)(Disk A)[a].png",
+          "width": 320,
+          "height": 469,
+          "ratio": 0.6823
+        },
+        {
+          "file": "Xak - The Tower of Gazzel (1991)(Microcabin)(Disk 2 of 7).png",
+          "width": 320,
+          "height": 439,
+          "ratio": 0.7289
+        }
+      ]
+    },
+    {
+      "system": "NEC - PC-88",
+      "median": 0.7107,
+      "samples": [
+        {
+          "file": "Burai Joukan (1989)(Riverhill)(Disk 3 of 9).png",
+          "width": 320,
+          "height": 462,
+          "ratio": 0.6926
+        },
+        {
+          "file": "Laplace no Ma (1987)(Hummingbird)(Disk 2 of 3).png",
+          "width": 320,
+          "height": 416,
+          "ratio": 0.7692
+        },
+        {
+          "file": "Shiryou Sensen (1989)(Victor)(Disk 1 of 2)(Disk A)[a].png",
+          "width": 320,
+          "height": 469,
+          "ratio": 0.6823
+        },
+        {
+          "file": "Xak - The Tower of Gazzel (1991)(Microcabin)(Disk 2 of 7).png",
+          "width": 320,
+          "height": 439,
+          "ratio": 0.7289
+        }
+      ]
+    },
+    {
+      "system": "NEC - PC-98",
+      "median": 0.8696,
+      "samples": [
+        {
+          "file": "Jinmon Yuugi (Japan).png",
+          "width": 496,
+          "height": 680,
+          "ratio": 0.7294
+        },
+        {
+          "file": "Bunretsu Shiyugo Shin Twinkle Star (1993)(Studio Twinkle)(Disk 1 of 5)(Disk A).png",
+          "width": 320,
+          "height": 353,
+          "ratio": 0.9065
+        },
+        {
+          "file": "Farland Story 4 (1994)(TGL)(Disk 4 of 5)(Disk D).png",
+          "width": 320,
+          "height": 439,
+          "ratio": 0.7289
+        },
+        {
+          "file": "Metal Eye 2 (1994)(Elf)(Disk 6 of 8)(Disk F).png",
+          "width": 320,
+          "height": 368,
+          "ratio": 0.8696
+        },
+        {
+          "file": "Touhou Gensoukyou - Lotus Land Story.png",
+          "width": 512,
+          "height": 346,
+          "ratio": 1.4798
+        }
+      ]
+    },
+    {
+      "system": "NEC - PC-FX",
+      "median": 1.0139,
+      "samples": [
+        {
+          "file": "Konpeki no Kantai (Japan).png",
+          "width": 512,
+          "height": 673,
+          "ratio": 0.7608
+        },
+        {
+          "file": "AnimeFreak FX Vol. 5 (Japan) (Disc 1).png",
+          "width": 512,
+          "height": 505,
+          "ratio": 1.0139
+        },
+        {
+          "file": "Fushigi no Kuni no Angelique (Japan).png",
+          "width": 512,
+          "height": 505,
+          "ratio": 1.0139
+        },
+        {
+          "file": "PC Engine Fan - Special CD-ROM Vol. 2 (Japan).png",
+          "width": 512,
+          "height": 997,
+          "ratio": 0.5135
+        },
+        {
+          "file": "Tonari no Princess Rolfee! (Japan).png",
+          "width": 512,
+          "height": 505,
+          "ratio": 1.0139
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Family Computer Disk System",
+      "median": 0.9865,
+      "samples": [
+        {
+          "file": "Famicom Tantei Club - Kieta Koukeisha - Kouhen (Japan).png",
+          "width": 512,
+          "height": 503,
+          "ratio": 1.0179
+        },
+        {
+          "file": "Kick and Run (Japan).png",
+          "width": 512,
+          "height": 519,
+          "ratio": 0.9865
+        },
+        {
+          "file": "Reflect World (Japan).png",
+          "width": 512,
+          "height": 527,
+          "ratio": 0.9715
+        },
+        {
+          "file": "Dracula II - Noroi no Fuuin (Japan).png",
+          "width": 512,
+          "height": 532,
+          "ratio": 0.9624
+        },
+        {
+          "file": "Goonies (Japan) (Disk Writer).png",
+          "width": 512,
+          "height": 504,
+          "ratio": 1.0159
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Game Boy",
+      "median": 0.9961,
+      "samples": [
+        {
+          "file": "Dragon's Lair - The Legend (USA).png",
+          "width": 256,
+          "height": 259,
+          "ratio": 0.9884
+        },
+        {
+          "file": "Maui Mallard in Cold Shadow (USA).png",
+          "width": 256,
+          "height": 256,
+          "ratio": 1.0
+        },
+        {
+          "file": "Snoopy's Magic Show (USA, Europe).png",
+          "width": 256,
+          "height": 256,
+          "ratio": 1.0
+        },
+        {
+          "file": "DuckTales 2 (Europe).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Mickey's Dangerous Chase (Europe).png",
+          "width": 256,
+          "height": 226,
+          "ratio": 1.1327
+        },
+        {
+          "file": "Rodland (Europe).png",
+          "width": 256,
+          "height": 257,
+          "ratio": 0.9961
+        },
+        {
+          "file": "Genki Bakuhatsu Gambaruger (Japan).png",
+          "width": 512,
+          "height": 645,
+          "ratio": 0.7938
+        },
+        {
+          "file": "Mini Yonku GB Let's _ Go!! - All-Star Battle Max (Japan) (SGB Enhanced).png",
+          "width": 512,
+          "height": 608,
+          "ratio": 0.8421
+        },
+        {
+          "file": "SD Lupin Sansei - Kinko Yaburi Daisakusen (Japan).png",
+          "width": 512,
+          "height": 645,
+          "ratio": 0.7938
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Game Boy Advance",
+      "median": 1.0,
+      "samples": [
+        {
+          "file": "Disney Sports - Skateboarding (USA).png",
+          "width": 256,
+          "height": 260,
+          "ratio": 0.9846
+        },
+        {
+          "file": "Phantasy Star Collection (USA).png",
+          "width": 256,
+          "height": 229,
+          "ratio": 1.1179
+        },
+        {
+          "file": "Pokemon-e TCG - Expedition Base Set - B-81-# - Ampharos (USA).png",
+          "width": 478,
+          "height": 864,
+          "ratio": 0.5532
+        },
+        {
+          "file": "Disney Sports - Skateboarding (Europe) (En,Fr,De,Es,It).png",
+          "width": 500,
+          "height": 500,
+          "ratio": 1.0
+        },
+        {
+          "file": "Lion King, The (Europe) (En,Fr,De,Es,It,Nl,Sv,Da).png",
+          "width": 256,
+          "height": 255,
+          "ratio": 1.0039
+        },
+        {
+          "file": "Scrabble (Europe) (En,Fr,De,Es).png",
+          "width": 256,
+          "height": 254,
+          "ratio": 1.0079
+        },
+        {
+          "file": "Doubutsu no Mori Card-e+ - Series 2 - 06-C052 (Japan).png",
+          "width": 478,
+          "height": 864,
+          "ratio": 0.5532
+        },
+        {
+          "file": "Naruto - Ninjutsu Zenkai! Saikyou Ninja Daikesshuu (Japan).png",
+          "width": 256,
+          "height": 256,
+          "ratio": 1.0
+        },
+        {
+          "file": "Pokemon Card-e - The Town on No Map - C-03-# (Japan).png",
+          "width": 478,
+          "height": 864,
+          "ratio": 0.5532
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Game Boy Color",
+      "median": 1.0,
+      "samples": [
+        {
+          "file": "F1 World Grand Prix II for Game Boy Color (USA) (En,Fr,De,Es).png",
+          "width": 256,
+          "height": 255,
+          "ratio": 1.0039
+        },
+        {
+          "file": "Metroid II - Return of Samus DX (USA).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Sabrina - The Animated Series - Spooked! (USA, Europe).png",
+          "width": 256,
+          "height": 253,
+          "ratio": 1.0119
+        },
+        {
+          "file": "Extreme Ghostbusters (Europe) (En,Fr,De,Es,It,Pt).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Magical Tetris Challenge (Europe) (En,Fr,De,Es,It,Nl,Sv) (Rev 1).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Roland Garros French Open (Europe) (En,Fr,De,Es,It,Nl).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Gakkyuu Ou Yamazaki (Japan) (Rev 1) (GB Compatible).png",
+          "width": 512,
+          "height": 645,
+          "ratio": 0.7938
+        },
+        {
+          "file": "Marie no Atelier GB (Japan) (SGB Enhanced) (GB Compatible).png",
+          "width": 512,
+          "height": 647,
+          "ratio": 0.7913
+        },
+        {
+          "file": "Robot Poncots - Moon Version (Japan) (SGB Enhanced) (GB Compatible).png",
+          "width": 489,
+          "height": 619,
+          "ratio": 0.79
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - GameCube",
+      "median": 0.7147,
+      "samples": [
+        {
+          "file": "Medal of Honor - Rising Sun (USA) (Disc 2).png",
+          "width": 466,
+          "height": 672,
+          "ratio": 0.6935
+        },
+        {
+          "file": "Medal of Honor - Frontline (Europe).png",
+          "width": 486,
+          "height": 680,
+          "ratio": 0.7147
+        },
+        {
+          "file": "Kururin Squash! (Japan).png",
+          "width": 512,
+          "height": 710,
+          "ratio": 0.7211
+        },
+        {
+          "file": "Bomberman Generation (Europe) (En,Fr,De).png",
+          "width": 489,
+          "height": 680,
+          "ratio": 0.7191
+        },
+        {
+          "file": "Herr der Ringe, Der - Die zwei Tuerme (Germany).png",
+          "width": 486,
+          "height": 680,
+          "ratio": 0.7147
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Nintendo 3DS",
+      "median": 1.1228,
+      "samples": [
+        {
+          "file": "Farming Simulator 14 (USA) (En,Fr,Es,Pt).png",
+          "width": 512,
+          "height": 453,
+          "ratio": 1.1302
+        },
+        {
+          "file": "Metroid Prime Blast Ball (USA).png",
+          "width": 500,
+          "height": 300,
+          "ratio": 1.6667
+        },
+        {
+          "file": "Rhythm Thief _ the Emperor's Treasure (USA).png",
+          "width": 328,
+          "height": 300,
+          "ratio": 1.0933
+        },
+        {
+          "file": "Final Fantasy Explorers (Europe) (En,Fr).png",
+          "width": 512,
+          "height": 456,
+          "ratio": 1.1228
+        },
+        {
+          "file": "Mario Sports Superstars (Europe) (En,Fr,De,Es,It,Nl).png",
+          "width": 400,
+          "height": 352,
+          "ratio": 1.1364
+        },
+        {
+          "file": "RPG Maker Fes (Europe) (En,Fr,De,Es,It).png",
+          "width": 512,
+          "height": 457,
+          "ratio": 1.1204
+        },
+        {
+          "file": "Fire Emblem - Kakusei (Japan).png",
+          "width": 512,
+          "height": 456,
+          "ratio": 1.1228
+        },
+        {
+          "file": "Medarot Girls Mission - Kabuto Ver. (Japan).png",
+          "width": 400,
+          "height": 352,
+          "ratio": 1.1364
+        },
+        {
+          "file": "Senran Kagura 2 - Shinku (Japan).png",
+          "width": 512,
+          "height": 456,
+          "ratio": 1.1228
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Nintendo 3DS (Digital)",
+      "median": 1.2642,
+      "samples": [
+        {
+          "file": "Netflix (USA) (eShop).png",
+          "width": 512,
+          "height": 405,
+          "ratio": 1.2642
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Nintendo 64",
+      "median": 1.3653,
+      "samples": [
+        {
+          "file": "FIFA Soccer 64 (USA) (En,Fr,De).png",
+          "width": 512,
+          "height": 374,
+          "ratio": 1.369
+        },
+        {
+          "file": "Mortal Kombat Trilogy (USA).png",
+          "width": 512,
+          "height": 374,
+          "ratio": 1.369
+        },
+        {
+          "file": "Sin and Punishment (USA).png",
+          "width": 512,
+          "height": 357,
+          "ratio": 1.4342
+        },
+        {
+          "file": "FIFA 99 (Europe) (En,Fr,De,Es,It,Nl,Pt,Sv).png",
+          "width": 500,
+          "height": 340,
+          "ratio": 1.4706
+        },
+        {
+          "file": "Mortal Kombat Trilogy (Europe).png",
+          "width": 512,
+          "height": 375,
+          "ratio": 1.3653
+        },
+        {
+          "file": "Snowboard Kids (Europe, Australia).png",
+          "width": 512,
+          "height": 375,
+          "ratio": 1.3653
+        },
+        {
+          "file": "Famista 64 (Japan).png",
+          "width": 497,
+          "height": 680,
+          "ratio": 0.7309
+        },
+        {
+          "file": "Kiratto Kaiketsu! 64 Tanteidan (Japan).png",
+          "width": 512,
+          "height": 715,
+          "ratio": 0.7161
+        },
+        {
+          "file": "Rockman Dash - Hagane no Boukenshin (Japan).png",
+          "width": 512,
+          "height": 725,
+          "ratio": 0.7062
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Nintendo 64DD",
+      "median": 1.1584,
+      "samples": [
+        {
+          "file": "F-Zero X Expansion Kit (USA).png",
+          "width": 512,
+          "height": 442,
+          "ratio": 1.1584
+        },
+        {
+          "file": "Mario Artist - Paint Studio (Japan).png",
+          "width": 512,
+          "height": 653,
+          "ratio": 0.7841
+        },
+        {
+          "file": "F-Zero X - Expansion Kit (Japan).png",
+          "width": 512,
+          "height": 434,
+          "ratio": 1.1797
+        },
+        {
+          "file": "Kyojin no Doshin - Kaihou Sensen Chibikko Chikko Daishuugou (Japan).png",
+          "width": 512,
+          "height": 433,
+          "ratio": 1.1824
+        },
+        {
+          "file": "Mario Artist Communication Kit (Japan).png",
+          "width": 512,
+          "height": 442,
+          "ratio": 1.1584
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Nintendo DS",
+      "median": 1.1111,
+      "samples": [
+        {
+          "file": "Madagascar 3 (USA) (En,Fr,Es).png",
+          "width": 512,
+          "height": 456,
+          "ratio": 1.1228
+        },
+        {
+          "file": "Line Rider - Freestyle (Europe) (En,Fr,De,Es,It).png",
+          "width": 512,
+          "height": 460,
+          "ratio": 1.113
+        },
+        {
+          "file": "Meitantei Conan _ Kindaichi Shounen no Jikenbo - Meguriau Futari no Meitantei (Japan).png",
+          "width": 500,
+          "height": 450,
+          "ratio": 1.1111
+        },
+        {
+          "file": "Club Penguin - Elite Penguin Force (USA) (En,Fr,Es) (Rev 2).png",
+          "width": 512,
+          "height": 467,
+          "ratio": 1.0964
+        },
+        {
+          "file": "John Deere - Harvest in the Heartland (USA).png",
+          "width": 512,
+          "height": 463,
+          "ratio": 1.1058
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Nintendo DSi",
+      "median": 1.1111,
+      "samples": [
+        {
+          "file": "Master of Illusion Express - Shuffle Games (USA, Australia).png",
+          "width": 500,
+          "height": 450,
+          "ratio": 1.1111
+        },
+        {
+          "file": "Face Training (Europe) (En,Fr,De,Es,It).png",
+          "width": 512,
+          "height": 462,
+          "ratio": 1.1082
+        },
+        {
+          "file": "Monster Finder (Japan).png",
+          "width": 512,
+          "height": 459,
+          "ratio": 1.1155
+        },
+        {
+          "file": "Dictionary 6 in 1 with Camera Function (Europe, Australia) (En,Fr,De,Es,It) (Rev 1).png",
+          "width": 500,
+          "height": 450,
+          "ratio": 1.1111
+        },
+        {
+          "file": "Hidden Photo (Europe).png",
+          "width": 512,
+          "height": 461,
+          "ratio": 1.1106
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Nintendo Entertainment System",
+      "median": 0.7012,
+      "samples": [
+        {
+          "file": "Double Dragon II - The Revenge (USA).png",
+          "width": 359,
+          "height": 512,
+          "ratio": 0.7012
+        },
+        {
+          "file": "Little Samson (USA).png",
+          "width": 512,
+          "height": 731,
+          "ratio": 0.7004
+        },
+        {
+          "file": "Skate or Die 2 - The Search for Double Trouble (USA).png",
+          "width": 512,
+          "height": 731,
+          "ratio": 0.7004
+        },
+        {
+          "file": "Dropzone (Europe).png",
+          "width": 256,
+          "height": 362,
+          "ratio": 0.7072
+        },
+        {
+          "file": "Marble Madness (Europe).png",
+          "width": 256,
+          "height": 372,
+          "ratio": 0.6882
+        },
+        {
+          "file": "Ski or Die (Europe).png",
+          "width": 256,
+          "height": 362,
+          "ratio": 0.7072
+        },
+        {
+          "file": "Famicom Shougi - Ryuuousen (Japan).png",
+          "width": 512,
+          "height": 358,
+          "ratio": 1.4302
+        },
+        {
+          "file": "Kouryuu Densetsu Villgust Gaiden (Japan).png",
+          "width": 512,
+          "height": 350,
+          "ratio": 1.4629
+        },
+        {
+          "file": "Rokudenashi Blues (Japan).png",
+          "width": 400,
+          "height": 589,
+          "ratio": 0.6791
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Pokemon Mini",
+      "median": 0.9846,
+      "samples": [
+        {
+          "file": "Pokemon Pinball Mini (USA) (GameCube Preview).png",
+          "width": 256,
+          "height": 255,
+          "ratio": 1.0039
+        },
+        {
+          "file": "Pokemon Party Mini - Pikachu's Rocket Start (Europe) (GameCube).png",
+          "width": 256,
+          "height": 260,
+          "ratio": 0.9846
+        },
+        {
+          "file": "Pokemon Puzzle Collection (Japan) (GameCube).png",
+          "width": 256,
+          "height": 255,
+          "ratio": 1.0039
+        },
+        {
+          "file": "Pokemon Party Mini (Europe).png",
+          "width": 256,
+          "height": 260,
+          "ratio": 0.9846
+        },
+        {
+          "file": "Pokemon Party Mini - Slowking's Judge (Europe) (GameCube).png",
+          "width": 256,
+          "height": 260,
+          "ratio": 0.9846
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Satellaview",
+      "median": 0.5509,
+      "samples": [
+        {
+          "file": "Golf Daisuki! O.B. Club (Japan).png",
+          "width": 476,
+          "height": 864,
+          "ratio": 0.5509
+        },
+        {
+          "file": "BS Tantei Club - Yuki ni Kieta Kako - Chuuhen (Japan) (SoundLink).png",
+          "width": 512,
+          "height": 575,
+          "ratio": 0.8904
+        },
+        {
+          "file": "Excitebike - Bunbun Mario Battle - Stadium 1 (Japan) (6-30) (SoundLink).png",
+          "width": 476,
+          "height": 864,
+          "ratio": 0.5509
+        },
+        {
+          "file": "Panel de Pon - Event '98 (Japan) (1-11).png",
+          "width": 476,
+          "height": 864,
+          "ratio": 0.5509
+        },
+        {
+          "file": "Sutte Hakkun - 98 Fuyu Event Version (Japan).png",
+          "width": 476,
+          "height": 864,
+          "ratio": 0.5509
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Sufami Turbo",
+      "median": 0.4629,
+      "samples": [
+        {
+          "file": "SD Gundam Generation - Babylonia Kenkoku Senki (Japan).png",
+          "width": 512,
+          "height": 1106,
+          "ratio": 0.4629
+        },
+        {
+          "file": "Crayon Shin-chan - Nagagutsu Dobon!! (Japan).png",
+          "width": 512,
+          "height": 1089,
+          "ratio": 0.4702
+        },
+        {
+          "file": "SD Gundam Generation - Axis Senki (Japan).png",
+          "width": 512,
+          "height": 1106,
+          "ratio": 0.4629
+        },
+        {
+          "file": "SD Gundam Generation - Gryps Senki (Japan).png",
+          "width": 512,
+          "height": 1106,
+          "ratio": 0.4629
+        },
+        {
+          "file": "SD Ultra Battle - Seven Densetsu (Japan).png",
+          "width": 512,
+          "height": 1076,
+          "ratio": 0.4758
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Super Nintendo Entertainment System",
+      "median": 1.3838,
+      "samples": [
+        {
+          "file": "Final Fantasy IV (USA).png",
+          "width": 512,
+          "height": 364,
+          "ratio": 1.4066
+        },
+        {
+          "file": "NBA Jam (USA) (Rev 1).png",
+          "width": 512,
+          "height": 364,
+          "ratio": 1.4066
+        },
+        {
+          "file": "Strike Gunner S.T.G (USA).png",
+          "width": 512,
+          "height": 364,
+          "ratio": 1.4066
+        },
+        {
+          "file": "Firemen, The (Europe) (En,Fr,De).png",
+          "width": 512,
+          "height": 360,
+          "ratio": 1.4222
+        },
+        {
+          "file": "NBA Live 96 (Europe).png",
+          "width": 512,
+          "height": 370,
+          "ratio": 1.3838
+        },
+        {
+          "file": "Super Ghouls 'N Ghosts (Europe).png",
+          "width": 512,
+          "height": 374,
+          "ratio": 1.369
+        },
+        {
+          "file": "Garou Densetsu 2 - Aratanaru Tatakai (Japan).png",
+          "width": 512,
+          "height": 934,
+          "ratio": 0.5482
+        },
+        {
+          "file": "Naxat Super Pinball - Jaki Crush (Japan).png",
+          "width": 512,
+          "height": 753,
+          "ratio": 0.6799
+        },
+        {
+          "file": "Super F1 Circus (Japan).png",
+          "width": 512,
+          "height": 931,
+          "ratio": 0.5499
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Virtual Boy",
+      "median": 1.0059,
+      "samples": [
+        {
+          "file": "Red Alarm (USA).png",
+          "width": 512,
+          "height": 509,
+          "ratio": 1.0059
+        },
+        {
+          "file": "Space Pinball (Japan) (En) (Proto).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Hyper Fighting (World) (Beta) (Aftermarket) (Unl).png",
+          "width": 512,
+          "height": 494,
+          "ratio": 1.0364
+        },
+        {
+          "file": "Niko-chan Battle (Japan) (Proto).png",
+          "width": 230,
+          "height": 230,
+          "ratio": 1.0
+        },
+        {
+          "file": "Teleroboxer (Japan, USA) (En).png",
+          "width": 512,
+          "height": 457,
+          "ratio": 1.1204
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Wii",
+      "median": 0.7141,
+      "samples": [
+        {
+          "file": "M_M's Kart Racing (USA).png",
+          "width": 512,
+          "height": 725,
+          "ratio": 0.7062
+        },
+        {
+          "file": "Lylat Wars (Europe) (Rev 3) (N64) (Virtual Console).png",
+          "width": 457,
+          "height": 640,
+          "ratio": 0.7141
+        },
+        {
+          "file": "Metal Gear (Japan) (MSX) (Virtual Console).png",
+          "width": 457,
+          "height": 640,
+          "ratio": 0.7141
+        },
+        {
+          "file": "Chronicles of Narnia, The - Prince Caspian (USA).png",
+          "width": 486,
+          "height": 680,
+          "ratio": 0.7147
+        },
+        {
+          "file": "Ice Climber (USA) (NES) (Virtual Console).png",
+          "width": 457,
+          "height": 640,
+          "ratio": 0.7141
+        }
+      ]
+    },
+    {
+      "system": "Nintendo - Wii U",
+      "median": 0.7141,
+      "samples": [
+        {
+          "file": "LEGO Star Wars - The Force Awakens (USA) (En,Fr,Es,Pt).png",
+          "width": 457,
+          "height": 640,
+          "ratio": 0.7141
+        },
+        {
+          "file": "LEGO Marvel Avengers (Europe) (En,Fr,De,Es,It,Nl,Da).png",
+          "width": 457,
+          "height": 640,
+          "ratio": 0.7141
+        },
+        {
+          "file": "Monster Hunter Frontier G6 - Premium Package (Japan).png",
+          "width": 455,
+          "height": 640,
+          "ratio": 0.7109
+        },
+        {
+          "file": "Darksiders - Warmastered Edition (USA) (En,Ja,Fr,De,Es,It,Pt,Zh,Ko,Pl,Ru,Cs).png",
+          "width": 457,
+          "height": 640,
+          "ratio": 0.7141
+        },
+        {
+          "file": "Just Dance 2018 (USA) (En,Fr,Es,Pt).png",
+          "width": 457,
+          "height": 640,
+          "ratio": 0.7141
+        }
+      ]
+    },
+    {
+      "system": "Philips - CD-i",
+      "median": 1.0,
+      "samples": [
+        {
+          "file": "Kingdom - The Far Reaches (USA).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Lost Eden (Europe).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Mystic Midway - Rest in Pieces (Japan).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Caesars World of Gambling (Japan).png",
+          "width": 320,
+          "height": 320,
+          "ratio": 1.0
+        },
+        {
+          "file": "International Tennis Open (USA) (En,Fr) (Simultaneous 2 Player Game).png",
+          "width": 481,
+          "height": 680,
+          "ratio": 0.7074
+        }
+      ]
+    },
+    {
+      "system": "Philips - Videopac+",
+      "median": 0.7242,
+      "samples": [
+        {
+          "file": "Killer Bees (Europe).png",
+          "width": 512,
+          "height": 699,
+          "ratio": 0.7325
+        },
+        {
+          "file": "Billard Electrique (France).png",
+          "width": 512,
+          "height": 713,
+          "ratio": 0.7181
+        },
+        {
+          "file": "Flipper Game (Europe) (Proto).png",
+          "width": 512,
+          "height": 711,
+          "ratio": 0.7201
+        },
+        {
+          "file": "Monster (Europe).png",
+          "width": 512,
+          "height": 695,
+          "ratio": 0.7367
+        },
+        {
+          "file": "Syracuse (France).png",
+          "width": 512,
+          "height": 707,
+          "ratio": 0.7242
+        }
+      ]
+    },
+    {
+      "system": "Quake",
+      "median": 0.8387,
+      "samples": [
+        {
+          "file": "Quake (v1.01).png",
+          "width": 512,
+          "height": 614,
+          "ratio": 0.8339
+        },
+        {
+          "file": "Quake Mission Pack 1_ Scourge of Armagon (2021 re-release).png",
+          "width": 512,
+          "height": 607,
+          "ratio": 0.8435
+        },
+        {
+          "file": "Quake Mission Pack 2_ Dissolution of Eternity (2021 re-release).png",
+          "width": 512,
+          "height": 596,
+          "ratio": 0.8591
+        },
+        {
+          "file": "Quake Mission Pack 3_ Dimension of the Past.png",
+          "width": 267,
+          "height": 400,
+          "ratio": 0.6675
+        }
+      ]
+    },
+    {
+      "system": "Quake II",
+      "median": 0.8463,
+      "samples": [
+        {
+          "file": "Quake II Demo.png",
+          "width": 512,
+          "height": 605,
+          "ratio": 0.8463
+        },
+        {
+          "file": "Quake II.png",
+          "width": 512,
+          "height": 605,
+          "ratio": 0.8463
+        }
+      ]
+    },
+    {
+      "system": "Quake III",
+      "median": 0.7817,
+      "samples": [
+        {
+          "file": "Quake III Arena.png",
+          "width": 512,
+          "height": 655,
+          "ratio": 0.7817
+        }
+      ]
+    },
+    {
+      "system": "RCA - Studio II",
+      "median": 1.3096,
+      "samples": [
+        {
+          "file": "TV Arcade V - Speedway + Tag (USA).png",
+          "width": 256,
+          "height": 189,
+          "ratio": 1.3545
+        },
+        {
+          "file": "TV Arcade II - Fun with Numbers (USA).png",
+          "width": 368,
+          "height": 281,
+          "ratio": 1.3096
+        },
+        {
+          "file": "TV Arcade Series - Gunfighter + Moonship Battle (USA, Europe).png",
+          "width": 368,
+          "height": 281,
+          "ratio": 1.3096
+        },
+        {
+          "file": "TV Casino Series - Blackjack (USA).png",
+          "width": 368,
+          "height": 281,
+          "ratio": 1.3096
+        },
+        {
+          "file": "TV School House I (USA).png",
+          "width": 214,
+          "height": 281,
+          "ratio": 0.7616
+        }
+      ]
+    },
+    {
+      "system": "RPG Maker",
+      "median": 1.3333,
+      "samples": [
+        {
+          "file": "Embric of Wulfhammer's Castle.png",
+          "width": 320,
+          "height": 240,
+          "ratio": 1.3333
+        },
+        {
+          "file": "Lisa the First.png",
+          "width": 2712,
+          "height": 2212,
+          "ratio": 1.226
+        },
+        {
+          "file": "Super Columbine Massacre RPG.png",
+          "width": 320,
+          "height": 240,
+          "ratio": 1.3333
+        },
+        {
+          "file": "Yume Nikki (Uboachan Translation).png",
+          "width": 460,
+          "height": 215,
+          "ratio": 2.1395
+        }
+      ]
+    },
+    {
+      "system": "Rick Dangerous",
+      "median": 0.8258,
+      "samples": [
+        {
+          "file": "Rick Dangerous.png",
+          "width": 256,
+          "height": 310,
+          "ratio": 0.8258
+        }
+      ]
+    },
+    {
+      "system": "SNK - Neo Geo",
+      "median": 0.6997,
+      "samples": [
+        {
+          "file": "Cyber-Lip (NGM-010).png",
+          "width": 512,
+          "height": 638,
+          "ratio": 0.8025
+        },
+        {
+          "file": "Neo Bomberman.png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Sengoku 3 _ Sengoku Densho 2001 (Set 2).png",
+          "width": 512,
+          "height": 746,
+          "ratio": 0.6863
+        },
+        {
+          "file": "The Last Blade _ Bakumatsu Roman - Gekka no Kenshi (NGH-2340).png",
+          "width": 510,
+          "height": 741,
+          "ratio": 0.6883
+        }
+      ]
+    },
+    {
+      "system": "SNK - Neo Geo CD",
+      "median": 1.0,
+      "samples": [
+        {
+          "file": "Double Dragon (USA) (En,Ja).png",
+          "width": 500,
+          "height": 500,
+          "ratio": 1.0
+        },
+        {
+          "file": "Nam-1975 (Japan) (En,Ja).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Double Dragon (Export) (En,Ja).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "King of Fighters '97, The (Japan) (En,Ja).png",
+          "width": 500,
+          "height": 500,
+          "ratio": 1.0
+        },
+        {
+          "file": "Real Bout Fatal Fury 2 - The Newcomers (World).png",
+          "width": 500,
+          "height": 500,
+          "ratio": 1.0
+        }
+      ]
+    },
+    {
+      "system": "SNK - Neo Geo Pocket",
+      "median": 0.8828,
+      "samples": [
+        {
+          "file": "Neo Geo Cup '98 (Japan, Europe) (En,Ja).png",
+          "width": 256,
+          "height": 290,
+          "ratio": 0.8828
+        },
+        {
+          "file": "King of Fighters R-1 - Pocket Fighting Series (Japan, Europe) (En,Ja).png",
+          "width": 256,
+          "height": 294,
+          "ratio": 0.8707
+        },
+        {
+          "file": "Neo Cherry Master - Real Casino Series (Japan) (En,Ja).png",
+          "width": 256,
+          "height": 281,
+          "ratio": 0.911
+        },
+        {
+          "file": "Pocket Tennis - Pocket Sports Series (Japan, Europe) (En,Ja).png",
+          "width": 256,
+          "height": 288,
+          "ratio": 0.8889
+        },
+        {
+          "file": "Samurai Shodown! - Pocket Fighting Series (Japan, Europe) (En,Ja).png",
+          "width": 256,
+          "height": 299,
+          "ratio": 0.8562
+        }
+      ]
+    },
+    {
+      "system": "SNK - Neo Geo Pocket Color",
+      "median": 0.9859,
+      "samples": [
+        {
+          "file": "Magical Drop Pocket (USA, Europe).png",
+          "width": 512,
+          "height": 589,
+          "ratio": 0.8693
+        },
+        {
+          "file": "Faselei! (Europe).png",
+          "width": 512,
+          "height": 590,
+          "ratio": 0.8678
+        },
+        {
+          "file": "Oekaki Puzzle (Japan).png",
+          "width": 198,
+          "height": 200,
+          "ratio": 0.99
+        },
+        {
+          "file": "Densha de Go! 2 on Neo Geo Pocket (Japan) (Demo).png",
+          "width": 631,
+          "height": 640,
+          "ratio": 0.9859
+        },
+        {
+          "file": "Metal Slug - 2nd Mission (World) (En,Ja) (Demo).png",
+          "width": 256,
+          "height": 257,
+          "ratio": 0.9961
+        }
+      ]
+    },
+    {
+      "system": "ScummVM",
+      "median": 1.1538,
+      "samples": [
+        {
+          "file": "Brownies Dream.png",
+          "width": 512,
+          "height": 338,
+          "ratio": 1.5148
+        },
+        {
+          "file": "In Cold Blood.png",
+          "width": 512,
+          "height": 683,
+          "ratio": 0.7496
+        },
+        {
+          "file": "Obsidian (V1.0, 1_13_97, installed, CD_Macintosh_English).png",
+          "width": 512,
+          "height": 625,
+          "ratio": 0.8192
+        },
+        {
+          "file": "The Journey.png",
+          "width": 512,
+          "height": 344,
+          "ratio": 1.4884
+        }
+      ]
+    },
+    {
+      "system": "Sega - 32X",
+      "median": 0.7062,
+      "samples": [
+        {
+          "file": "Star Wars Arcade (USA) (Beta) (1994-09-14).png",
+          "width": 512,
+          "height": 725,
+          "ratio": 0.7062
+        },
+        {
+          "file": "Motherbase (Europe).png",
+          "width": 512,
+          "height": 708,
+          "ratio": 0.7232
+        },
+        {
+          "file": "Knuckles' Chaotix (Japan, USA) (En) (Beta) (1995-02-13) (Alt).png",
+          "width": 512,
+          "height": 728,
+          "ratio": 0.7033
+        },
+        {
+          "file": "Doom RR (Japan, USA) (En) (Beta) (1995-02-21).png",
+          "width": 512,
+          "height": 719,
+          "ratio": 0.7121
+        },
+        {
+          "file": "Knuckles' Chaotix (Japan, USA) (En) (Beta) (1995-02-13).png",
+          "width": 512,
+          "height": 728,
+          "ratio": 0.7033
+        }
+      ]
+    },
+    {
+      "system": "Sega - Dreamcast",
+      "median": 1.0079,
+      "samples": [
+        {
+          "file": "Official Sega Dreamcast Magazine Vol. 10 - January 2001 (USA).png",
+          "width": 512,
+          "height": 508,
+          "ratio": 1.0079
+        },
+        {
+          "file": "Pro Pinball Trilogy (Europe).png",
+          "width": 512,
+          "height": 507,
+          "ratio": 1.0099
+        },
+        {
+          "file": "Milky Season (Japan).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Dead or Alive 2 (Japan).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Kita e. - White Illumination (Japan).png",
+          "width": 512,
+          "height": 508,
+          "ratio": 1.0079
+        }
+      ]
+    },
+    {
+      "system": "Sega - Game Gear",
+      "median": 0.7111,
+      "samples": [
+        {
+          "file": "Dynamite Headdy (USA, Europe).png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Mickey's Ultimate Challenge (USA).png",
+          "width": 256,
+          "height": 360,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Solitaire Poker (USA, Europe).png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Earthworm Jim (Europe).png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Lion King, The (Europe).png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Schtroumpfs Autour du Monde, Les (Europe) (En,Fr,De,Es).png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "GG Portrait - Pai Chan (Japan).png",
+          "width": 512,
+          "height": 720,
+          "ratio": 0.7111
+        },
+        {
+          "file": "Mickey Mouse no Castle Illusion (Japan) (En).png",
+          "width": 512,
+          "height": 590,
+          "ratio": 0.8678
+        },
+        {
+          "file": "Sassou Shounen Eiyuuden - Coca-Cola Kid (Japan).png",
+          "width": 512,
+          "height": 590,
+          "ratio": 0.8678
+        }
+      ]
+    },
+    {
+      "system": "Sega - Master System - Mark III",
+      "median": 0.7059,
+      "samples": [
+        {
+          "file": "Michael Jackson's Moonwalker (USA, Europe, Brazil) (En) (Beta).png",
+          "width": 480,
+          "height": 680,
+          "ratio": 0.7059
+        },
+        {
+          "file": "Ninja Gaiden (Europe, Brazil) (En) (Beta).png",
+          "width": 480,
+          "height": 680,
+          "ratio": 0.7059
+        },
+        {
+          "file": "Hoshi wo Sagashite... (Japan) [T-En by filler and SSTranslations].png",
+          "width": 480,
+          "height": 680,
+          "ratio": 0.7059
+        },
+        {
+          "file": "Casino Games (USA, Europe).png",
+          "width": 480,
+          "height": 680,
+          "ratio": 0.7059
+        },
+        {
+          "file": "Heavyweight Champ (Europe, Brazil) (En).png",
+          "width": 480,
+          "height": 680,
+          "ratio": 0.7059
+        }
+      ]
+    },
+    {
+      "system": "Sega - Mega Drive - Genesis",
+      "median": 0.7103,
+      "samples": [
+        {
+          "file": "Micro Machines (USA) (Rev 1).png",
+          "width": 484,
+          "height": 680,
+          "ratio": 0.7118
+        },
+        {
+          "file": "Micro Machines (Europe).png",
+          "width": 512,
+          "height": 721,
+          "ratio": 0.7101
+        },
+        {
+          "file": "Mutant League Football (Japan).png",
+          "width": 256,
+          "height": 350,
+          "ratio": 0.7314
+        },
+        {
+          "file": "Combat Cars (Europe).png",
+          "width": 483,
+          "height": 680,
+          "ratio": 0.7103
+        },
+        {
+          "file": "Kawasaki Superbike Challenge (USA, Europe).png",
+          "width": 483,
+          "height": 680,
+          "ratio": 0.7103
+        }
+      ]
+    },
+    {
+      "system": "Sega - Mega-CD - Sega CD",
+      "median": 0.7074,
+      "samples": [
+        {
+          "file": "Eye of the Beholder (USA).png",
+          "width": 512,
+          "height": 435,
+          "ratio": 1.177
+        },
+        {
+          "file": "Night Trap (Disc2) (USA).png",
+          "width": 512,
+          "height": 751,
+          "ratio": 0.6818
+        },
+        {
+          "file": "Slam City with Scottie Pippen (USA) (32X) (Disc 4).png",
+          "width": 512,
+          "height": 743,
+          "ratio": 0.6891
+        },
+        {
+          "file": "Ecco the Dolphin (Europe) (Rerelease).png",
+          "width": 481,
+          "height": 680,
+          "ratio": 0.7074
+        },
+        {
+          "file": "Night Trap (Europe) (Disc 1) (Mega-CD 32X).png",
+          "width": 481,
+          "height": 680,
+          "ratio": 0.7074
+        },
+        {
+          "file": "Slam City with Scottie Pippen (Europe) (Disc 3) (Mad Dog).png",
+          "width": 481,
+          "height": 680,
+          "ratio": 0.7074
+        },
+        {
+          "file": "Earnest Evans (Japan).png",
+          "width": 512,
+          "height": 496,
+          "ratio": 1.0323
+        },
+        {
+          "file": "Lunar - The Silver Star (Japan).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Seirei Shinseiki - Fhey Area (Japan).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        }
+      ]
+    },
+    {
+      "system": "Sega - Naomi",
+      "median": 0.7121,
+      "samples": [
+        {
+          "file": "Mobile Suit Gundam_ Federation Vs. Zeon DX (USA, Japan) (GDL-0006).png",
+          "width": 512,
+          "height": 718,
+          "ratio": 0.7131
+        },
+        {
+          "file": "Mamoru-kun wa Norowarete Shimatta! (Japan).png",
+          "width": 512,
+          "height": 724,
+          "ratio": 0.7072
+        },
+        {
+          "file": "Crazy Taxi.png",
+          "width": 512,
+          "height": 660,
+          "ratio": 0.7758
+        },
+        {
+          "file": "Shin Nihon Pro Wrestling Toukon Retsuden 4 Arcade Edition (Japan, TRF1 Ver.A).png",
+          "width": 512,
+          "height": 719,
+          "ratio": 0.7121
+        },
+        {
+          "file": "Virtua Tennis 2 ~ Power Smash 2 (Rev A) (GDS-0015A).png",
+          "width": 500,
+          "height": 710,
+          "ratio": 0.7042
+        }
+      ]
+    },
+    {
+      "system": "Sega - Naomi 2",
+      "median": 0.77,
+      "samples": [
+        {
+          "file": "Initial D Arcade Stage (Japan, Rev B) (GDS-0020B).png",
+          "width": 740,
+          "height": 961,
+          "ratio": 0.77
+        },
+        {
+          "file": "Club Kart_ European Session (Rev D).png",
+          "width": 512,
+          "height": 758,
+          "ratio": 0.6755
+        },
+        {
+          "file": "Soul Surfer (Rev A).png",
+          "width": 512,
+          "height": 663,
+          "ratio": 0.7722
+        },
+        {
+          "file": "Virtua Fighter 4 (World).png",
+          "width": 512,
+          "height": 724,
+          "ratio": 0.7072
+        },
+        {
+          "file": "Wild Riders.png",
+          "width": 512,
+          "height": 658,
+          "ratio": 0.7781
+        }
+      ]
+    },
+    {
+      "system": "Sega - PICO",
+      "median": 1.0199,
+      "samples": [
+        {
+          "file": "Mickey's Blast into the Past (USA).png",
+          "width": 512,
+          "height": 650,
+          "ratio": 0.7877
+        },
+        {
+          "file": "Mickey's Blast into the Past (Europe).png",
+          "width": 512,
+          "height": 650,
+          "ratio": 0.7877
+        },
+        {
+          "file": "Mike to Asobou Tobidase Milky Way (Japan) (Mixt Book Player - Copera).png",
+          "width": 512,
+          "height": 502,
+          "ratio": 1.0199
+        },
+        {
+          "file": "Donald no TV Show (Japan) (Rev 2).png",
+          "width": 512,
+          "height": 502,
+          "ratio": 1.0199
+        },
+        {
+          "file": "Kiteretsu Daihyakka - Edo ni Itte Kiteretsusai-sama ni Au Nari (Japan).png",
+          "width": 512,
+          "height": 502,
+          "ratio": 1.0199
+        }
+      ]
+    },
+    {
+      "system": "Sega - SG-1000",
+      "median": 0.7353,
+      "samples": [
+        {
+          "file": "N-Sub (Europe).png",
+          "width": 500,
+          "height": 680,
+          "ratio": 0.7353
+        },
+        {
+          "file": "Hyper Sports (Japan).png",
+          "width": 500,
+          "height": 680,
+          "ratio": 0.7353
+        },
+        {
+          "file": "Champion Boxing (Japan).png",
+          "width": 500,
+          "height": 680,
+          "ratio": 0.7353
+        },
+        {
+          "file": "Flicky (Japan, New Zealand) (Ja).png",
+          "width": 492,
+          "height": 680,
+          "ratio": 0.7235
+        },
+        {
+          "file": "Pitfall II - The Lost Caverns (Japan) (Rev 1).png",
+          "width": 492,
+          "height": 680,
+          "ratio": 0.7235
+        }
+      ]
+    },
+    {
+      "system": "Sega - Saturn",
+      "median": 0.6485,
+      "samples": [
+        {
+          "file": "Darklight Conflict (USA) (En,Fr,De,Es,It,Sv).png",
+          "width": 183,
+          "height": 252,
+          "ratio": 0.7262
+        },
+        {
+          "file": "Minnesota Fats - Pool Legend (USA).png",
+          "width": 512,
+          "height": 838,
+          "ratio": 0.611
+        },
+        {
+          "file": "Shanghai - Triple Threat (USA).png",
+          "width": 512,
+          "height": 863,
+          "ratio": 0.5933
+        },
+        {
+          "file": "Doom (Europe) (R).png",
+          "width": 441,
+          "height": 680,
+          "ratio": 0.6485
+        },
+        {
+          "file": "NASCAR 98 (Europe).png",
+          "width": 441,
+          "height": 680,
+          "ratio": 0.6485
+        },
+        {
+          "file": "Sonic Jam (Europe).png",
+          "width": 441,
+          "height": 680,
+          "ratio": 0.6485
+        },
+        {
+          "file": "G Vector (Japan).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "NBA Jam Extreme (Japan).png",
+          "width": 441,
+          "height": 680,
+          "ratio": 0.6485
+        },
+        {
+          "file": "Shouryuu Sangoku Engi (Japan).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        }
+      ]
+    },
+    {
+      "system": "Sharp - X1",
+      "median": 0.7554,
+      "samples": [
+        {
+          "file": "Brain Breaker (1985)(Enix).png",
+          "width": 256,
+          "height": 320,
+          "ratio": 0.8
+        },
+        {
+          "file": "Mappy (19xx)(Namco).png",
+          "width": 219,
+          "height": 311,
+          "ratio": 0.7042
+        },
+        {
+          "file": "Space Harrier (19xx)(Sega)(Disk 1 of 2).png",
+          "width": 245,
+          "height": 247,
+          "ratio": 0.9919
+        },
+        {
+          "file": "Wingman 2a (19xx)(-)(Disk 1 of 2).png",
+          "width": 273,
+          "height": 384,
+          "ratio": 0.7109
+        }
+      ]
+    },
+    {
+      "system": "Sharp - X68000",
+      "median": 0.7224,
+      "samples": [
+        {
+          "file": "Detana!! TwinBee (1991-12-06) (Konami) (Japan) (Disk 2 of 2).png",
+          "width": 271,
+          "height": 384,
+          "ratio": 0.7057
+        },
+        {
+          "file": "Cyber Core (1991)(SPS).png",
+          "width": 320,
+          "height": 437,
+          "ratio": 0.7323
+        },
+        {
+          "file": "Half Mind (19xx)(Pasoket).png",
+          "width": 320,
+          "height": 318,
+          "ratio": 1.0063
+        },
+        {
+          "file": "Nostalgia 1907 (Sur De' Wave) (Disk 1 of 4) (System) (Alt 2).png",
+          "width": 203,
+          "height": 281,
+          "ratio": 0.7224
+        },
+        {
+          "file": "Thunder Blade (Sharp - SPS) (Disk 2 of 3) (Disk B) (Alt 1).png",
+          "width": 271,
+          "height": 384,
+          "ratio": 0.7057
+        }
+      ]
+    },
+    {
+      "system": "Sinclair - ZX 81",
+      "median": 0.6379,
+      "samples": [
+        {
+          "file": "Cassette 4 (M. Orwin).png",
+          "width": 250,
+          "height": 388,
+          "ratio": 0.6443
+        },
+        {
+          "file": "Invaders (Forward Software).png",
+          "width": 245,
+          "height": 388,
+          "ratio": 0.6314
+        },
+        {
+          "file": "Salvo (Orbyte Software).png",
+          "width": 244,
+          "height": 388,
+          "ratio": 0.6289
+        },
+        {
+          "file": "World Cup Football (Test your knowledge of) (M. A. Smith).png",
+          "width": 254,
+          "height": 388,
+          "ratio": 0.6546
+        }
+      ]
+    },
+    {
+      "system": "Sinclair - ZX Spectrum",
+      "median": 0.8356,
+      "samples": [
+        {
+          "file": "Mickey Mouse (Europe).png",
+          "width": 512,
+          "height": 644,
+          "ratio": 0.795
+        },
+        {
+          "file": "Choy-Lee-Fut Kung-Fu Warrior (Positive).png",
+          "width": 427,
+          "height": 511,
+          "ratio": 0.8356
+        },
+        {
+          "file": "Hunt for Red October, The - Based on the Book (Grandslam Entertainments Ltd).png",
+          "width": 511,
+          "height": 355,
+          "ratio": 1.4394
+        },
+        {
+          "file": "Pool (Abrasco).png",
+          "width": 511,
+          "height": 333,
+          "ratio": 1.5345
+        },
+        {
+          "file": "Time Machine, The (Digital Fantasia).png",
+          "width": 186,
+          "height": 299,
+          "ratio": 0.6221
+        }
+      ]
+    },
+    {
+      "system": "Sony - PlayStation",
+      "median": 1.0,
+      "samples": [
+        {
+          "file": "Mary-Kate and Ashley - Winners Circle (USA).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "MTV Sports - Pure Ride (Europe) (En,Fr,De).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Metal Gear Solid (Japan) (Disc 1) (Ichi).png",
+          "width": 512,
+          "height": 441,
+          "ratio": 1.161
+        },
+        {
+          "file": "Cool Boarders 3 (Europe).png",
+          "width": 512,
+          "height": 520,
+          "ratio": 0.9846
+        },
+        {
+          "file": "Interplay Sports Baseball 2000 (Europe).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        }
+      ]
+    },
+    {
+      "system": "Sony - PlayStation 2",
+      "median": 0.7147,
+      "samples": [
+        {
+          "file": "Marvel - Ultimate Alliance (USA).png",
+          "width": 512,
+          "height": 726,
+          "ratio": 0.7052
+        },
+        {
+          "file": "MX vs. ATV Unleashed (Europe, Australia).png",
+          "width": 512,
+          "height": 712,
+          "ratio": 0.7191
+        },
+        {
+          "file": "Like Life an Hour (Japan).png",
+          "width": 486,
+          "height": 680,
+          "ratio": 0.7147
+        },
+        {
+          "file": "Curse - The Eye of Isis (Europe) (En,Fr,De,Es,It,Pt).png",
+          "width": 486,
+          "height": 680,
+          "ratio": 0.7147
+        },
+        {
+          "file": "I-O (Japan).png",
+          "width": 486,
+          "height": 680,
+          "ratio": 0.7147
+        }
+      ]
+    },
+    {
+      "system": "Sony - PlayStation 3",
+      "median": 0.862,
+      "samples": [
+        {
+          "file": "Lightning Returns - Final Fantasy XIII (USA).png",
+          "width": 512,
+          "height": 591,
+          "ratio": 0.8663
+        },
+        {
+          "file": "Remember Me (Europe).png",
+          "width": 512,
+          "height": 596,
+          "ratio": 0.8591
+        },
+        {
+          "file": "Lightning Returns - Final Fantasy XIII (Japan).png",
+          "width": 512,
+          "height": 594,
+          "ratio": 0.862
+        },
+        {
+          "file": "Dark Souls II (Japan).png",
+          "width": 512,
+          "height": 604,
+          "ratio": 0.8477
+        },
+        {
+          "file": "Heavy Rain (Europe).png",
+          "width": 512,
+          "height": 589,
+          "ratio": 0.8693
+        }
+      ]
+    },
+    {
+      "system": "Sony - PlayStation 3 (Downloadable)",
+      "median": 0.8025,
+      "samples": [
+        {
+          "file": "Far Cry 3 (World) (PSN).png",
+          "width": 512,
+          "height": 638,
+          "ratio": 0.8025
+        }
+      ]
+    },
+    {
+      "system": "Sony - PlayStation 4",
+      "median": 0.7988,
+      "samples": [
+        {
+          "file": "Persona 5 (USA).png",
+          "width": 512,
+          "height": 630,
+          "ratio": 0.8127
+        },
+        {
+          "file": "Final Fantasy XIV Online - A Realm Reborn (Europe).png",
+          "width": 512,
+          "height": 622,
+          "ratio": 0.8232
+        },
+        {
+          "file": "NieR Automata (Japan).png",
+          "width": 512,
+          "height": 641,
+          "ratio": 0.7988
+        },
+        {
+          "file": "Dead or Alive Xtreme 3 - Fortune (Japan).png",
+          "width": 512,
+          "height": 642,
+          "ratio": 0.7975
+        },
+        {
+          "file": "Final Fantasy XV (Japan).png",
+          "width": 512,
+          "height": 641,
+          "ratio": 0.7988
+        }
+      ]
+    },
+    {
+      "system": "Sony - PlayStation Portable",
+      "median": 0.5792,
+      "samples": [
+        {
+          "file": "Mega Man - Maverick Hunter X (USA) (v1.01).png",
+          "width": 512,
+          "height": 884,
+          "ratio": 0.5792
+        },
+        {
+          "file": "MediEvil - Resurrection (Europe) (En,Fr,De,Es,It).png",
+          "width": 512,
+          "height": 883,
+          "ratio": 0.5798
+        },
+        {
+          "file": "Megami no Etsubo (Japan) (v1.01).png",
+          "width": 289,
+          "height": 500,
+          "ratio": 0.578
+        },
+        {
+          "file": "Crisis Core - Final Fantasy VII (Japan) (v1.01) (10th Anniversary Limited Edition).png",
+          "width": 290,
+          "height": 498,
+          "ratio": 0.5823
+        },
+        {
+          "file": "Kazoku Keikaku (Japan) (v1.01).png",
+          "width": 289,
+          "height": 500,
+          "ratio": 0.578
+        }
+      ]
+    },
+    {
+      "system": "Sony - PlayStation Vita",
+      "median": 0.7865,
+      "samples": [
+        {
+          "file": "Persona 4 Golden (USA).png",
+          "width": 512,
+          "height": 650,
+          "ratio": 0.7877
+        },
+        {
+          "file": "Child of Light (Europe) (En,Fr,De,Es,It,Ru).png",
+          "width": 512,
+          "height": 656,
+          "ratio": 0.7805
+        },
+        {
+          "file": "Zettai Zetsubou Shoujo - Dangan-Ronpa - Another Episode (Japan).png",
+          "width": 512,
+          "height": 651,
+          "ratio": 0.7865
+        },
+        {
+          "file": "Dead or Alive 5 Plus (USA).png",
+          "width": 512,
+          "height": 650,
+          "ratio": 0.7877
+        },
+        {
+          "file": "Ninja Gaiden Sigma (USA).png",
+          "width": 512,
+          "height": 653,
+          "ratio": 0.7841
+        }
+      ]
+    },
+    {
+      "system": "Spectravideo - SVI-318 - SVI-328",
+      "median": 0.7308,
+      "samples": [
+        {
+          "file": "Frantic Freddy (1983)(Spectravideo)[BLOAD'CAS-',R].png",
+          "width": 497,
+          "height": 680,
+          "ratio": 0.7309
+        },
+        {
+          "file": "New York Bomb Blitz (1984)(Spectravideo)[CLOAD + RUN].png",
+          "width": 320,
+          "height": 488,
+          "ratio": 0.6557
+        },
+        {
+          "file": "Sasa (1984)(Spectravideo)[BLOAD'CAS-',R].png",
+          "width": 320,
+          "height": 438,
+          "ratio": 0.7306
+        },
+        {
+          "file": "Turboat (1984)(Spectravideo)[BLOAD'CAS-',R].png",
+          "width": 497,
+          "height": 680,
+          "ratio": 0.7309
+        }
+      ]
+    },
+    {
+      "system": "TIC-80",
+      "median": 1.7647,
+      "samples": [
+        {
+          "file": "Chiptune Made by Rushjet1.png",
+          "width": 240,
+          "height": 136,
+          "ratio": 1.7647
+        },
+        {
+          "file": "Its a Final Countdown!.png",
+          "width": 240,
+          "height": 136,
+          "ratio": 1.7647
+        },
+        {
+          "file": "Print Demo Moon.png",
+          "width": 240,
+          "height": 136,
+          "ratio": 1.7647
+        },
+        {
+          "file": "Ticlines.png",
+          "width": 240,
+          "height": 136,
+          "ratio": 1.7647
+        }
+      ]
+    },
+    {
+      "system": "The 3DO Company - 3DO",
+      "median": 0.9808,
+      "samples": [
+        {
+          "file": "Night Trap (USA) (Disc 2).png",
+          "width": 512,
+          "height": 512,
+          "ratio": 1.0
+        },
+        {
+          "file": "Real Pinball (Europe).png",
+          "width": 512,
+          "height": 988,
+          "ratio": 0.5182
+        },
+        {
+          "file": "NFL Madden Football (Japan).png",
+          "width": 482,
+          "height": 680,
+          "ratio": 0.7088
+        },
+        {
+          "file": "D's Diner - The Director's Cut (Japan) (Disc C).png",
+          "width": 512,
+          "height": 522,
+          "ratio": 0.9808
+        },
+        {
+          "file": "Jurassic Park Interactive (Japan).png",
+          "width": 380,
+          "height": 384,
+          "ratio": 0.9896
+        }
+      ]
+    },
+    {
+      "system": "Thomson - MOTO",
+      "median": 0.7123,
+      "samples": [
+        {
+          "file": "Blue War - Le Bateau (1986)(Free Game Blot)(FR).png",
+          "width": 456,
+          "height": 640,
+          "ratio": 0.7125
+        },
+        {
+          "file": "Grand Prix 500cc.png",
+          "width": 512,
+          "height": 719,
+          "ratio": 0.7121
+        },
+        {
+          "file": "Numéro 10.png",
+          "width": 512,
+          "height": 800,
+          "ratio": 0.64
+        },
+        {
+          "file": "Thesaurus (198x)(Minipuce)(FR).png",
+          "width": 456,
+          "height": 640,
+          "ratio": 0.7125
+        }
+      ]
+    },
+    {
+      "system": "Tiger - Game.com",
+      "median": 0.7,
+      "samples": [
+        {
+          "file": "Monopoly (USA).png",
+          "width": 560,
+          "height": 800,
+          "ratio": 0.7
+        },
+        {
+          "file": "Fighters Megamix (USA).png",
+          "width": 560,
+          "height": 800,
+          "ratio": 0.7
+        },
+        {
+          "file": "Jeopardy! (USA).png",
+          "width": 560,
+          "height": 800,
+          "ratio": 0.7
+        },
+        {
+          "file": "Resident Evil 2 (USA).png",
+          "width": 560,
+          "height": 800,
+          "ratio": 0.7
+        },
+        {
+          "file": "Wheel of Fortune (USA).png",
+          "width": 560,
+          "height": 800,
+          "ratio": 0.7
+        }
+      ]
+    },
+    {
+      "system": "Tomb Raider",
+      "median": 1.0099,
+      "samples": [
+        {
+          "file": "Tomb Raider 1 (Saturn) (USA).png",
+          "width": 511,
+          "height": 853,
+          "ratio": 0.5991
+        },
+        {
+          "file": "Tomb Raider 1 (PSX) (Japan).png",
+          "width": 498,
+          "height": 490,
+          "ratio": 1.0163
+        },
+        {
+          "file": "Tomb Raider 2 (PC).png",
+          "width": 512,
+          "height": 507,
+          "ratio": 1.0099
+        },
+        {
+          "file": "Tomb Raider 2 - The Golden Mask (PC).png",
+          "width": 500,
+          "height": 487,
+          "ratio": 1.0267
+        },
+        {
+          "file": "Tomb Raider 3 - The Lost Artifact (PC).png",
+          "width": 491,
+          "height": 593,
+          "ratio": 0.828
+        }
+      ]
+    },
+    {
+      "system": "VTech - CreatiVision",
+      "median": 0.7206,
+      "samples": [
+        {
+          "file": "Music Maker (Europe, Asia) (En).png",
+          "width": 490,
+          "height": 680,
+          "ratio": 0.7206
+        },
+        {
+          "file": "Auto Chase (Europe, Asia) (En).png",
+          "width": 490,
+          "height": 680,
+          "ratio": 0.7206
+        },
+        {
+          "file": "Hapmon (Asia, Europe).png",
+          "width": 256,
+          "height": 375,
+          "ratio": 0.6827
+        },
+        {
+          "file": "Planet Defender (Europe, Asia) (En).png",
+          "width": 490,
+          "height": 680,
+          "ratio": 0.7206
+        },
+        {
+          "file": "Tennis (Asia, Europe) (DSE).png",
+          "width": 512,
+          "height": 684,
+          "ratio": 0.7485
+        }
+      ]
+    },
+    {
+      "system": "VTech - V.Smile",
+      "median": 0.7353,
+      "samples": [
+        {
+          "file": "Handy Manny (USA).png",
+          "width": 500,
+          "height": 680,
+          "ratio": 0.7353
+        },
+        {
+          "file": "Noddy - Detective for a Day (Europe) (En-GB).png",
+          "width": 500,
+          "height": 680,
+          "ratio": 0.7353
+        },
+        {
+          "file": "Bob der Baumeister - Bobs spannender Arbeitstag (Germany).png",
+          "width": 500,
+          "height": 680,
+          "ratio": 0.7353
+        },
+        {
+          "file": "Dora's Fix It Adventure.png",
+          "width": 374,
+          "height": 500,
+          "ratio": 0.748
+        },
+        {
+          "file": "Spongebob Schwammkopf - Der Tag des Schwamms (Germany) (Rev 1).png",
+          "width": 500,
+          "height": 680,
+          "ratio": 0.7353
+        }
+      ]
+    },
+    {
+      "system": "Vircon32",
+      "median": 1.4423,
+      "samples": [
+        {
+          "file": "Chip-8 Emulator.png",
+          "width": 512,
+          "height": 355,
+          "ratio": 1.4423
+        },
+        {
+          "file": "JellyFish.png",
+          "width": 512,
+          "height": 355,
+          "ratio": 1.4423
+        },
+        {
+          "file": "RetroTime.png",
+          "width": 512,
+          "height": 355,
+          "ratio": 1.4423
+        },
+        {
+          "file": "Vircoban.png",
+          "width": 512,
+          "height": 355,
+          "ratio": 1.4423
+        }
+      ]
+    },
+    {
+      "system": "WASM-4",
+      "median": null,
+      "samples": []
+    },
+    {
+      "system": "Watara - Supervision",
+      "median": 0.7642,
+      "samples": [
+        {
+          "file": "Jaguar Bomber (USA, Europe).png",
+          "width": 350,
+          "height": 458,
+          "ratio": 0.7642
+        },
+        {
+          "file": "Challenger Tank (USA, Europe).png",
+          "width": 350,
+          "height": 458,
+          "ratio": 0.7642
+        },
+        {
+          "file": "Happy Pairs (USA, Europe).png",
+          "width": 350,
+          "height": 458,
+          "ratio": 0.7642
+        },
+        {
+          "file": "Matta Blatta (USA, Europe).png",
+          "width": 350,
+          "height": 458,
+          "ratio": 0.7642
+        },
+        {
+          "file": "Super Pang (USA, Europe).png",
+          "width": 142,
+          "height": 142,
+          "ratio": 1.0
+        }
+      ]
+    },
+    {
+      "system": "Wolfenstein 3D",
+      "median": 0.8519,
+      "samples": [
+        {
+          "file": "Spear of Destiny Mission 1 - Spear of Destiny.png",
+          "width": 512,
+          "height": 614,
+          "ratio": 0.8339
+        },
+        {
+          "file": "Super 3D Noah's Ark.png",
+          "width": 512,
+          "height": 509,
+          "ratio": 1.0059
+        },
+        {
+          "file": "Wolfenstein 3D v1.2 (Shareware).png",
+          "width": 512,
+          "height": 601,
+          "ratio": 0.8519
+        },
+        {
+          "file": "Wolfenstein 3D v1.4.png",
+          "width": 512,
+          "height": 601,
+          "ratio": 0.8519
+        }
+      ]
+    }
+  ]
+}

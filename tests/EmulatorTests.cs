@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -18,7 +18,7 @@ class EmulatorTests {
         string root=Path.Combine(Path.GetTempPath(),"EmulatorTests-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try {
             var settings=new Settings();
-            Check(settings.Emulators==null && EmulatorLibrary.Presets.Length==14,"Existing settings need no migration and all fourteen emulators are available");
+            Check(settings.Emulators==null && EmulatorLibrary.Presets.Length==15,"Existing settings need no migration and all fifteen emulators are available");
             Check(!settings.RemoveMissingEmulatorGames,"Missing-ROM cleanup is disabled by default");
             string missingProbe=FileAt(root,"missing-check\\game.iso");
             Check(!EmulatorLibrary.ConfirmMissingRom(missingProbe),"Existing ROM is preserved");
@@ -35,6 +35,7 @@ class EmulatorTests {
             paths["pcsx2"]=FileAt(root,"PS2\\Game B.iso");
             paths["dolphin"]=FileAt(root,"Wii\\Game C.rvz");
             paths["eden"]=FileAt(root,"Switch\\Game D.xci");
+            paths["xemu"]=FileAt(root,"Xbox/Halo.iso");
             paths["xenia"]=FileAt(root,"360\\Game E\\default.xex");
             paths["melonds"]=FileAt(root,"DS\\Game F.nds");
             paths["rpcs3"]=FileAt(root,"PS3\\Game G\\PS3_GAME\\USRDIR\\EBOOT.BIN");
@@ -59,6 +60,14 @@ class EmulatorTests {
             }
             var library=new Library(); EmulatorLibrary.Apply(library,settings); EmulatorLibrary.Apply(library,settings);
             Check(library.Games.Count==paths.Count && library.Collections.Count==paths.Count,"Repeated apply does not duplicate games or source lists");
+            foreach(var preset in EmulatorLibrary.Presets) {
+                var checkedGame=library.Games.Single(entry => entry.EmulatorId==preset.Id);
+                var checkedConfig=EmulatorLibrary.Config(settings,preset.Id); string previousPath=checkedConfig.Path;
+                checkedConfig.Path=Path.Combine(root,"moved-installation",preset.Id+".exe");
+                Check(EmulatorLibrary.MissingReason(checkedGame,settings)==preset.Name+" executable missing or invalid","Moved "+preset.Name+" reports the emulator problem rather than blaming its ROM");
+                checkedConfig.Path=previousPath;
+                Check(EmulatorLibrary.MissingReason(checkedGame,settings)==null,"Restoring "+preset.Name+" clears the diagnostic");
+            }
             var cemu=library.Games.Single(g => g.EmulatorId=="cemu");
             var shad=library.Games.Single(g => g.EmulatorId=="shadps4");
             Check(cemu.Name=="Game L" && GameLaunch.StartInfo(cemu,settings).Arguments=="-f -g \""+paths["cemu"]+"\"","Cemu names extracted games and launches their RPX");
@@ -88,6 +97,10 @@ class EmulatorTests {
             Check(GameLaunch.StartInfo(library.Games.First(g => g.EmulatorId=="ppsspp"),settings).Arguments.StartsWith("--fullscreen --pause-menu-exit "),"PPSSPP fullscreen and frontend exit options");
             Check(GameLaunch.StartInfo(library.Games.First(g => g.EmulatorId=="mgba"),settings).Arguments.StartsWith("-f "),"mGBA fullscreen option");
             File.Delete(otherCore); Check(EmulatorLibrary.Missing(retro,settings),"Missing assigned core identified");
+            Check(EmulatorLibrary.MissingReason(retro,settings)=="RetroArch core missing or invalid","A moved or removed core is distinguished from a missing ROM");
+            var raConfig=EmulatorLibrary.Config(settings,"retroarch"); string oldRaPath=raConfig.Path; raConfig.Path=Path.Combine(root,"old RetroArch installation","retroarch.exe");
+            Check(EmulatorLibrary.MissingReason(retro,settings)=="RetroArch executable missing or invalid","A moved emulator is identified before checking its core or ROM"); raConfig.Path=oldRaPath;
+            Check(EmulatorLibrary.MissingReason(new Game {Id="unassigned",Source="emulator",EmulatorId="retroarch",LaunchId=retro.LaunchId},noCore)=="RetroArch core not selected","An unassigned core has its own diagnostic");
             Reject(() => GameLaunch.StartInfo(retro,settings),"Missing core prevents launch"); File.WriteAllText(otherCore,"");
             var restored=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
             foreach(var game in library.Games) {
@@ -154,6 +167,7 @@ class EmulatorTests {
             string combined=CombinedCollections.Save(settings,library,null,"Emulated together",new[]{list,"source:emulator:pcsx2"});
             Check(CombinedCollections.Options(library,settings).Single(c => c.Id==combined).Games.Count==2,"Emulated titles work in custom and combined lists");
             File.Delete(ps1.LaunchId); Check(EmulatorLibrary.Missing(ps1,settings),"Missing ROM identified");
+            Check(EmulatorLibrary.MissingReason(ps1,settings)=="Game file missing","A missing ROM keeps the game-file diagnostic when the emulator exists");
             Reject(() => GameLaunch.StartInfo(ps1,settings),"Missing ROM launch rejected");
             string replacementRom=FileAt(root,@"RepairedGame.chd");
             GameLaunch.RepairPath(settings,ps1,replacementRom);

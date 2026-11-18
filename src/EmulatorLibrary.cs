@@ -13,6 +13,8 @@ namespace PadLauncher {
         public string Id {get;set;}
         public string Name {get;set;}
         public string CorePath {get;set;}
+        public string ArtworkSystem {get;set;}
+        public string ArtworkTitle {get;set;}
         public string Path {get;set;}
     }
     public class EmulatorScan {
@@ -52,6 +54,7 @@ namespace PadLauncher {
         }
         public static readonly EmulatorPreset[] Presets={
             new EmulatorPreset {Id="duckstation",Name="DuckStation",System="PlayStation",Extensions=".cue;.chd;.iso;.bin;.img;.pbp;.m3u;.ccd;.mds",Hint="For multi-track discs, choose the CUE file; for multi-disc games, choose an M3U playlist."},
+            new EmulatorPreset {Id="xemu",Name="xemu",System="Xbox",Extensions=".iso;.xiso",Hint="Choose an Xbox XISO disc image. Configure the required system files in xemu first."},
             new EmulatorPreset {Id="xenia",Name="Xenia",System="Xbox 360",Extensions=".iso;.xex;.zar;.live;.con;.pirs;",Hint="Choose an ISO, extracted game's default.xex, or an extensionless Xbox 360 content file. Xenia Canary executables are supported."},
             new EmulatorPreset {Id="rpcs3",Name="RPCS3",System="PlayStation 3",Extensions=".bin;.elf;.self;.iso",Hint="Choose a game folder or PS3_GAME/USRDIR/EBOOT.BIN. Install PKG games in RPCS3 first, then select their installed game folder."},
             new EmulatorPreset {Id="pcsx2",Name="PCSX2",System="PlayStation 2",Extensions=".iso;.chd;.cso;.bin;.gz;.elf",Hint="Choose a PS2 disc image or ELF file."},
@@ -91,6 +94,11 @@ namespace PadLauncher {
                 config.Path=normalized;
                 config.ImportPath=location;
             }
+            if(id=="retroarch" && normalized!=null) {
+                var resolver=new RetroArchCoreResolver(normalized);
+                config.CorePath=resolver.Relocate(config.CorePath) ?? config.CorePath;
+                foreach(var game in config.Games ?? new List<EmulatorGame>()) game.CorePath=resolver.Relocate(game.CorePath) ?? game.CorePath;
+            }
         }
         public static string Core(string path) {
             if(String.IsNullOrWhiteSpace(path)) throw new ArgumentException("Choose a RetroArch core before adding or launching games.");
@@ -103,7 +111,7 @@ namespace PadLauncher {
             return Core(game==null ? config.CorePath : game.CorePath ?? config.CorePath);
         }
         public static List<string> Cores(string executable) {
-            try {string folder=System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Executable(executable)),"cores"); return Directory.Exists(folder) ? Directory.GetFiles(folder,"*_libretro.dll").OrderBy(p => p,StringComparer.CurrentCultureIgnoreCase).ToList() : new List<string>();} catch {return new List<string>();}
+            try {return new RetroArchCoreResolver(executable).Paths.OrderBy(p => p,StringComparer.CurrentCultureIgnoreCase).ToList();} catch {return new List<string>();}
         }
         static HashSet<string> ScanExtensions(string id,string corePath) {
             var all=new HashSet<string>(Preset(id).Extensions.Split(';'),StringComparer.OrdinalIgnoreCase);
@@ -121,9 +129,28 @@ namespace PadLauncher {
                 }
             } catch {} return all;
         }
+        internal static bool SplitRetroArchArchive(string path,out string archive,out string member) {
+            archive=null; member=null; if(String.IsNullOrWhiteSpace(path)) return false;
+            string value=path.Trim().Trim('"');
+            int split=-1;
+            foreach(string extension in new[]{".zip#",".7z#"}) {
+                int found=value.IndexOf(extension,StringComparison.OrdinalIgnoreCase);
+                if(found>=0 && (split<0 || found+extension.Length-1<split)) split=found+extension.Length-1;
+            }
+            if(split<0) return false;
+            archive=value.Substring(0,split); member=value.Substring(split+1).Replace('\\','/'); return true;
+        }
         public static string GamePath(string id,string path) {
             var preset=Preset(id);
             if(String.IsNullOrWhiteSpace(path)) throw new ArgumentException("Choose a game file.");
+            string archive,member;
+            if(id=="retroarch" && SplitRetroArchArchive(path,out archive,out member)) {
+                archive=System.IO.Path.GetFullPath(Environment.ExpandEnvironmentVariables(archive));
+                if(!File.Exists(archive)) throw new FileNotFoundException("The game archive could not be found.",archive);
+                if(String.IsNullOrWhiteSpace(member) || member.StartsWith("/") || member.Contains(":") || member.Contains("\"") || member.Any(Char.IsControl) || member.Split('/').Any(part => part=="..")) throw new ArgumentException("The ROM path inside the archive is invalid.");
+                if(!preset.Extensions.Split(';').Contains(System.IO.Path.GetExtension(member).ToLowerInvariant())) throw new ArgumentException("The archive entry is not a supported RetroArch game file.");
+                return archive+"#"+member;
+            }
             path=System.IO.Path.GetFullPath(Environment.ExpandEnvironmentVariables(path.Trim().Trim('"')));
             if(id=="vita3k") {
                 if(File.Exists(path) && System.IO.Path.GetFileName(path).Equals("eboot.bin",StringComparison.OrdinalIgnoreCase)) path=System.IO.Path.GetDirectoryName(path);
@@ -231,6 +258,8 @@ namespace PadLauncher {
         public static bool ConfirmMissingRom(string path) {
             try {
                 if(String.IsNullOrWhiteSpace(path)) return false;
+                string archive,member;
+                if(!File.Exists(path) && SplitRetroArchArchive(path,out archive,out member)) path=archive;
                 path=Path.GetFullPath(path);
                 // Most games still exist. Avoid enumerating their parent folders on
                 // every refresh; the slower check below handles missing paths safely.
@@ -320,14 +349,31 @@ namespace PadLauncher {
                 var config=Config(settings,preset.Id); if(config==null) continue;
                 foreach(var entry in config.Games ?? new List<EmulatorGame>()) {
                     if(entry==null || String.IsNullOrEmpty(entry.Id) || !existingIds.Add(entry.Id)) continue;
-                    library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="emulator",EmulatorId=preset.Id,LaunchId=entry.Path,Arguments=entry.Arguments});
+                    library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="emulator",EmulatorId=preset.Id,LaunchId=entry.Path,Arguments=entry.Arguments,ArtworkSystem=entry.ArtworkSystem,ArtworkTitle=entry.ArtworkTitle});
                 }
                 library.Collections.Add(new Collection {Id="source:emulator:"+preset.Id,Source="emulator",Name=String.IsNullOrWhiteSpace(config.ListName) ? preset.Name : config.ListName,Games=library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==preset.Id).Select(g => g.Id).ToList()});
             }
         }
         public static bool Missing(Game game,Settings settings) {
-            if(game.Source!="emulator") return false;
-            try {GamePath(game.EmulatorId,game.LaunchId); var config=Config(settings,game.EmulatorId); Executable(config==null ? null : config.Path); if(game.EmulatorId=="retroarch") GameCore(config,game.Id); return false;} catch {return true;}
+            return MissingReason(game,settings)!=null;
+        }
+        public static string MissingReason(Game game,Settings settings) {
+            if(game.Source!="emulator") return null;
+            var preset=Presets.FirstOrDefault(item => item.Id==game.EmulatorId); string name=preset==null ? "Emulator" : preset.Name;
+            var config=Config(settings,game.EmulatorId);
+            if(config==null || String.IsNullOrWhiteSpace(config.Path)) return name+" not configured";
+            try {Executable(config.Path);} catch {return name+" executable missing or invalid";}
+            try {GamePath(game.EmulatorId,game.LaunchId);}
+            catch(FileNotFoundException) {return "Game file missing";}
+            catch(DirectoryNotFoundException) {return "Game folder missing";}
+            catch {return "Game file missing or unsupported";}
+            if(game.EmulatorId=="retroarch") {
+                var saved=(config.Games ?? new List<EmulatorGame>()).FirstOrDefault(item => item.Id==game.Id);
+                string core=saved==null ? config.CorePath : saved.CorePath ?? config.CorePath;
+                if(String.IsNullOrWhiteSpace(core)) return "RetroArch core not selected";
+                try {GameCore(config,game.Id);} catch {return "RetroArch core missing or invalid";}
+            }
+            return null;
         }
         public static string SfoTitle(string path) {return SfoValue(path,"TITLE");}
         public static string SfoValue(string path,string field) {
@@ -490,6 +536,7 @@ namespace PadLauncher {
             switch(id) {
                 case "duckstation": case "pcsx2": return "-batch -fullscreen -- {game}";
                 case "rpcs3": return "--no-gui --fullscreen {game}";
+                case "xemu": return "-full-screen -dvd_path {game}";
                 case "dolphin": return "-b -e {game}";
                 case "eden": case "cemu": return "-f -g {game}";
                 case "azahar": case "melonds": case "mgba": return "-f {game}";
@@ -499,11 +546,17 @@ namespace PadLauncher {
                 default: return "{game}";
             }
         }
+        public static bool IsShadQtLauncher(string executable) {
+            try {return String.Equals(System.IO.Path.GetFileName((executable ?? "").Trim().Trim('"')),"shadPS4QtLauncher.exe",StringComparison.OrdinalIgnoreCase);} catch(ArgumentException) {return false;}
+        }
+        public static string DefaultArguments(string id,string executable) {
+            return id=="shadps4" && IsShadQtLauncher(executable) ? "-d -g {game}" : DefaultArguments(id);
+        }
         public static ProcessStartInfo StartInfo(Game game,Settings settings) {
             if(settings==null) throw new InvalidOperationException("Emulator settings are unavailable.");
             var config=Config(settings,game.EmulatorId);
             string executable=Executable(config==null ? null : config.Path),path=GamePath(game.EmulatorId,game.LaunchId),quoted="\""+path+"\"",arguments;
-            arguments=config!=null && config.Arguments!=null ? config.Arguments : DefaultArguments(game.EmulatorId);
+            arguments=config!=null && config.Arguments!=null ? config.Arguments : DefaultArguments(game.EmulatorId,executable);
             arguments=arguments.Replace("{game}",quoted).Replace("{core}",game.EmulatorId=="retroarch" ? "\""+GameCore(config,game.Id)+"\"" : "").Replace("{title}","\""+new DirectoryInfo(path).Name+"\"");
             if(!String.IsNullOrWhiteSpace(game.Arguments)) arguments=game.Arguments.Contains("{game}") ? game.Arguments.Replace("{game}",quoted).Replace("{core}",game.EmulatorId=="retroarch" ? "\""+GameCore(config,game.Id)+"\"" : "") : arguments+" "+game.Arguments;
             return new ProcessStartInfo(executable,arguments) {UseShellExecute=true,WorkingDirectory=System.IO.Path.GetDirectoryName(executable)};

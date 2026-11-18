@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -25,7 +25,7 @@ class UpdateSessionTests {
             Check(!(bool)canInstall.Invoke(original,null),"Settings blocks automatic installation");
             original.HelpWindow.Hide();
             Check(!(bool)canInstall.Invoke(original,null),"A hidden Settings window still protects unsaved work"); original.HelpWindow.Show();
-            var tabs=Find<TabControl>(original.HelpWindow,"HelpSettingsTabs"); tabs.SelectedIndex=4;
+            var tabs=Find<TabControl>(original.HelpWindow,"HelpSettingsTabs"); tabs.SelectedIndex=3;
             Find<TabControl>(original.HelpWindow,"CustomGamesTabs").SelectedIndex=0;
             Find<TextBox>(original.HelpWindow,"CustomGameName").Text="Unsaved game draft";
             var secret=Controls(original.HelpWindow).Select(pair => pair.Value).OfType<PasswordBox>().First(); secret.Password="unsaved-secret-api-key";
@@ -44,13 +44,13 @@ class UpdateSessionTests {
             var oldScroll=(ScrollViewer)((TabItem)tabs.SelectedItem).Content; oldScroll.ScrollToVerticalOffset(120); original.HelpWindow.UpdateLayout();
             string resume=(string)typeof(Launcher).GetMethod("SaveUpdateSession",flags).Invoke(original,new object[]{root});
             var saved=UpdateSession.Read(resume);
-            Check(saved.SettingsOpen && saved.SettingsTab==4 && saved.CustomTab==0,"Update captures Settings and selected nested tab");
+            Check(saved.SettingsOpen && saved.SettingsTab==3 && saved.CustomTab==0,"Update captures Settings and selected nested tab");
             Check(saved.Form.Any(value => value.Value=="Unsaved game draft") && saved.Form.Any(value => value.Value=="unsaved-secret-api-key"),"Session includes unsaved form values");
             Check(!Encoding.UTF8.GetString(File.ReadAllBytes(resume)).Contains("unsaved-secret-api-key"),"Session drafts and passwords are encrypted for the Windows user");
             Check((Storage.Read<Settings>("settings.json").CustomGames ?? new List<CustomGame>()).Count==0,"Capturing a draft does not register an unsaved game");
             original.HelpWindow.Close(); original.ExitApp(); original=null;
             resumed=new Launcher(true,true); resumed.ResumeAfterUpdate(resume);
-            Check(resumed.HelpWindow!=null && Find<TabControl>(resumed.HelpWindow,"HelpSettingsTabs").SelectedIndex==4 && Find<TabControl>(resumed.HelpWindow,"CustomGamesTabs").SelectedIndex==0,"Restart reopens Settings on its previous tabs");
+            Check(resumed.HelpWindow!=null && Find<TabControl>(resumed.HelpWindow,"HelpSettingsTabs").SelectedIndex==3 && Find<TabControl>(resumed.HelpWindow,"CustomGamesTabs").SelectedIndex==0,"Restart reopens Settings on its previous tabs");
             Check(Find<TextBox>(resumed.HelpWindow,"CustomGameName").Text=="Unsaved game draft","Restart restores an unsaved custom game name");
             Check(Controls(resumed.HelpWindow).Select(pair => pair.Value).OfType<PasswordBox>().First().Password=="unsaved-secret-api-key","Restart restores an unsaved API key without saving it as plaintext");
             Check(Find<Expander>(resumed.HelpWindow,"HiddenGamesSection").IsExpanded,"Restart restores expanded sections");

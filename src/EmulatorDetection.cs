@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -34,11 +34,11 @@ namespace PadLauncher {
         public static readonly Dictionary<string,string[]> Executables=new Dictionary<string,string[]> {
             {"duckstation",new[]{"duckstation-qt-x64-ReleaseLTCG.exe","duckstation-qt-x64-Release.exe","duckstation-qt-x64.exe","duckstation.exe"}},
             {"pcsx2",new[]{"pcsx2-qt.exe","pcsx2.exe"}}, {"rpcs3",new[]{"rpcs3.exe"}},
-            {"xenia",new[]{"xenia_canary.exe","xenia.exe"}}, {"dolphin",new[]{"Dolphin.exe"}},
+            {"xemu",new[]{"xemu.exe"}}, {"xenia",new[]{"xenia_canary.exe","xenia.exe"}}, {"dolphin",new[]{"Dolphin.exe"}},
             {"eden",new[]{"eden.exe","eden-qt.exe"}}, {"azahar",new[]{"azahar.exe","azahar-qt.exe"}},
             {"melonds",new[]{"melonDS.exe"}}, {"vita3k",new[]{"Vita3K.exe"}},
             {"retroarch",new[]{"retroarch.exe"}}, {"ppsspp",new[]{"PPSSPPWindows64.exe","PPSSPPWindows.exe","PPSSPP.exe"}},
-            {"mgba",new[]{"mGBA.exe","mgba-qt.exe"}}, {"cemu",new[]{"Cemu.exe"}}, {"shadps4",new[]{"shadPS4.exe"}}
+            {"mgba",new[]{"mGBA.exe","mgba-qt.exe"}}, {"cemu",new[]{"Cemu.exe"}}, {"shadps4",new[]{"shadPS4.exe","shadPS4QtLauncher.exe"}}
         };
         static string LocalPath(string value) {
             if(String.IsNullOrWhiteSpace(value)) return null;
@@ -70,7 +70,7 @@ namespace PadLauncher {
             path=LocalPath(path); if(path==null || !File.Exists(path)) return;
             string id=MatchId(path); if(id==null) return;
             var existing=result.Matches.FirstOrDefault(item => item.Id==id && String.Equals(item.Path,path,StringComparison.OrdinalIgnoreCase));
-            if(existing==null) {existing=new DetectedEmulator {Id=id,Name=EmulatorLibrary.Preset(id).Name,Path=path,Sources=new List<string>()}; result.Matches.Add(existing);}
+            if(existing==null) {existing=new DetectedEmulator {Id=id,Name=EmulatorLibrary.Preset(id).Name+(EmulatorLibrary.IsShadQtLauncher(path) ? " (Qt Launcher)" : ""),Path=path,Sources=new List<string>()}; result.Matches.Add(existing);}
             if(!existing.Sources.Contains(source)) existing.Sources.Add(source);
         }
         static void ProbeFolder(EmulatorDetectionResult result,string id,string folder,string source) {
@@ -127,7 +127,31 @@ namespace PadLauncher {
                 foreach(string sub in Directory.GetDirectories(folder)) if((File.GetAttributes(sub)&FileAttributes.ReparsePoint)==0) ReadShortcuts(sub,hints,warnings,token,depth+1);
             } catch(OperationCanceledException) {throw;} catch(Exception error) {warnings.Add("Could not inspect Start menu folder "+folder+": "+error.Message);}
         }
-        public static EmulatorDetectionResult Scan(CancellationToken token) {
+        public static List<EmulatorExecutableHint> SteamHints(string steam,CancellationToken token) {
+            var hints=new List<EmulatorExecutableHint>(); steam=LocalPath(steam);
+            if(steam==null || !Directory.Exists(steam)) return hints;
+            var folders=new HashSet<string>(StringComparer.OrdinalIgnoreCase) {steam};
+            string file=System.IO.Path.Combine(steam,"steamapps","libraryfolders.vdf");
+            if(File.Exists(file)) foreach(var pair in Vdf.Map(Vdf.Get(Vdf.Read(file),"libraryfolders"))) {
+                token.ThrowIfCancellationRequested(); string folder=LocalPath(pair.Value as string ?? Vdf.Str(pair.Value,"path"));
+                if(folder!=null) folders.Add(folder);
+            }
+            foreach(string library in folders) {
+                token.ThrowIfCancellationRequested(); string common=System.IO.Path.Combine(library,"steamapps","common");
+                if(!Directory.Exists(common)) continue;
+                foreach(string folder in Directory.GetDirectories(common)) {
+                    token.ThrowIfCancellationRequested(); if((File.GetAttributes(folder)&FileAttributes.ReparsePoint)!=0) continue;
+                    foreach(string id in Executables.Keys.Where(id => MatchesName(System.IO.Path.GetFileName(folder),id)))
+                        foreach(string sub in new[]{"","bin","x64"}) foreach(string name in Executables[id]) {
+                            string candidate=System.IO.Path.Combine(folder,sub,name);
+                            if(File.Exists(candidate)) hints.Add(new EmulatorExecutableHint {Path=candidate,Source="Steam library: "+library});
+                        }
+                }
+            }
+            return hints;
+        }
+        public static EmulatorDetectionResult Scan(CancellationToken token) {return Scan(token,null);}
+        public static EmulatorDetectionResult Scan(CancellationToken token,string configuredSteam) {
             var hints=new List<EmulatorExecutableHint>(); var installs=new List<EmulatorInstallRecord>(); var warnings=new List<string>();
             foreach(var hive in new[]{RegistryHive.CurrentUser,RegistryHive.LocalMachine}) foreach(var view in new[]{RegistryView.Registry64,RegistryView.Registry32}) {
                 token.ThrowIfCancellationRequested();
@@ -146,6 +170,10 @@ namespace PadLauncher {
                 }} catch(OperationCanceledException) {throw;} catch(Exception error) {warnings.Add("Could not inspect "+hive+" / "+view+": "+error.Message);}
             }
             foreach(var place in new[]{Environment.SpecialFolder.Programs,Environment.SpecialFolder.CommonPrograms}) ReadShortcuts(Environment.GetFolderPath(place),hints,warnings,token);
+            foreach(string steam in new[]{configuredSteam,SteamLibrary.DetectSteam()}.Where(path => !String.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase)) {
+                try {hints.AddRange(SteamHints(steam,token));}
+                catch(OperationCanceledException) {throw;} catch(Exception error) {warnings.Add("Could not inspect Steam emulator locations: "+error.Message);}
+            }
             string local=Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             var result=FromSources(hints,installs,new[]{Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),System.IO.Path.Combine(local,"Programs"),local},token);
             result.Warnings.AddRange(warnings); return result;

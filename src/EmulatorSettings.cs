@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -136,7 +136,7 @@ namespace PadLauncher {
                     saveCore.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SavePath(next,id,path.Text); EmulatorLibrary.Config(next,id).RomFolder=romFolder.Text.Trim(); EmulatorLibrary.SaveCore(next,defaultCore.Text); CommitEmulators(next,rebuild);} catch(Exception error) {status.Text=error.Message;}};
                 }
                 var globalArguments=field("Launch arguments (all games)","EmulatorArguments_"+id);
-                globalArguments.Text=config==null || config.Arguments==null ? EmulatorLibrary.DefaultArguments(id) : config.Arguments;
+                globalArguments.Text=config==null || config.Arguments==null ? EmulatorLibrary.DefaultArguments(id,path.Text) : config.Arguments;
                 string argumentHelp="Use {game} for the quoted game path.";
                 if(id=="retroarch") argumentHelp+=" Use {core} for the RetroArch core.";
                 if(id=="vita3k") argumentHelp+=" Use {title} for the Vita3K title ID.";
@@ -151,7 +151,8 @@ namespace PadLauncher {
                     EmulatorLibrary.Config(next,id).Arguments=globalArguments.Text.Trim();
                     CommitEmulators(next,rebuild);
                 } catch(Exception error) {status.Text=error.Message;}};
-                resetArguments.Click+=(s,e) => globalArguments.Text=EmulatorLibrary.DefaultArguments(id);
+                resetArguments.Click+=(s,e) => globalArguments.Text=EmulatorLibrary.DefaultArguments(id,path.Text);
+                if(id=="shadps4") {var qtNote=Label("Qt Launcher uses its selected default emulator version. Install and select a version in its Version Manager before launching games.",12,muted); qtNote.TextWrapping=TextWrapping.Wrap; qtNote.Margin=new Thickness(0,8,0,0); panel.Children.Add(qtNote);}
                 argumentActions.Children.Add(saveArguments); argumentActions.Children.Add(resetArguments); panel.Children.Add(argumentActions);
                 var gamesSection=new Expander {Name="EmulatorGamesSection_"+id,Header=preset.Name+" · "+preset.System,Foreground=white,FontSize=14,Margin=new Thickness(0,14,0,0),IsExpanded=openEmulatorGameSections.Contains(id)};
                 gamesSection.Expanded+=(sender,args) => openEmulatorGameSections.Add(id);
@@ -176,9 +177,8 @@ namespace PadLauncher {
                 scanDetails.Content=new ScrollViewer {Content=scanErrors,MaxHeight=180,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
                 panel.Children.Add(scanDetails);
                 CancellationTokenSource scanCancellation=null; cancelScan.Click+=(s,e) => {if(scanCancellation!=null) scanCancellation.Cancel();};
-                EventHandler onClosed=(s,e) => {if(scanCancellation!=null) scanCancellation.Cancel();}; dialog.Closed+=onClosed;
-                // Rebuilt sections release their close handler along with their cancellation source.
-                section.Unloaded+=(s,e) => {if(scanCancellation!=null) scanCancellation.Cancel(); dialog.Closed-=onClosed;};
+                RegisterSettingsCleanup(dialog,() => {if(scanCancellation!=null) scanCancellation.Cancel();});
+                section.Unloaded+=(s,e) => {if(scanCancellation!=null) scanCancellation.Cancel();};
                 scan.Click+=async (s,e) => {
                     try {
                         if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
@@ -233,7 +233,7 @@ namespace PadLauncher {
                 var games=(config==null ? new List<EmulatorGame>() : config.Games ?? new List<EmulatorGame>()).OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
                 var gameLabel=Label("Added games ("+games.Count+")",14,mint); gameLabel.Margin=new Thickness(0,20,0,8); panel.Children.Add(gameLabel);
                 if(games.Count==0) {panel.Children.Add(Label("No games added yet.",12,muted)); continue;}
-                var gamePicker=new SettingsComboBox {Name="EmulatorGames_"+id,ItemsSource=games,DisplayMemberPath="Name",SelectedValuePath="Id",SelectedIndex=0,Padding=new Thickness(8)}; panel.Children.Add(gamePicker);
+                var gamePicker=new SettingsComboBox {Name="EmulatorGames_"+id,ItemsSource=id=="retroarch" ? (System.Collections.IEnumerable)games.Select(game => new KeyValuePair<string,string>(game.Id,game.Name+" · "+GameSourceLabel(new Game {Id=game.Id,Source="emulator",EmulatorId=id,LaunchId=game.Path,ArtworkSystem=game.ArtworkSystem}))).ToList() : games,DisplayMemberPath=id=="retroarch" ? "Value" : "Name",SelectedValuePath=id=="retroarch" ? "Key" : "Id",SelectedIndex=0,Padding=new Thickness(8)}; panel.Children.Add(gamePicker);
                 var name=field("Game name","EmulatorGameName_"+id); name.MaxLength=120;
                 var target=field(id=="vita3k" ? "Installed title folder" : "Game path","EmulatorGamePath_"+id);
                 var arguments=field("Launch arguments (optional)", "EmulatorGameArguments_"+id);
@@ -245,58 +245,14 @@ namespace PadLauncher {
                     browseGameCore.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="RetroArch core|*.dll",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) gameCore.Text=file.FileName;};
                 }
                 var missing=Label("",12,muted); missing.TextWrapping=TextWrapping.Wrap; missing.Margin=new Thickness(0,8,0,0); panel.Children.Add(missing);
-                Action load=() => {var game=games.FirstOrDefault(g => g.Id==(string)gamePicker.SelectedValue); name.Text=game==null ? "" : game.Name; target.Text=game==null ? "" : game.Path; arguments.Text=game==null ? "" : game.Arguments ?? ""; if(gameCore!=null) gameCore.Text=game==null ? "" : game.CorePath ?? config.CorePath ?? ""; try {EmulatorLibrary.GamePath(id,target.Text); missing.Text="";} catch {missing.Text="Game file missing or unsupported — update its path.";}};
+                Action load=() => {var game=games.FirstOrDefault(g => g.Id==(string)gamePicker.SelectedValue); name.Text=game==null ? "" : game.Name; target.Text=game==null ? "" : game.Path; arguments.Text=game==null ? "" : game.Arguments ?? ""; if(gameCore!=null) gameCore.Text=game==null ? "" : game.CorePath ?? config.CorePath ?? ""; missing.Text=EmulatorLibrary.MissingReason(new Game {Id=game==null ? null : game.Id,Source="emulator",EmulatorId=id,LaunchId=target.Text},settings) ?? "";};
                 gamePicker.SelectionChanged+=(s,e) => load(); load();
-                var artActions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,12,0,0)};
-                panel.Children.Add(artActions);
-                Func<EmulatorGame> selectedEntry=() => games.FirstOrDefault(g => g.Id==(gamePicker.SelectedValue as string));
-                var chooseLocal=new Button {Name="EmulatorChooseLocalImage_"+id,Content="Choose local image…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
-                chooseLocal.Click+=(s,e) => {
-                    var entry=selectedEntry();
-                    if(entry==null) {ThemedMessage.Show(dialog,"Select a game from the dropdown first.",preset.Name); return;}
-                    if(scanning) {ThemedMessage.Show(dialog,"Please wait for the current library refresh to finish.",preset.Name); return;}
-                    var file=new Microsoft.Win32.OpenFileDialog {Filter="Artwork|*.png;*.jpg;*.jpeg;*.bmp",CheckFileExists=true};
-                    if(file.ShowDialog(dialog)!=true) return;
-                    try {
-                        var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                        if(next.ArtworkOverrides==null) next.ArtworkOverrides=new Dictionary<string,string>();
-                        next.ArtworkOverrides[entry.Id]=ArtworkService.SaveLocalChoice(file.FileName);
-                        CommitEmulators(next,rebuild);
-                    } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Artwork");}
-                };
-                var chooseSgdb=new Button {Name="EmulatorChooseSgdbImage_"+id,Content="Choose SGDB image…",Padding=new Thickness(12,7,12,7)};
-                chooseSgdb.Click+=(s,e) => {
-                    var entry=selectedEntry();
-                    if(entry==null) {ThemedMessage.Show(dialog,"Select a game from the dropdown first.",preset.Name); return;}
-                    if(scanning) {ThemedMessage.Show(dialog,"Please wait for the current library refresh to finish.",preset.Name); return;}
-                    ShowArtworkPicker(dialog,library.Games.FirstOrDefault(g => g.Id==entry.Id) ?? new Game {Id=entry.Id,Name=entry.Name,Source="emulator",EmulatorId=id});
-                };
-                var clearImage=new Button {Name="EmulatorClearImage_"+id,Content="Clear image",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
-                clearImage.Click+=(s,e) => {
-                    var entry=selectedEntry();
-                    if(entry==null) {ThemedMessage.Show(dialog,"Select a game from the dropdown first.",preset.Name); return;}
-                    try {
-                        var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                        if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
-                        if(next.ArtworkOverrides==null) next.ArtworkOverrides=new Dictionary<string,string>();
-                        if(!next.ArtworkOverrides.Remove(entry.Id)) {ThemedMessage.Show(dialog,"This game has no saved artwork to clear.",preset.Name); return;}
-                        CommitEmulators(next,rebuild);
-                    } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Artwork");}
-                };
-                artActions.Children.Add(chooseSgdb); artActions.Children.Add(chooseLocal); artActions.Children.Add(clearImage);
-                var editActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,0)}; panel.Children.Add(editActions);
+                var editActions=new Grid {Margin=new Thickness(0,12,0,0)}; panel.Children.Add(editActions);
+                editActions.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto});
+                editActions.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto});
                 var saveGame=new Button {Name="EmulatorSaveGame_"+id,Content="Save changes",Padding=new Thickness(12,7,12,7)};
                 var remove=new Button {Name="EmulatorRemoveGame_"+id,Content="Remove game",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; editActions.Children.Add(saveGame); editActions.Children.Add(remove);
-                var removeAll=new Button {Content="Remove all games",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
-                editActions.Children.Add(removeAll);
-                removeAll.Click+=(s,e) => {
-                    if(!ConfirmEmulatorRemoval(dialog,"Remove "+preset.Name+" games","Remove all "+preset.Name+" games?",games.Count+" "+(games.Count==1 ? "game will" : "games will")+" be removed from Pad Launcher. Your game files stay on disk.","Remove all")) return;
-                    try {
-                        var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                        foreach(var game in games) EmulatorLibrary.RemoveGame(next,id,game.Id);
-                        CommitEmulators(next,rebuild);
-                    } catch(Exception error) {missing.Text=error.Message;}
-                };
+                Grid.SetColumn(remove,1);
                 saveGame.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SaveGame(next,id,(string)gamePicker.SelectedValue,name.Text,target.Text,gameCore==null ? null : gameCore.Text,arguments.Text); CommitEmulators(next,rebuild);} catch(Exception error) {missing.Text=error.Message;}};
                 remove.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.RemoveGame(next,id,(string)gamePicker.SelectedValue); CommitEmulators(next,rebuild);} catch(Exception error) {missing.Text=error.Message;}};
             }

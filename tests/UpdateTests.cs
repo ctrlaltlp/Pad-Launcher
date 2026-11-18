@@ -36,6 +36,14 @@ class UpdateTests {
             asset["browser_download_url"]="https://github.com/other/project/releases/download/v1/PadLauncher.exe";
             Reject(() => AppUpdates.Parse(Storage.Json().Serialize(release)),"Foreign release rejected");
             Check(!new Settings().AutoUpdate,"Automatic updates are opt-in");
+            var now=new DateTimeOffset(2026,11,16,12,0,0,TimeSpan.Zero);
+            long reset=(long)(now.AddMinutes(20)-new DateTimeOffset(1970,1,1,0,0,0,TimeSpan.Zero)).TotalSeconds;
+            string limited=AppUpdates.RateLimitMessage(403,"0",reset.ToString(),null,now);
+            Check(limited.Contains("Try again after "+now.AddMinutes(20).ToLocalTime().ToString("g")) && limited.Contains("local time"),"GitHub rate-limit reset is shown in local time");
+            Check(AppUpdates.RateLimitMessage(429,null,null,"120",now).Contains(now.AddSeconds(120).ToLocalTime().ToString("g")),"Retry-After seconds provide the retry time");
+            Check(AppUpdates.RateLimitMessage(403,null,null,now.AddMinutes(5).ToString("r"),now).Contains("Try again after"),"Retry-After HTTP date is supported");
+            Check(AppUpdates.RateLimitMessage(403,"0","invalid",null,now).Contains("try again later"),"Missing reset time gives a clear rate-limit message");
+            Check(AppUpdates.RateLimitMessage(403,"1",null,null,now)==null,"Unrelated forbidden responses are not misreported as rate limits");
             var settings=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(new Settings {AutoUpdate=true})); Check(settings.AutoUpdate,"Automatic update choice persists");
             string target=Path.Combine(root,"PadLauncher.exe"),payload=Path.Combine(root,"payload.exe");
             File.Copy(executable,target); File.Copy(executable,payload);

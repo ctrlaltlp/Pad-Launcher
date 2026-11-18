@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -11,6 +11,25 @@ using System.Windows.Media;
 
 namespace PadLauncher {
     public partial class Launcher {
+        FrameworkElement RetroArchSourceRow(EmulatorImportSource source,CheckBox box,string coreStatus,List<string> installed,Action changed,int index) {
+            var row=new StackPanel(); row.Children.Add(box);
+            bool unresolved=coreStatus!=null && (coreStatus.Contains("will not be imported") || coreStatus.Contains("choose a core"));
+            if(!unresolved) return row;
+            box.Foreground=new SolidColorBrush(Color.FromRgb(255,218,106));
+            if(installed.Count==0) {
+                var note=Label("No installed cores found. Install cores in RetroArch, then load sources again.",12,muted); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(28,4,0,8); row.Children.Add(note); return row;
+            }
+            var choices=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Choose an installed core…")};
+            choices.AddRange(installed.Select(path => new KeyValuePair<string,string>(path,Path.GetFileName(path))));
+            var picker=new SettingsComboBox {Name="RetroArchSourceCoreChoice_"+index,Tag=source.Id,ItemsSource=choices,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(28,4,0,8),ToolTip="Use this core for games without a usable playlist assignment. Saved only when you import."}; row.Children.Add(picker);
+            picker.SelectionChanged+=(s,e) => {
+                source.CorePath=String.IsNullOrWhiteSpace(picker.SelectedValue as string) ? null : picker.SelectedValue as string;
+                box.Content=new TextBlock {Text=source.Name+" · "+(source.CorePath==null ? coreStatus : "Core for unresolved games: "+Path.GetFileName(source.CorePath)),TextWrapping=TextWrapping.Wrap};
+                box.Foreground=source.CorePath==null ? new SolidColorBrush(Color.FromRgb(255,218,106)) : white;
+                if(source.CorePath!=null) box.IsChecked=true; changed();
+            };
+            return row;
+        }
         static void EnableGameNameNavigation(TextBox field,List<TextBox> nameFields) {
             field.PreviewKeyDown+=(a,key) => {
                 var modifiers=Keyboard.Modifiers;
@@ -50,9 +69,9 @@ namespace PadLauncher {
             var folderButton=new Button {Content="Browse folder…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
             var detect=new Button {Name="LoadEmulatorImportSources",Content="Load sources",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
             locate.Children.Add(configButton); locate.Children.Add(folderButton); locate.Children.Add(detect);
-            configButton.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Emulator settings or library|*.ini;*.cfg;*.toml;*.yml;*.yaml;*.lpl;*.sqlite3|All files|*.*",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) {location.Text=file.FileName; detect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}};
+            configButton.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Emulator settings or library|*.ini;*.cfg;*.toml;*.yml;*.yaml;*.json;*.xml;*.lpl;*.sqlite3|All files|*.*",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) {location.Text=file.FileName; detect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}};
             folderButton.Click+=(s,e) => {using(var folder=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the emulator's data folder",SelectedPath=Directory.Exists(location.Text) ? location.Text : ""}) {if(folder.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) {location.Text=folder.SelectedPath; detect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}}};
-            var sourceSection=new Expander {Header="Sources",Foreground=white,IsExpanded=true,Margin=new Thickness(0,6,0,8)};
+            var sourceSection=new Expander {Name="EmulatorImportSourcesSection",Header="Sources",Foreground=white,IsExpanded=true,Margin=new Thickness(0,6,0,8)};
             var sourceRows=new StackPanel {Margin=new Thickness(8)}; sourceSection.Content=new ScrollViewer {Content=sourceRows,MaxHeight=132,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}; header.Children.Add(sourceSection);
             var reviewActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,8)}; header.Children.Add(reviewActions);
             var review=new Button {Name="ReviewEmulatorImportGames",Content="Review selected sources",Padding=new Thickness(12,7,12,7),IsEnabled=false}; reviewActions.Children.Add(review);
@@ -67,7 +86,8 @@ namespace PadLauncher {
                 new KeyValuePair<string,string>("","Create a new list")
             };
             foreach(var list in settings.CustomLists ?? new List<CustomList>()) destinations.Add(new KeyValuePair<string,string>(list.Id,list.Name));
-            var destination=new SettingsComboBox {Name="EmulatorImportDestination",ItemsSource=destinations,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)};
+            if(preset.Id=="retroarch") destinations.Insert(1,new KeyValuePair<string,string>("per-playlist","One list per playlist"));
+            var destination=new SettingsComboBox {Name="EmulatorImportDestination",ItemsSource=destinations,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=preset.Id=="retroarch" ? 1 : 0,Padding=new Thickness(8)};
             footer.Children.Add(Label("Destination list",12,mint)); footer.Children.Add(destination);
             var listCaption=Label("New list name",12,mint); listCaption.Margin=new Thickness(0,8,0,0); footer.Children.Add(listCaption);
             var listName=new TextBox {Name="EmulatorImportListName",Text=preset.Name+" games",MaxLength=80,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)}; footer.Children.Add(listName);
@@ -77,14 +97,20 @@ namespace PadLauncher {
             var cancel=new Button {Content="Cancel",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0),IsCancel=true}; buttons.Children.Add(import); buttons.Children.Add(cancel);
 
             var reviewArea=new DockPanel(); root.Children.Add(reviewArea);
-            var selectionBar=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,6),Visibility=Visibility.Collapsed}; DockPanel.SetDock(selectionBar,Dock.Top); reviewArea.Children.Add(selectionBar);
-            var all=new Button {Content="Select all games",Padding=new Thickness(12,7,12,7)}; selectionBar.Children.Add(all);
-            var hideAdded=new Button {Name="HideAddedEmulatorImportGames",Content="Hide already added games",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed}; selectionBar.Children.Add(hideAdded);
-            var count=Label("",12,muted); count.Name="EmulatorImportSelectionCount"; count.Margin=new Thickness(12,0,0,0); selectionBar.Children.Add(count);
+            var selectionBar=new Grid {Margin=new Thickness(0,0,0,6),Visibility=Visibility.Collapsed}; selectionBar.ColumnDefinitions.Add(new ColumnDefinition()); selectionBar.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto}); DockPanel.SetDock(selectionBar,Dock.Top); reviewArea.Children.Add(selectionBar);
+            var selectionActions=new WrapPanel(); selectionBar.Children.Add(selectionActions);
+            var all=new Button {Content="Select all games",Padding=new Thickness(12,7,12,7)}; selectionActions.Children.Add(all);
+            var hideAdded=new Button {Name="HideAddedEmulatorImportGames",Content="Hide already added games",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed}; selectionActions.Children.Add(hideAdded);
+            var count=Label("",12,muted); count.Name="EmulatorImportSelectionCount"; count.Margin=new Thickness(12,0,0,0); count.VerticalAlignment=VerticalAlignment.Center; selectionActions.Children.Add(count);
             var gameRows=new StackPanel(); reviewArea.Children.Add(new ScrollViewer {Content=gameRows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
             var hiddenNotice=Label("All reviewed games are already added. Hidden entries keep their selection.",12,muted); hiddenNotice.Name="EmulatorImportHiddenNotice"; hiddenNotice.TextWrapping=TextWrapping.Wrap; hiddenNotice.Visibility=Visibility.Collapsed;
             var nameFields=new List<TextBox>();
             var sourceBoxes=new Dictionary<EmulatorImportSource,CheckBox>(); var gameBoxes=new Dictionary<EmulatorImportGame,CheckBox>();
+            var titleActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(24,0,0,0)}; Grid.SetColumn(titleActions,1); selectionBar.Children.Add(titleActions);
+            var cleanTitles=new Button {Name="CleanEmulatorImportTitles",Content="Remove tags from game titles",Padding=new Thickness(12,7,12,7),VerticalAlignment=VerticalAlignment.Top}; titleActions.Children.Add(cleanTitles);
+            cleanTitles.Click+=(s,e) => CleanImportGameTitles(dialog,gameBoxes);
+            var normaliseTitles=new Button {Name="NormaliseEmulatorImportTitles",Content="Normalise titles",Padding=new Thickness(12,7,12,7),VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(8,0,0,0)}; titleActions.Children.Add(normaliseTitles);
+            normaliseTitles.Click+=(s,e) => NormaliseImportGameTitles(dialog,gameBoxes);
             var reviewedSources=new List<EmulatorImportSource>(); string loadedLocation=null;
             bool hideAlreadyAdded=false;
             var addedBoxes=new HashSet<CheckBox>();
@@ -131,13 +157,21 @@ namespace PadLauncher {
             Func<Task> loadSources=async () => {
                 if(busy) return;
                 clearReview(); sourceRows.Children.Clear(); sourceBoxes.Clear(); review.IsEnabled=false; loadedLocation=null;
+                sourceSection.IsExpanded=true;
                 try {
                     string selectedLocation=Path.GetFullPath(location.Text.Trim().Trim('"')); var previous=saved(); setBusy(true); status.Text="Finding import sources…";
-                    var sources=await Task.Run(() => EmulatorImport.Sources(preset.Id,executable,selectedLocation),lifetime.Token);
+                    EmulatorImportBatch sourceCoreBatch=null;
+                    var installedCores=new List<string>();
+                    var sources=await Task.Run(() => {var found=EmulatorImport.Sources(preset.Id,executable,selectedLocation); if(preset.Id=="retroarch") {EmulatorImport.RestoreSourceCores(settings,preset.Id,selectedLocation,found); installedCores=EmulatorLibrary.Cores(executable); sourceCoreBatch=EmulatorImport.Read(preset.Id,executable,found,fallbackCore,lifetime.Token);} return found;},lifetime.Token);
                     if(closed) return; loadedLocation=selectedLocation;
                     foreach(var source in sources.OrderBy(x => x.Name,StringComparer.CurrentCultureIgnoreCase)) {
                         var box=new CheckBox {Content=source.Name,IsChecked=previous!=null ? (previous.Sources ?? new List<string>()).Contains(source.Id) : preset.Id!="retroarch" || sources.Count==1,ToolTip=source.Path,Margin=new Thickness(0,4,0,4)};
-                        box.Click+=(s,e) => clearReview(); sourceBoxes.Add(source,box); sourceRows.Children.Add(box);
+                        string coreStatus=null;
+                        if(sourceCoreBatch!=null) {
+                            coreStatus=EmulatorImport.RetroArchSourceCoreStatus(sourceCoreBatch,source,(EmulatorLibrary.Config(settings,preset.Id) ?? new EmulatorConfig()).Games);
+                            if(coreStatus!=null) {box.Content=new TextBlock {Text=source.Name+" · "+coreStatus,TextWrapping=TextWrapping.Wrap}; if(coreStatus.Contains("will not be imported")) box.Foreground=new SolidColorBrush(Color.FromRgb(255,218,106));}
+                        }
+                        box.Click+=(s,e) => clearReview(); sourceBoxes.Add(source,box); sourceRows.Children.Add(preset.Id=="retroarch" ? RetroArchSourceRow(source,box,coreStatus,installedCores,clearReview,sourceRows.Children.Count) : box);
                     }
                     review.IsEnabled=sources.Count>0;
                     status.Text=sources.Count==0 ? "No import sources found. Try the emulator's active data folder or configuration file." : sources.Count+" sources found. Select what to review.";
@@ -145,7 +179,7 @@ namespace PadLauncher {
                 finally {if(closed) lifetime.Dispose(); else setBusy(false);}
             };
             detect.Click+=async (s,e) => { await loadSources(); if(!closed && preset.Id=="rpcs3" && sourceBoxes.Values.Any(b => b.IsChecked==true)) review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); };
-            savedPicker.SelectionChanged+=async (s,e) => {var definition=saved(); if(definition!=null) {location.Text=definition.Location; destination.SelectedValue=definition.ListId; await loadSources();} else {destination.SelectedIndex=0; await loadSources();}};
+            savedPicker.SelectionChanged+=async (s,e) => {var definition=saved(); if(definition!=null) {location.Text=definition.Location; destination.SelectedValue=definition.ListId; await loadSources();} else {destination.SelectedIndex=preset.Id=="retroarch" ? 1 : 0; await loadSources();}};
             dialog.Loaded+=async (s,e) => await loadSources();
             review.Click+=async (s,e) => {
                 var chosen=sourceBoxes.Where(x => x.Value.IsChecked==true).Select(x => x.Key).ToList();
@@ -158,13 +192,18 @@ namespace PadLauncher {
                     var current=(EmulatorLibrary.Config(settings,preset.Id) ?? new EmulatorConfig()).Games ?? new List<EmulatorGame>();
                     var byPath=current.Where(g => !String.IsNullOrEmpty(g.Path)).GroupBy(g => g.Path,StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key,g => g.First(),StringComparer.OrdinalIgnoreCase);
                     var excluded=new HashSet<string>(previous==null ? Enumerable.Empty<string>() : previous.ExcludedKeys ?? new List<string>());
+                    if(preset.Id=="retroarch") {
+                        var coreNotes=EmulatorImport.RetroArchCoreReviewNotes(batch,chosen,current);
+                        if(coreNotes.Count>0) {var coreNote=Label(String.Join("\n",coreNotes),12,new SolidColorBrush(Color.FromRgb(255,218,106))); coreNote.TextWrapping=TextWrapping.Wrap; coreNote.Margin=new Thickness(0,8,0,10); gameRows.Children.Add(coreNote);}
+                    }
                     foreach(var source in chosen) {
                         var games=batch.Games.Where(g => g.SourceId==source.Id).GroupBy(g => g.Key).Select(g => g.First()).OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
                         var caption=Label(source.Name+" ("+games.Count+")",14,mint); caption.TextWrapping=TextWrapping.Wrap; caption.Margin=new Thickness(0,8,0,6); gameRows.Children.Add(caption);
                         var sourceGameBoxes=new List<CheckBox>(); groupRows[caption]=sourceGameBoxes;
                         foreach(var game in games) {
                             EmulatorGame existing; byPath.TryGetValue(game.Path,out existing);
-                            bool ready=existing!=null || game.Problem==null;
+                            if(existing!=null) game.Name=existing.Name;
+                            bool ready=EmulatorImport.CanImport(preset.Id,game,existing,config==null ? null : config.CorePath);
                             var row=new StackPanel(); if(existing!=null) row.Children.Add(Label(existing.Name+" · already added",13,white));
                             else {
                                 var gameName=new TextBox {Text=game.Name,MaxLength=120,ToolTip="Game name",MinWidth=240};
@@ -173,7 +212,7 @@ namespace PadLauncher {
                                 EnableGameNameNavigation(gameName,nameFields);
                                 row.Children.Add(gameName);
                             }
-                            string core=existing==null ? game.CorePath : existing.CorePath ?? (config==null ? null : config.CorePath);
+                            string core=existing!=null && EmulatorImport.CoreAvailable(existing.CorePath) ? existing.CorePath : game.CorePath ?? (config==null ? null : config.CorePath);
                             var detail=Label(game.Path+(String.IsNullOrEmpty(core) ? "" : " · Core: "+Path.GetFileName(core))+(ready ? "" : " · "+game.Problem),11,muted); detail.TextWrapping=TextWrapping.Wrap; row.Children.Add(detail);
                             var box=new CheckBox {Content=row,IsEnabled=ready,IsChecked=ready && !excluded.Contains(game.Key),Margin=new Thickness(0,4,0,6)}; box.Checked+=(a,b) => updateCount(); box.Unchecked+=(a,b) => updateCount(); gameBoxes.Add(game,box); gameRows.Children.Add(box);
                             sourceGameBoxes.Add(box); if(existing!=null) addedBoxes.Add(box);
@@ -204,7 +243,9 @@ namespace PadLauncher {
                     var before=settings;
                     var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                     var previous=saved(); var excluded=gameBoxes.Where(p => p.Value.IsEnabled && p.Value.IsChecked!=true).Select(p => p.Key.Key).Concat(previous==null ? Enumerable.Empty<string>() : previous.ExcludedKeys ?? new List<string>()).Except(games.Select(g => g.Key)).ToList();
-                    if(separate.IsEnabled && separate.IsChecked==true) {
+                    if(preset.Id=="retroarch" && ((string)destination.SelectedValue=="per-playlist" || (separate.IsEnabled && separate.IsChecked==true))) {
+                        EmulatorImport.ImportPlaylists(next,library,executable,loadedLocation,reviewedSources,games,excluded);
+                    } else if(separate.IsEnabled && separate.IsChecked==true) {
                         foreach(var source in reviewedSources) {
                             var selected=games.Where(g => g.SourceId==source.Id).ToList(); if(selected.Count==0) continue;
                             var old=(next.EmulatorImports ?? new List<EmulatorImportDefinition>()).FirstOrDefault(d => d.EmulatorId==preset.Id && String.Equals(d.Location,loadedLocation,StringComparison.OrdinalIgnoreCase) && d.Sources!=null && d.Sources.SequenceEqual(new[]{source.Id}));
@@ -252,11 +293,17 @@ namespace PadLauncher {
             var note=Label("Select each emulator's sources, review its games, and choose a destination list for each.",12,muted); note.TextWrapping=TextWrapping.Wrap; content.Children.Add(note);
             var duplicateNote=Label("Reimporting games already added reuses their existing entries without creating duplicates.",12,new SolidColorBrush(Color.FromRgb(255,218,106)));
             duplicateNote.Name="ImportNoDuplicatesNote"; duplicateNote.TextWrapping=TextWrapping.Wrap; duplicateNote.Margin=new Thickness(0,8,0,0); content.Children.Add(duplicateNote);
-            var actionRow=new WrapPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,8)}; content.Children.Add(actionRow);
+            var actionHost=new Grid {Margin=new Thickness(0,12,0,8)}; actionHost.ColumnDefinitions.Add(new ColumnDefinition()); actionHost.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto}); content.Children.Add(actionHost);
+            var actionRow=new WrapPanel {Orientation=Orientation.Horizontal}; actionHost.Children.Add(actionRow);
             var review=new Button {Name="ReviewEmulatorImportAll",Content="Review selected sources",Padding=new Thickness(12,7,12,7),IsEnabled=false}; actionRow.Children.Add(review);
             var selectAll=new Button {Name="SelectAllEmulatorImportSources",Content="Select all sources",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; actionRow.Children.Add(selectAll);
             bool hideAlreadyAdded=false;
             var hideAdded=new Button {Name="HideAddedEmulatorImportAllGames",Content="Hide already added games",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0),ToolTip="Filters the review list only. Hidden entries keep their selection.",Visibility=Visibility.Collapsed}; actionRow.Children.Add(hideAdded);
+            var titleActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(24,0,0,0)}; Grid.SetColumn(titleActions,1); actionHost.Children.Add(titleActions);
+            var cleanTitles=new Button {Name="CleanEmulatorImportAllTitles",Content="Remove tags from game titles",Padding=new Thickness(12,7,12,7),VerticalAlignment=VerticalAlignment.Top,Visibility=Visibility.Collapsed}; titleActions.Children.Add(cleanTitles);
+            cleanTitles.Click+=(s,e) => CleanImportGameTitles(dialog,entries.SelectMany(entry => entry.gameBoxes));
+            var normaliseTitles=new Button {Name="NormaliseEmulatorImportAllTitles",Content="Normalise titles",Padding=new Thickness(12,7,12,7),VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed}; titleActions.Children.Add(normaliseTitles);
+            normaliseTitles.Click+=(s,e) => NormaliseImportGameTitles(dialog,entries.SelectMany(entry => entry.gameBoxes));
 
             var count=Label("",12,muted); count.Name="ImportAllSelectionCount"; count.Margin=new Thickness(12,0,0,0); actionRow.Children.Add(count);
             var status=Label("Finding import sources…",12,muted); status.Name="EmulatorImportAllStatus"; status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,0,0,10); content.Children.Add(status);
@@ -271,6 +318,8 @@ namespace PadLauncher {
             Func<int> selectedSources=() => entries.Sum(en => en.sourceBoxes.Values.Count(box => box.IsChecked==true));
             Action updateCount=() => {
                 hideAdded.Visibility=entries.Any(entry => entry.gameBoxes.Count>0) ? Visibility.Visible : Visibility.Collapsed;
+                cleanTitles.Visibility=hideAdded.Visibility; cleanTitles.IsEnabled=!busy;
+                normaliseTitles.Visibility=hideAdded.Visibility; normaliseTitles.IsEnabled=!busy;
                 foreach(var entry in entries) {
                     foreach(var box in entry.gameBoxes.Values) box.Visibility=hideAlreadyAdded && entry.addedBoxes.Contains(box) ? Visibility.Collapsed : Visibility.Visible;
                     foreach(var group in entry.groupRows) group.Key.Visibility=group.Value.Any(box => box.Visibility==Visibility.Visible) ? Visibility.Visible : Visibility.Collapsed;
@@ -302,7 +351,9 @@ namespace PadLauncher {
                     setBusy(true);
                     status.Text="Finding "+entry.preset.Name+" import sources…";
                     string selectedLocation=Path.GetFullPath(entry.location.Text.Trim().Trim('"'));
-                    var sources=await Task.Run(() => EmulatorImport.Sources(entry.preset.Id,entry.executable,selectedLocation),lifetime.Token);
+                    EmulatorImportBatch sourceCoreBatch=null;
+                    var installedCores=new List<string>();
+                    var sources=await Task.Run(() => {var found=EmulatorImport.Sources(entry.preset.Id,entry.executable,selectedLocation); if(entry.preset.Id=="retroarch") {EmulatorImport.RestoreSourceCores(settings,entry.preset.Id,selectedLocation,found); installedCores=EmulatorLibrary.Cores(entry.executable); sourceCoreBatch=EmulatorImport.Read(entry.preset.Id,entry.executable,found,entry.fallbackCore,lifetime.Token);} return found;},lifetime.Token);
                     if(closed) return;
                     entry.loadedLocation=selectedLocation;
                     entry.sources=sources;
@@ -310,8 +361,13 @@ namespace PadLauncher {
                     entry.sourceBoxes.Clear();
                     foreach(var source in sources.OrderBy(x => x.Name,StringComparer.CurrentCultureIgnoreCase)) {
                         var box=new CheckBox {Content=source.Name,IsChecked=true,ToolTip=source.Path,Margin=new Thickness(0,4,0,4)};
+                        string coreStatus=null;
+                        if(sourceCoreBatch!=null) {
+                            coreStatus=EmulatorImport.RetroArchSourceCoreStatus(sourceCoreBatch,source,(EmulatorLibrary.Config(settings,entry.preset.Id) ?? new EmulatorConfig()).Games);
+                            if(coreStatus!=null) {box.Content=new TextBlock {Text=source.Name+" · "+coreStatus,TextWrapping=TextWrapping.Wrap}; if(coreStatus.Contains("will not be imported")) box.Foreground=new SolidColorBrush(Color.FromRgb(255,218,106));}
+                        }
                         box.Click+=(a,b) => clearReview(entry);
-                        entry.sourceBoxes.Add(source,box); entry.sourceRows.Children.Add(box);
+                        entry.sourceBoxes.Add(source,box); entry.sourceRows.Children.Add(entry.preset.Id=="retroarch" ? RetroArchSourceRow(source,box,coreStatus,installedCores,() => clearReview(entry),entry.sourceRows.Children.Count) : box);
                     }
                     entry.statusText.Text=sources.Count==0 ? "No import sources found. Browse to this emulator's configuration file or data folder." : sources.Count+" sources found.";
                 } catch(OperationCanceledException) {if(closed) return;} catch(Exception error) {if(!closed) entry.statusText.Text=error.Message;}
@@ -334,7 +390,7 @@ namespace PadLauncher {
                 var browseFolder=new Button {Name="ImportAllBrowseFolder_"+preset.Id,Content="Browse folder…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
                 var load=new Button {Name="ImportAllLoadSources_"+preset.Id,Content="Load sources",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
                 locationRow.Children.Add(browseFile); locationRow.Children.Add(browseFolder); locationRow.Children.Add(load); entry.panel.Children.Add(locationRow);
-                browseFile.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Emulator settings or library|*.ini;*.cfg;*.toml;*.yml;*.yaml;*.lpl;*.sqlite3|All files|*.*",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) {entry.location.Text=file.FileName; load.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}};
+                browseFile.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="Emulator settings or library|*.ini;*.cfg;*.toml;*.yml;*.yaml;*.json;*.xml;*.lpl;*.sqlite3|All files|*.*",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) {entry.location.Text=file.FileName; load.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}};
                 browseFolder.Click+=(s,e) => {using(var folder=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the emulator's data folder",SelectedPath=Directory.Exists(entry.location.Text) ? entry.location.Text : ""}) {if(folder.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) {entry.location.Text=folder.SelectedPath; load.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}}};
                 load.Click+=(s,e) => {loadEntry(entry);};
                 entry.sourceRows=new StackPanel {Margin=new Thickness(8,6,0,0)}; entry.panel.Children.Add(entry.sourceRows);
@@ -344,7 +400,8 @@ namespace PadLauncher {
                     new KeyValuePair<string,string>("","Create a new list")
                 };
                 foreach(var list in settings.CustomLists ?? new List<CustomList>()) destinations.Add(new KeyValuePair<string,string>(list.Id,list.Name));
-                entry.destination=new SettingsComboBox {Name="ImportAllDestination_"+preset.Id,ItemsSource=destinations,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8)}; entry.panel.Children.Add(entry.destination);
+                if(preset.Id=="retroarch") destinations.Insert(1,new KeyValuePair<string,string>("per-playlist","One list per playlist"));
+                entry.destination=new SettingsComboBox {Name="ImportAllDestination_"+preset.Id,ItemsSource=destinations,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=preset.Id=="retroarch" ? 1 : 0,Padding=new Thickness(8)}; entry.panel.Children.Add(entry.destination);
                 entry.listName=new TextBox {Name="ImportAllListName_"+preset.Id,Text=UniqueImportName(settings,preset.Name+" games"),MaxLength=80,Padding=new Thickness(8),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed}; entry.panel.Children.Add(entry.listName);
                 entry.statusText=Label("",12,muted); entry.statusText.TextWrapping=TextWrapping.Wrap; entry.statusText.Margin=new Thickness(0,6,0,0); entry.panel.Children.Add(entry.statusText);
                 content.Children.Add(entry.panel);
@@ -380,6 +437,10 @@ namespace PadLauncher {
                         var config=EmulatorLibrary.Config(settings,entry.preset.Id);
                         var current=(config==null ? new List<EmulatorGame>() : config.Games ?? new List<EmulatorGame>());
                         var byPath=current.Where(g => !String.IsNullOrEmpty(g.Path)).GroupBy(g => g.Path,StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key,g => g.First(),StringComparer.OrdinalIgnoreCase);
+                        if(entry.preset.Id=="retroarch") {
+                            var coreNotes=EmulatorImport.RetroArchCoreReviewNotes(batch,chosen,current);
+                            if(coreNotes.Count>0) {var coreNote=Label(String.Join("\n",coreNotes),12,new SolidColorBrush(Color.FromRgb(255,218,106))); coreNote.TextWrapping=TextWrapping.Wrap; coreNote.Margin=new Thickness(0,8,0,10); entry.reviewRows.Add(coreNote); reviewArea.Children.Add(coreNote);}
+                        }
                         var caption=Label(entry.preset.Name+" ("+batch.Games.Count+" games)",14,mint); caption.Margin=new Thickness(0,10,0,6); entry.reviewRows.Add(caption); reviewArea.Children.Add(caption);
                         var emulatorGameBoxes=new List<CheckBox>(); entry.groupRows[caption]=emulatorGameBoxes;
                         foreach(var source in chosen) {
@@ -389,7 +450,8 @@ namespace PadLauncher {
                             if(chosen.Count>1) {var sub=Label(source.Name+" ("+games.Count+")",13,mint); sub.Margin=new Thickness(0,6,0,4); entry.reviewRows.Add(sub); reviewArea.Children.Add(sub); entry.groupRows[sub]=sourceGameBoxes;}
                             foreach(var game in games) {
                                 EmulatorGame existing; byPath.TryGetValue(game.Path,out existing);
-                                bool ready=existing!=null || game.Problem==null;
+                                if(existing!=null) game.Name=existing.Name;
+                                bool ready=EmulatorImport.CanImport(entry.preset.Id,game,existing,config==null ? null : config.CorePath);
                                 var row=new StackPanel();
                                 if(existing!=null) row.Children.Add(Label(existing.Name+" · already added",13,white));
                                 else {
@@ -399,7 +461,7 @@ namespace PadLauncher {
                                     EnableGameNameNavigation(gameName,entry.nameFields);
                                     row.Children.Add(gameName);
                                 }
-                                string core=existing==null ? game.CorePath : existing.CorePath ?? (config==null ? null : config.CorePath);
+                                string core=existing!=null && EmulatorImport.CoreAvailable(existing.CorePath) ? existing.CorePath : game.CorePath ?? (config==null ? null : config.CorePath);
                                 var detail=Label(game.Path+(String.IsNullOrEmpty(core) ? "" : " · Core: "+Path.GetFileName(core))+(ready ? "" : " · "+game.Problem),11,muted); detail.TextWrapping=TextWrapping.Wrap; row.Children.Add(detail);
                                 var box=new CheckBox {Content=row,IsEnabled=ready,IsChecked=ready,Margin=new Thickness(0,4,0,6)};
                                 box.Checked+=(a,b) => updateCount(); box.Unchecked+=(a,b) => updateCount();
@@ -431,7 +493,8 @@ namespace PadLauncher {
                         imported.AddRange(chosen.Select(game => Tuple.Create(entry.preset.Id,game)));
                         var excluded=entry.gameBoxes.Where(p => p.Value.IsEnabled && p.Value.IsChecked!=true).Select(p => p.Key.Key).ToList();
                         string listId=entry.destination.SelectedValue as string;
-                        EmulatorImport.Import(next,library,entry.preset.Id,entry.executable,entry.loadedLocation,entry.reviewedSources,chosen,excluded,String.IsNullOrEmpty(listId) ? null : listId,entry.listName.Text);
+                        if(entry.preset.Id=="retroarch" && listId=="per-playlist") EmulatorImport.ImportPlaylists(next,library,entry.executable,entry.loadedLocation,entry.reviewedSources,chosen,excluded);
+                        else EmulatorImport.Import(next,library,entry.preset.Id,entry.executable,entry.loadedLocation,entry.reviewedSources,chosen,excluded,String.IsNullOrEmpty(listId) ? null : listId,entry.listName.Text);
 
                     }
                     CommitEmulators(next,rebuild);

@@ -35,11 +35,11 @@ class EmulatorUiTests {
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(boxes.All(box => box.Visibility==Visibility.Visible) && boxes.Select(box => box.IsChecked).SequenceEqual(selected),"Toggling the filter off restores rows without changing selections");
     }
-    static bool RunImport(Window owner,FrameworkElement content,bool update) {
+    static bool RunImport(Window owner,FrameworkElement content,bool update,bool cancel=false,string emulator="retroarch") {
         int stage=0; bool done=false; var started=DateTime.UtcNow;
         var timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(30)};
         timer.Tick+=(s,e) => {
-            var wizard=owner.OwnedWindows.Cast<Window>().FirstOrDefault(w => w.IsVisible && w.Title=="Import RetroArch library");
+            var wizard=owner.OwnedWindows.Cast<Window>().FirstOrDefault(w => w.IsVisible && w.Title=="Import "+EmulatorLibrary.Preset(emulator).Name+" library");
             if(wizard==null) return;
             if(DateTime.UtcNow-started>TimeSpan.FromSeconds(5)) {wizard.Close(); return;}
             var wizardContent=(FrameworkElement)wizard.Content;
@@ -54,7 +54,16 @@ class EmulatorUiTests {
             }
             if(stage==1 && review!=null && review.IsEnabled) {stage=2; review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return;}
             if(stage==2 && commit!=null && commit.IsEnabled) {
+                stage=20; ((Button)Find(wizardContent,"LoadEmulatorImportSources")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return;
+            }
+            if(stage==20 && review!=null && review.IsEnabled) {
+                var sourceSection=(Expander)Find(wizardContent,"EmulatorImportSourcesSection");
+                Check(sourceSection.IsExpanded && ImportChildren(sourceSection).OfType<CheckBox>().Any(),"Reload after review makes loaded sources visible again for "+emulator);
+                stage=21; review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return;
+            }
+            if(stage==21 && commit!=null && commit.IsEnabled) {
                 stage=3;
+                if(cancel) {wizard.Close(); done=true; return;}
                 CheckAddedFilter(wizardContent,"HideAddedEmulatorImportGames",update ? 1 : 0);
                 if(!update) {
                     ((ComboBox)Find(wizardContent,"EmulatorImportDestination")).SelectedValue="";
@@ -65,8 +74,28 @@ class EmulatorUiTests {
                 commit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); done=!wizard.IsVisible;
             }
         };
-        timer.Start(); try {((Button)Find(content,"ImportEmulatorLibrary_retroarch")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));} finally {timer.Stop();}
+        timer.Start(); try {((Button)Find(content,"ImportEmulatorLibrary_"+emulator)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));} finally {timer.Stop();}
         return done;
+    }
+    static void CheckTitleCleanup(Launcher launcher,Window owner,bool applyChanges,bool normalise=false) {
+        string before=normalise ? "Legend of Zelda, The - A Link to the Past (USA)" : "My game (USA) (SGB Enhanced)";
+        string after=normalise ? "The Legend of Zelda - A Link to the Past (USA)" : "My game";
+        var draft=new EmulatorImportGame {Path="test.gb",Name=before,CorePath="core.dll",ArtworkTitle="Original artwork label"};
+        var field=new TextBox {Text=draft.Name}; var row=new StackPanel(); row.Children.Add(field);
+        var box=new CheckBox {IsChecked=true,Content=row};
+        var candidates=new Dictionary<EmulatorImportGame,CheckBox> {{draft,box}};
+        bool visited=false; var timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(30)};
+        timer.Tick+=(s,e) => {
+            var window=owner.OwnedWindows.Cast<Window>().FirstOrDefault(item => item.IsVisible && item.Title==(normalise ? "Normalise titles" : "Remove tags from game titles")); if(window==null) return;
+            timer.Stop(); visited=true;
+            var toggle=(Button)Find(window.Content as FrameworkElement,"ToggleTitleTagChanges"); var apply=(Button)Find(window.Content as FrameworkElement,"ApplyTitleTagChanges");
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(!apply.IsEnabled && (string)toggle.Content=="Select all","Cleanup Select all toggle can clear the proposed changes");
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Check(apply.IsEnabled && (string)toggle.Content=="Unselect all","Cleanup Select all toggle restores proposed changes");
+            if(applyChanges) apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); else window.Close();
+        };
+        timer.Start(); try {typeof(Launcher).GetMethod(normalise ? "NormaliseImportGameTitles" : "CleanImportGameTitles",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(launcher,new object[]{owner,candidates});} finally {timer.Stop();}
+        Check(visited && draft.Name==(applyChanges ? after : before) && draft.RenameExisting==applyChanges,"Cleanup preview applies or cancels draft title changes without saving settings");
+        Check(draft.Path=="test.gb" && draft.CorePath=="core.dll" && draft.ArtworkTitle=="Original artwork label","Cleanup leaves launch paths, core and artwork metadata unchanged");
     }
     static bool RunImportAll(Window owner,FrameworkElement content) {
         int stage=0; bool done=false; var started=DateTime.UtcNow;
@@ -106,6 +135,13 @@ class EmulatorUiTests {
                 stage=22; review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return;
             }
             if(stage==22 && commit!=null && commit.IsEnabled) {
+                stage=23; ((Button)Find(wizardContent,"ImportAllLoadSources_retroarch")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return;
+            }
+            if(stage==23 && review!=null && review.IsEnabled && ((Button)Find(wizardContent,"SelectAllEmulatorImportSources")).IsEnabled) {
+                Check(((TextBlock)Find(wizardContent,"ImportAllSelectionCount")).Text.EndsWith("source selected"),"Bulk library reload restores sources after review");
+                stage=24; review.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return;
+            }
+            if(stage==24 && commit!=null && commit.IsEnabled) {
                 Check(((TextBlock)Find(wizardContent,"ImportAllSelectionCount")).Text.EndsWith("2 games selected"),"Reviewing bulk sources twice keeps one row per game");
                 CheckAddedFilter(wizardContent,"HideAddedEmulatorImportAllGames",2);
                 var destination=(ComboBox)Find(wizardContent,"ImportAllDestination_retroarch"); var listName=(TextBox)Find(wizardContent,"ImportAllListName_retroarch");
@@ -130,13 +166,21 @@ class EmulatorUiTests {
     [STAThread] static void Main() {
         string root=Path.Combine(Path.GetTempPath(),"EmulatorUiTests-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root); Storage.Root=root;
         Launcher launcher=null;
+        var previousFetch=ArtworkService.Fetch; ArtworkService.Fetch=(url,key,token) => System.Text.Encoding.UTF8.GetBytes("");
         try {
             string exe=Path.Combine(root,"duckstation.exe"),nextExe=Path.Combine(root,"duckstation-new.exe"),game=Path.Combine(root,"Test game.chd"); File.WriteAllText(exe,""); File.WriteAllText(nextExe,""); File.WriteAllText(game,"");
             var settings=new Settings(); EmulatorLibrary.SavePath(settings,"duckstation",exe); EmulatorLibrary.AddGames(settings,"duckstation",new[]{game});
             var library=new Library(); EmulatorLibrary.Apply(library,settings); Storage.Write("settings.json",settings); Storage.Write("library.json",library);
             launcher=new Launcher(false,true); var dialog=launcher.CreateHelpWindow(); var content=(FrameworkElement)dialog.Content;
-            var tabs=(TabControl)Find(content,"HelpSettingsTabs"); tabs.SelectedIndex=5; Layout(content);
-            Check((string)((TabItem)tabs.Items[5]).Header=="Emulators" && (string)((TabItem)tabs.Items[6]).Header=="System","Emulators tab precedes System");
+            File.Move(exe,exe+".moved");
+            typeof(Launcher).GetMethod("ApplyLibrary",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(launcher,new object[]{false});
+            var overlayTitle=(TextBlock)Find((FrameworkElement)launcher.Content,"SelectedGameTitle");
+            Check(overlayTitle.Text.Contains("executable missing or invalid") && !overlayTitle.Text.Contains("Game file missing"),"Overlay titles identify a moved emulator without claiming the existing ROM is missing");
+            File.Move(exe+".moved",exe);
+            typeof(Launcher).GetMethod("ApplyLibrary",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(launcher,new object[]{false});
+            Check(!overlayTitle.Text.Contains("executable missing"),"Refreshing clears the emulator diagnostic after its executable is restored");
+            var tabs=(TabControl)Find(content,"HelpSettingsTabs"); tabs.SelectedIndex=4; Layout(content);
+            Check((string)((TabItem)tabs.Items[4]).Header=="Emulators" && (string)((TabItem)tabs.Items[6]).Header=="Artwork" && (string)((TabItem)tabs.Items[7]).Header=="System","Artwork tab follows Emulators and System remains last");
             var emulatorTabs=(TabControl)Find(content,"EmulatorTabs");
             var sections=((StackPanel)((TabItem)emulatorTabs.Items[0]).Content).Children.OfType<Expander>().ToList();
             Check(sections.Count==EmulatorLibrary.Presets.Length && sections.All(s => !s.IsExpanded),"All emulator sections are initially collapsed");
@@ -160,8 +204,9 @@ class EmulatorUiTests {
             ((Button)Find(content,"EmulatorSaveGame_duckstation")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(content);
             Check(Storage.Read<Settings>("settings.json").Emulators[0].Games[0].Name=="A renamed game","Game editor saves a new title");
             var image=new RenderTargetBitmap(780,680,96,96,PixelFormats.Pbgra32); image.Render(content); var encoder=new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); using(var output=File.Create(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"Emulator-settings-preview.png"))) encoder.Save(output);
+            Check(Find(content,"EmulatorRemoveAllGames_duckstation")==null,"Emulator game editing no longer offers Remove all games");
             ((Button)Find(content,"EmulatorRemoveGame_duckstation")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(content);
-            Check(Storage.Read<Settings>("settings.json").Emulators[0].Games.Count==0 && File.Exists(game),"Removing from UI keeps the original ROM");
+            Check(Storage.Read<Settings>("settings.json").Emulators[0].Games.Count==0 && File.Exists(game),"Individual game removal keeps the original ROM");
             ((TabControl)Find(content,"EmulatorTabs")).SelectedIndex=0; Layout(content);
             var retroSection=(Expander)Find(content,"EmulatorSection_retroarch"); retroSection.IsExpanded=true; Layout(content);
             Check(Find(content,"EmulatorDefaultCore")!=null && Find(content,"EmulatorInstalledCores")!=null,"RetroArch has a default core field and installed core dropdown");
@@ -170,12 +215,29 @@ class EmulatorUiTests {
             ((TextBox)Find(content,"EmulatorDefaultCore")).Text=core;
             ((Button)Find(content,"EmulatorSaveCore")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Layout(content);
             Check(EmulatorLibrary.Config(Storage.Read<Settings>("settings.json"),"retroarch").CorePath==core,"Core picker save handler persists executable and default core");
+            Check(Find(content,"RetroArchPreferLibretroSetting")==null && Storage.Read<Settings>("settings.json").RetroArchPreferLibretro==null,"Emulator settings omit the artwork preference and path/core saves leave it unchanged");
+            var raLabel=(string)typeof(Launcher).GetMethod("GameSourceLabel",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(launcher,new object[]{new Game {Source="emulator",EmulatorId="retroarch",ArtworkSystem="Nintendo - Game Boy",LaunchId="game.gb"}});
+            Check(raLabel=="RetroArch · Game Boy","RetroArch game source labels include the console");
             Check(((ComboBox)Find(content,"EmulatorInstalledCores")).Items.Count==1,"Installed core dropdown populated after saving path");
+            var unresolvedSource=new EmulatorImportSource {Id="playlist:test",Name="Unresolved playlist"};
+            var sourceBox=new CheckBox {Content=unresolvedSource.Name,IsChecked=false}; int sourceChanged=0;
+            var sourceRow=(FrameworkElement)typeof(Launcher).GetMethod("RetroArchSourceRow",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(launcher,new object[]{unresolvedSource,sourceBox,"No usable core found — will not be imported",new List<string>{core},(Action)(() => sourceChanged++),0});
+            var sourceCorePicker=ImportChildren(sourceRow).OfType<ComboBox>().Single(); sourceCorePicker.SelectedValue=core;
+            Check(unresolvedSource.CorePath==core && sourceBox.IsChecked==true && sourceChanged==1,"Unresolved source offers installed cores and stages the user's selected core for review");
+            sourceCorePicker.SelectedValue="";
+            Check(unresolvedSource.CorePath==null && sourceChanged==2,"Source core selection can be reset without writing settings");
+            var noCoreRow=(FrameworkElement)typeof(Launcher).GetMethod("RetroArchSourceRow",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(launcher,new object[]{unresolvedSource,new CheckBox(),"No usable core found — will not be imported",new List<string>(),(Action)(() => {}),1});
+            Check(!ImportChildren(noCoreRow).OfType<ComboBox>().Any() && ImportChildren(noCoreRow).OfType<TextBlock>().Any(text => text.Text.Contains("Install cores in RetroArch")),"No installed cores gives an installation instruction rather than a misleading empty picker");
             string playlists=Path.Combine(root,"playlists"); Directory.CreateDirectory(playlists); string playlist=Path.Combine(playlists,"Test playlist.lpl");
             File.WriteAllText(playlist,Storage.Json().Serialize(new {default_core_path=core,items=new[]{new {path=game,label="Imported game",core_path="DETECT"}}}));
             dialog.WindowStartupLocation=WindowStartupLocation.Manual; dialog.Left=-20000; dialog.Top=-20000; dialog.Show(); Layout(content);
+            CheckTitleCleanup(launcher,dialog,false); CheckTitleCleanup(launcher,dialog,true);
+            CheckTitleCleanup(launcher,dialog,false,true); CheckTitleCleanup(launcher,dialog,true,true);
             ((TabControl)Find(content,"EmulatorTabs")).SelectedIndex=1; Layout(content);
             ((Expander)Find(content,"EmulatorGamesSection_retroarch")).IsExpanded=true; Layout(content);
+            Check(RunImport(dialog,content,false,true) && RunImport(dialog,content,false,true),"Cancelling a reviewed RetroArch import allows reopening and reloading sources repeatedly");
+            File.WriteAllText(Path.Combine(root,"settings.ini"),"[GameList]\nPaths = "+root);
+            Check(RunImport(dialog,content,false,true,"duckstation") && RunImport(dialog,content,false,true,"duckstation"),"Other emulator imports also reopen, reload and review after cancellation");
             Check(RunImport(dialog,content,false),"Emulator import wizard loads sources, reviews a playlist and commits through its button"); Layout(content);
             var importResult=dialog.OwnedWindows.Cast<Window>().FirstOrDefault(window => window.Title=="Import complete");
             Check(importResult!=null && ((TextBox)Find(importResult.Content as FrameworkElement,"ImportedGamePath")).Text==game,"Successful library import shows the imported game's path");
@@ -203,16 +265,19 @@ class EmulatorUiTests {
             using(var cover=new System.Drawing.Bitmap(300,450)) cover.Save(localCover,System.Drawing.Imaging.ImageFormat.Png);
             ((TextBox)Find(addEditor,"CustomGameName")).Text="Custom UI game";
             ((TextBox)Find(addEditor,"CustomGameTarget")).Text=nextExe;
-            ((TextBox)Find(addEditor,"CustomGameArtwork")).Text=localCover;
+            Check(Find(addEditor,"CustomGameArtwork")==null,"New custom games contain no artwork field");
             ((Button)Find(addEditor,"SaveCustomGame")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var customSaved=Storage.Read<Settings>("settings.json");
             string customId=customSaved.CustomGames.Single().Id;
             Check(customSaved.CustomLists.First(list => list.Id==listId).Games.Contains(customId) && !customSaved.EnabledCollectionIds.Contains(listId),"Adding a custom game preserves a hidden destination list");
+            customSaved.CustomGames.Single().Artwork=localCover;
+            Storage.Write("settings.json",customSaved);
+            typeof(Launcher).GetField("settings",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance).SetValue(launcher,customSaved);
             var editEditor=(FrameworkElement)editorMethod.Invoke(launcher,new object[]{dialog,(Action)(() => {}),true}); Layout(editEditor);
-            ((Button)Find(editEditor,"ClearCustomGameImage")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(String.IsNullOrEmpty(Storage.Read<Settings>("settings.json").CustomGames.Single().Artwork),"Clear image removes the saved local cover without requiring Save changes");
+            Check(Find(editEditor,"CustomGameArtwork")==null && Find(editEditor,"ClearCustomGameImage")==null,"Added custom games contain no artwork fields or image buttons");
             ((ComboBox)Find(editEditor,"CustomGameList")).SelectedValue=allList.Id;
             ((Button)Find(editEditor,"SaveCustomGame")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(CustomGameLibrary.ArtworkPath(Storage.Read<Settings>("settings.json").CustomGames.Single().Artwork)==localCover,"Saving game details preserves its existing artwork");
             customSaved=Storage.Read<Settings>("settings.json");
             Check(!customSaved.CustomLists.First(list => list.Id==listId).Games.Contains(customId) && customSaved.CustomLists.First(list => list.Id==allList.Id).Games.Contains(customId),"Changing a custom game's list moves its manual membership");
             var panelMethod=typeof(Launcher).GetMethod("CreateCustomGamesPanel",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
@@ -241,6 +306,6 @@ class EmulatorUiTests {
             Check(Find((FrameworkElement)membershipsWindow.Content,"MembershipGamePicker")!=null && Find((FrameworkElement)membershipsWindow.Content,"SaveMemberships")!=null,"Game list memberships opens a game picker and save control");
             membershipsWindow.Close();
             dialog.Close(); Console.WriteLine(checks+" emulator UI checks passed");
-        } finally {if(launcher!=null) launcher.ExitApp(); Directory.Delete(root,true);}
+        } finally {if(launcher!=null) launcher.ExitApp(); ArtworkService.Fetch=previousFetch; Directory.Delete(root,true);}
     }
 }

@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using PadLauncher;
 class SetupWizardTests {
     static int checks;
@@ -17,6 +18,68 @@ class SetupWizardTests {
     static void Click(Window wizard,string name) {Find<Button>(wizard,name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}
     static Window Wizard(Launcher launcher) {return (Window)typeof(Launcher).GetField("setupWindow",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(launcher);}
     static void SkipToEnd(Window wizard) {for(int i=0;i<4;i++) Click(wizard,"SetupSkip");}
+    static void WaitUntil(Func<bool> condition) {
+        var frame=new DispatcherFrame(); var timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(20)};
+        var deadline=DateTime.UtcNow.AddSeconds(10);
+        timer.Tick+=(s,e) => {if(condition() || DateTime.UtcNow>=deadline) frame.Continue=false;};
+        timer.Start(); Dispatcher.PushFrame(frame); timer.Stop();
+        Check(condition(),"Setup work completes without blocking the UI");
+    }
+    static void WriteString(BinaryWriter writer,string value) {writer.Write(System.Text.Encoding.UTF8.GetBytes(value)); writer.Write((byte)0);}
+    static void WriteField(BinaryWriter writer,string key,string value) {writer.Write((byte)1); WriteString(writer,key); WriteString(writer,value);}
+    static void CheckTransactionalSetup(string root,string emulatorExe) {
+        string previous=Storage.Root; Launcher instance=null;
+        try {
+            string steam=Path.Combine(root,"wizard-steam"),config=Path.Combine(steam,"userdata","42","config"),game=Path.Combine(root,"WizardGame.exe");
+            Directory.CreateDirectory(config); Directory.CreateDirectory(Path.Combine(steam,"steamapps")); File.WriteAllText(Path.Combine(steam,"steam.exe"),""); File.WriteAllText(game,"");
+            using(var writer=new BinaryWriter(File.Create(Path.Combine(config,"shortcuts.vdf")))) {
+                writer.Write((byte)0); WriteString(writer,"shortcuts"); writer.Write((byte)0); WriteString(writer,"0");
+                writer.Write((byte)2); WriteString(writer,"appid"); writer.Write((uint)1234);
+                WriteField(writer,"AppName","Wizard game"); WriteField(writer,"exe","\""+game+"\""); WriteField(writer,"StartDir","\""+root+"\"");
+                writer.Write((byte)8); writer.Write((byte)8);
+            }
+            var detected=new Dictionary<string,string>{{"steam",steam}};
+            Storage.Root=Path.Combine(root,"cancel-fresh"); Directory.CreateDirectory(Storage.Root);
+            instance=new Launcher(false,true); instance.ShowSetupWizard(true,detected); var wizard=Wizard(instance);
+            Click(wizard,"SetupNext");
+            Check(!Descendants(wizard).OfType<CheckBox>().Any(box => box.Name=="SetupRetroArchPreferLibretro"),"RetroArch setup uses a detection prompt instead of an artwork checkbox");
+            Find<TextBox>(wizard,"SetupEmulatorPath_retroarch").Text=emulatorExe;
+            Find<TextBox>(wizard,"SetupEmulatorPath_pcsx2").Text=emulatorExe; Click(wizard,"SetupNext");
+            Find<PasswordBox>(wizard,"SetupArtworkKey").Password="unsaved-key"; Click(wizard,"SetupNext");
+            Find<ComboBox>(wizard,"SetupLayout").SelectedValue="grid"; Click(wizard,"SetupNext");
+            Check(!File.Exists(Path.Combine(Storage.Root,"settings.json")) && ArtworkKey.Load()==null,"Fresh setup writes neither settings nor API key before Finish");
+            wizard.Close();
+            var library=(Library)typeof(Launcher).GetField("library",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(instance);
+            Check(!instance.IsVisible && library.Games.Count==0,"Closing first-run setup returns to the tray without showing template panels");
+            typeof(Launcher).GetMethod("Save",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(instance,null);
+            Check(!File.Exists(Path.Combine(Storage.Root,"settings.json")) && ArtworkKey.Load()==null,"Closing first-run setup leaves the data untouched even after an overlay save");
+            instance.ExitApp(); Dispatcher.CurrentDispatcher.Invoke(DispatcherPriority.ApplicationIdle,new Action(() => {})); instance=null;
+            Storage.Root=Path.Combine(root,"finish-fresh"); Directory.CreateDirectory(Storage.Root);
+            instance=new Launcher(false,true); instance.ShowSetupWizard(true,detected); wizard=Wizard(instance);
+            Click(wizard,"SetupNext"); Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip"); Click(wizard,"SetupFinish");
+            var active=instance;
+            WaitUntil(() => Wizard(active)==null && !(bool)typeof(Launcher).GetField("scanning",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(active));
+            var saved=Storage.Read<Settings>("settings.json");
+            library=(Library)typeof(Launcher).GetField("library",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(instance);
+            Check(saved.SetupWizardCompleted && saved.CustomGames.Count==1 && CustomGameLibrary.InCustomGamesList(saved,saved.CustomGames[0]),"Finish automatically imports included Steam shortcuts into Custom games");
+            Check(library.Games.Count==1 && CombinedCollections.Options(library,saved).Single(list => list.Id=="source:custom").Games.Count==1,"Wizard import and Steam detection produce a single entry");
+            string id=saved.CustomGames[0].Id;
+            instance.ShowSetupWizard(true,detected); wizard=Wizard(instance); Click(wizard,"SetupNext"); Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip"); Click(wizard,"SetupFinish");
+            WaitUntil(() => Wizard(active)==null && !(bool)typeof(Launcher).GetField("scanning",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(active));
+            saved=Storage.Read<Settings>("settings.json");
+            Check(saved.CustomGames.Count==1 && saved.CustomGames[0].Id==id,"Repeating setup keeps the same imported game without duplicates");
+            instance.ExitApp(); Dispatcher.CurrentDispatcher.Invoke(DispatcherPriority.ApplicationIdle,new Action(() => {})); instance=null;
+            Storage.Root=Path.Combine(root,"finish-without-shortcuts"); Directory.CreateDirectory(Storage.Root);
+            instance=new Launcher(false,true); instance.ShowSetupWizard(true,detected); wizard=Wizard(instance);
+            Find<CheckBox>(wizard,"SetupIncludeSteamShortcuts").IsChecked=false;
+            Click(wizard,"SetupNext"); Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip"); Click(wizard,"SetupFinish");
+            active=instance;
+            WaitUntil(() => Wizard(active)==null && !(bool)typeof(Launcher).GetField("scanning",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(active));
+            saved=Storage.Read<Settings>("settings.json");
+            library=(Library)typeof(Launcher).GetField("library",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(instance);
+            Check(!saved.IncludeSteamShortcuts && (saved.CustomGames==null || saved.CustomGames.Count==0) && library.Games.Count==0,"Unchecking non-Steam games prevents both custom imports and native shortcut detection");
+        } finally {if(instance!=null) {instance.ExitApp(); Dispatcher.CurrentDispatcher.Invoke(DispatcherPriority.ApplicationIdle,new Action(() => {}));} Storage.Root=previous;}
+    }
     static void CheckStartupProfiles(string root) {
         string previous=Storage.Root;
         try {
@@ -39,6 +102,7 @@ class SetupWizardTests {
         } finally {Storage.Root=previous;}
     }
     [STAThread] public static void Main(string[] args) {
+        System.Threading.SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
         string root=Path.Combine(Path.GetTempPath(),"SetupWizard-"+Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root); Storage.Root=root;
         Launcher launcher=null;
         try {
@@ -48,7 +112,7 @@ class SetupWizardTests {
             Check(displayedPath.EndsWith(@"\MixedCase\Launcher.EXE",StringComparison.Ordinal) && !displayedPath.Contains('/') && Char.IsUpper(displayedPath[0]),"Launcher paths use actual filesystem casing and Windows separators");
             string oldExe=Path.Combine(root,"old","pcsx2.exe"),newExe=Path.Combine(root,"new","pcsx2-qt.exe");
             foreach(string file in new[]{oldExe,newExe}) {Directory.CreateDirectory(Path.GetDirectoryName(file)); File.WriteAllText(file,"");}
-            var initial=new Settings {GogEnabled=false,LeftStickSpeed=2,HiddenGameIds=new List<string>{"hidden-sentinel"},CustomLists=new List<CustomList>{new CustomList {Id="list:sentinel",Name="Keep",Games=new List<string>{"keep-game"}}},Emulators=new List<EmulatorConfig>{new EmulatorConfig {Id="pcsx2",Path=oldExe,RomFolder="keep-rom-folder",Arguments="--existing {game}",Games=new List<EmulatorGame>()}}};
+            var initial=new Settings {RetroArchListArtworkSource="sgdb",GogEnabled=false,LeftStickSpeed=2,HiddenGameIds=new List<string>{"hidden-sentinel"},CustomLists=new List<CustomList>{new CustomList {Id="list:sentinel",Name="Keep",Games=new List<string>{"keep-game"}}},Emulators=new List<EmulatorConfig>{new EmulatorConfig {Id="pcsx2",Path=oldExe,RomFolder="keep-rom-folder",Arguments="--existing {game}",Games=new List<EmulatorGame>()}}};
             Storage.Write("settings.json",initial); ArtworkKey.Save("existing-key"); launcher=new Launcher(true,true);
             var pathStatus=new TextBlock();
             typeof(Launcher).GetMethod("SetLauncherDetectionNote",BindingFlags.NonPublic|BindingFlags.Instance).Invoke(launcher,new object[]{pathStatus,"Steam",oldExe});
@@ -112,40 +176,65 @@ class SetupWizardTests {
             Find<TextBlock>(wizard,"SetupLauncherPath_gog").Text=newExe;
             Find<TextBlock>(wizard,"SetupLauncherPath_battlenet").Text=newExe;
             Click(wizard,"SetupNext");
-            Check(!Storage.Read<Settings>("settings.json").SteamEnabled && Storage.Read<Settings>("settings.json").IncludeSteamShortcuts && Storage.Read<Settings>("settings.json").SteamShortcutLaunchMode=="direct","Wizard persists Steam inclusion and launch mode without clearing the shortcut preference");
-            Check(Storage.Read<Settings>("settings.json").GogLauncherPath==newExe && Storage.Read<Settings>("settings.json").BattleNetLauncherPath==newExe,"Wizard saves changed launcher paths");
-            Check(Storage.Read<Settings>("settings.json").GogEnabled && Storage.Read<Settings>("settings.json").SetupWizardPage==1,"Next saves launcher choices and progress without requiring Steam");
+            Check(Storage.Read<Settings>("settings.json").SteamEnabled,"Next leaves saved Steam inclusion unchanged until Finish");
+            Check(Storage.Read<Settings>("settings.json").GogLauncherPath==null && Storage.Read<Settings>("settings.json").BattleNetLauncherPath==null,"Changed launcher paths remain staged");
+            Check(!Storage.Read<Settings>("settings.json").GogEnabled && Storage.Read<Settings>("settings.json").SetupWizardPage==4,"Next does not write launcher choices or progress");
             Check(Find<Button>(wizard,"SetupDetectEmulators")!=null,"Emulator detection is accessible directly from the wizard");
+            Find<TextBox>(wizard,"SetupEmulatorPath_retroarch").Text=newExe;
             Find<TextBox>(wizard,"SetupEmulatorPath_pcsx2").Text=newExe;
             Click(wizard,"SetupBack"); Click(wizard,"SetupNext");
             Check(Find<TextBox>(wizard,"SetupEmulatorPath_pcsx2").Text==newExe,"Back and Next preserve an emulator-page draft");
             Click(wizard,"SetupNext"); var applied=Storage.Read<Settings>("settings.json");
-            Check(EmulatorLibrary.Config(applied,"pcsx2").Path==newExe && EmulatorLibrary.Config(applied,"pcsx2").RomFolder=="keep-rom-folder" && EmulatorLibrary.Config(applied,"pcsx2").Arguments=="--existing {game}","Wizard saves emulator paths without clearing ROM folders or arguments");
+            Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 3 of 5","Emulator setup advances successfully: "+Find<TextBlock>(wizard,"SetupStatus").Text);
+            Check(EmulatorLibrary.Config(applied,"pcsx2").Path==oldExe && EmulatorLibrary.Config(applied,"pcsx2").RomFolder=="keep-rom-folder" && EmulatorLibrary.Config(applied,"pcsx2").Arguments=="--existing {game}","Wizard keeps staged emulator paths out of saved settings");
             Find<PasswordBox>(wizard,"SetupArtworkKey").Password="new-key"; Click(wizard,"SetupNext");
-            Check(ArtworkKey.Load()=="new-key" && !System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(Path.Combine(root,"steamgriddb.key"))).Contains("new-key"),"Next saves the optional artwork key encrypted");
+            Check(ArtworkKey.Load()=="existing-key","Next does not replace the saved artwork key");
             Check(Descendants(wizard).OfType<Image>().Count(image => image.Source is System.Windows.Media.Imaging.BitmapSource)==3,"All three layout options have template pictures");
             Click(wizard,"SetupLayoutPreview_grid");
             Check((string)Find<ComboBox>(wizard,"SetupLayout").SelectedValue=="grid","Clicking a layout picture selects that layout");
             Click(wizard,"SetupLayoutPreview_rectangular");
             Check((string)Find<ComboBox>(wizard,"SetupLayout").SelectedValue=="rectangular","The rectangular preview selects the same option as the dropdown");
             Find<ComboBox>(wizard,"SetupButtonStyle").SelectedValue="Nintendo"; Find<ComboBox>(wizard,"SetupLayout").SelectedValue="rectangular"; Find<CheckBox>(wizard,"SetupShowTitle").IsChecked=false; Click(wizard,"SetupNext");
-            Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="Nintendo" && Storage.Read<Settings>("settings.json").CarouselLayout=="rectangular" && !Storage.Read<Settings>("settings.json").ShowGameTitle,"Next saves optional controller labels and overlay choices");
+            Check(Storage.Read<Settings>("settings.json").ButtonPrompts=="PlayStation" && Storage.Read<Settings>("settings.json").CarouselLayout=="angled" && Storage.Read<Settings>("settings.json").ShowGameTitle,"Appearance choices are not saved before Finish");
             Click(wizard,"SetupRestart");
-            Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 1 of 5" && Storage.Read<Settings>("settings.json").GogEnabled && EmulatorLibrary.Config(Storage.Read<Settings>("settings.json"),"pcsx2").Path==newExe && ArtworkKey.Load()=="new-key","Restart returns to the first page without erasing saved configuration");
+            Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 1 of 5" && Find<CheckBox>(wizard,"SetupLauncher_gog").IsChecked==true && !Storage.Read<Settings>("settings.json").GogEnabled && ArtworkKey.Load()=="existing-key","Restart preserves staged choices without committing them");
             SkipToEnd(wizard); Click(wizard,"SetupFinish");
             Check(Storage.Read<Settings>("settings.json").SetupWizardCompleted,"Setup can finish after restarting and skipping every page");
+            Check(!Storage.Read<Settings>("settings.json").SteamEnabled && Storage.Read<Settings>("settings.json").GogEnabled && EmulatorLibrary.Config(Storage.Read<Settings>("settings.json"),"pcsx2").Path==newExe && Storage.Read<Settings>("settings.json").CarouselLayout=="rectangular" && ArtworkKey.Load()=="new-key","Finish commits launcher, emulator, artwork and appearance drafts together");
+            Check(Storage.Read<Settings>("settings.json").RetroArchListArtworkSource=="sgdb","Manually entering a RetroArch path does not silently change the existing artwork preference");
+            string beforeClose=File.ReadAllText(Path.Combine(root,"settings.json"));
             launcher.ShowSetupWizard(true,new Dictionary<string,string>()); wizard=Wizard(launcher); Click(wizard,"SetupSkip"); wizard.Close();
-            Check(Wizard(launcher)==null && Storage.Read<Settings>("settings.json").SetupWizardShown && Storage.Read<Settings>("settings.json").SetupWizardPage==1,"Closing early leaves saved progress and keeps setup optional");
+            Check(Wizard(launcher)==null && File.ReadAllText(Path.Combine(root,"settings.json"))==beforeClose,"Closing restarted setup leaves the saved settings byte-for-byte unchanged");
             ArtworkKey.Save(""); launcher.ShowSetupWizard(true,new Dictionary<string,string>()); wizard=Wizard(launcher);
             Click(wizard,"SetupSkip"); Click(wizard,"SetupSkip");
-            Check((string)Find<CheckBox>(wizard,"SetupArtworkEnabled").Content=="Use SteamGridDB artwork","Artwork checkbox caption");
+            Check(!Descendants(wizard).OfType<CheckBox>().Any(box => box.Name=="SetupArtworkEnabled"),"Wizard uses source choices without a global SteamGridDB checkbox");
+            Check(Find<TextBlock>(wizard,"SetupEmulatorArtworkHeading").Text=="Choose emulator artwork sources","Wizard labels the emulator artwork source section");
+            wizard.UpdateLayout();
+            var previewRoot=(FrameworkElement)wizard.Content;
+            var previewBitmap=new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(previewRoot.ActualWidth)+60,(int)Math.Ceiling(previewRoot.ActualHeight)+60,96,96,System.Windows.Media.PixelFormats.Pbgra32);
+            previewBitmap.Render(previewRoot); var previewPng=new System.Windows.Media.Imaging.PngBitmapEncoder(); previewPng.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(previewBitmap));
+            using(var output=File.Create(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"Setup-artwork-preview.png"))) previewPng.Save(output);
+
+            Check(!Descendants(wizard).OfType<CheckBox>().Any(box => box.Name=="SetupLibretroArtwork"),"Wizard artwork uses per-emulator sources instead of a global Libretro checkbox");
+            foreach(string emulator in new[]{"duckstation","mgba","melonds"}) Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_"+emulator).SelectedValue=="libretro","Older emulator defaults prefer Libretro: "+emulator);
+            Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_pcsx2").SelectedValue=="sgdb","Other emulators default to SteamGridDB");
+            Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_xemu").SelectedValue=="sgdb","xemu defaults to Prefer SteamGridDB");
+            Find<ComboBox>(wizard,"SetupArtworkSource_dolphin").SelectedValue="libretro-only";
+            Find<PasswordBox>(wizard,"SetupArtworkKey").Password="temporary-key";
+            Find<PasswordBox>(wizard,"SetupArtworkKey").Password="";
+            Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_dolphin").SelectedValue=="libretro-only","Editing or clearing the key preserves source choices");
+            foreach(var preset in EmulatorLibrary.Presets) Find<ComboBox>(wizard,"SetupArtworkSource_"+preset.Id).SelectedValue="libretro-only";
+            Click(wizard,"SetupNext");
+            Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 4 of 5","Only Libretro choices advance without a missing-SGDB-key warning");
+            Click(wizard,"SetupBack");
+            Find<ComboBox>(wizard,"SetupArtworkSource_xemu").SelectedValue="sgdb";
             wizard.Dispatcher.BeginInvoke(new Action(() => {
                 var warning=wizard.OwnedWindows.Cast<Window>().Single(window => window.Name=="SetupArtworkKeyWarning");
                 Check((string)Find<Button>(warning,"SetupProvideArtworkKey").Content=="Provide API key (recommended)","Missing-key warning offers the recommended key action");
                 Click(warning,"SetupProvideArtworkKey");
             }));
             Click(wizard,"SetupNext");
-            Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 3 of 5" && Storage.Read<Settings>("settings.json").SetupWizardPage==2,"Provide API key keeps the artwork page without advancing saved progress");
+            Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 3 of 5" && Storage.Read<Settings>("settings.json").SetupWizardPage==4,"Provide API key keeps the artwork page without changing saved progress");
             wizard.Dispatcher.BeginInvoke(new Action(() => {
                 var warning=wizard.OwnedWindows.Cast<Window>().Single(window => window.Name=="SetupArtworkKeyWarning"); Click(warning,"SetupContinueWithoutArtworkKey");
             }));
@@ -153,7 +242,10 @@ class SetupWizardTests {
             Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 4 of 5","Continue allows setup without an API key");
             Click(wizard,"SetupSkip");
             Check(Find<Button>(wizard,"SetupBack").Parent==Find<Button>(wizard,"SetupFinish").Parent && Find<Button>(wizard,"SetupRestart").Parent is Grid && Grid.GetColumn((UIElement)Find<Button>(wizard,"SetupBack").Parent)==1,"Last page places Back and Finish on the right and Restart setup on the left");
+            Find<CheckBox>(wizard,"SetupOpenSettings").IsChecked=true;
             Click(wizard,"SetupFinish");
+            Check((string)((TabItem)Find<TabControl>(launcher.HelpWindow,"HelpSettingsTabs").SelectedItem).Header=="Overlay","Open Settings after Finish selects Overlay");
+            CheckTransactionalSetup(root,newExe);
             Console.WriteLine(checks+" setup wizard checks passed");
         } finally {if(launcher!=null) {var wizard=Wizard(launcher); if(wizard!=null) wizard.Close(); launcher.ExitApp();} if(Directory.Exists(root)) Directory.Delete(root,true);}
     }

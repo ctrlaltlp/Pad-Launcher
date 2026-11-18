@@ -40,6 +40,40 @@ class CustomListTests {
         var provenanceOptions=CombinedCollections.Options(library,settings);
         Check(CustomLists.MembershipReason(settings,provenanceOptions,combined,"new-steam").Contains("From Steam"),"Combined game explanation identifies inherited source");
         Check(CustomLists.MembershipReason(settings,provenanceOptions,combined,"epic:2").Contains("Added individually"),"Combined game explanation identifies individual additions");
+        var removalLibrary=new Library {Games=new List<Game> {new Game {Id="pc",Source="custom"},new Game {Id="rom",Source="emulator",EmulatorId="duckstation"},new Game {Id="steam",Source="steam"},new Game {Id="keep",Source="custom"}}};
+        var removalSettings=new Settings {
+            CustomGames=new List<CustomGame> {new CustomGame {Id="pc",Target="untouched.exe"},new CustomGame {Id="keep"}},
+            Emulators=new List<EmulatorConfig> {new EmulatorConfig {Id="duckstation",Games=new List<EmulatorGame> {new EmulatorGame {Id="rom",Path="untouched.cue"}}}},
+            FavouriteGameIds=new List<string> {"pc","keep"},HiddenGameIds=new List<string> {"rom"},
+            ArtworkOverrides=new Dictionary<string,string> {{"pc","untouched.png"}},
+            LaunchHistory=new Dictionary<string,long> {{"rom",123}},
+            SelectedGamesByList=new Dictionary<string,string> {{"shared","rom"}},
+            ListGameAdditions=new Dictionary<string,List<string>> {{"source:steam",new List<string> {"pc","keep"}}}
+        };
+        string doomed=CustomLists.Save(removalSettings,removalLibrary,null,"Delete me",new[]{"pc","rom","steam"});
+        string shared=CustomLists.Save(removalSettings,removalLibrary,null,"Shared",new[]{"pc","rom","keep"});
+        string combination=CombinedCollections.Save(removalSettings,removalLibrary,null,"Combined",new[]{doomed,shared});
+        var removed=CustomLists.DeleteAndUnregisterGames(removalSettings,removalLibrary,doomed);
+        Check(removed.Count==3 && removalSettings.CustomGames.Single().Id=="keep" && removalSettings.Emulators.Single().Games.Count==0,"Delete with games unregisters emulator and custom entries while preserving unrelated games");
+        Check(removalSettings.CustomLists.Single().Id==shared && removalSettings.CustomLists.Single().Games.SequenceEqual(new[]{"keep"}) && !removalSettings.CombinedCollections.Single().Sources.Contains(doomed),"Unregistered games are removed from other lists and deleted list links are cleaned");
+        Check(removalSettings.ReplacedGameIds.Contains("steam") && removalSettings.FavouriteGameIds.SequenceEqual(new[]{"keep"}) && removalSettings.HiddenGameIds.Count==0 && removalSettings.ArtworkOverrides.Count==0 && removalSettings.LaunchHistory.Count==0 && removalSettings.SelectedGamesByList.Count==0,"Unregistration suppresses rediscovery and clears stale game metadata");
+        Check(removalSettings.ListGameAdditions["source:steam"].SequenceEqual(new[]{"keep"}) && removalLibrary.Games.Count==4,"Unregistration prepares settings without mutating the live library before settings are committed");
+        Reject(() => CustomLists.DeleteAndUnregisterGames(removalSettings,removalLibrary,"source:steam"),"Cannot delete a built-in launcher list with unregister");
+        var addedSettings=new Settings(); var addedLibrary=new Library {Games=new List<Game>{new Game {Id="old",Name="Old"}}};
+        Check(CombinedCollections.TrackAddedGames(addedLibrary,addedSettings,100) && addedSettings.GameAddedAt["old"]==0,"First tracking run baselines existing games without inventing dates");
+        Check(CombinedCollections.Options(addedLibrary,addedSettings).Single(list => list.Id=="recently-added").Games.Count==0,"Legacy games are not presented as newly added");
+        addedLibrary.Games.Add(new Game {Id="new1",Name="New one"}); CombinedCollections.TrackAddedGames(addedLibrary,addedSettings,200);
+        addedLibrary.Games.Add(new Game {Id="new2",Name="New two"}); CombinedCollections.TrackAddedGames(addedLibrary,addedSettings,300);
+        Check(CombinedCollections.Options(addedLibrary,addedSettings).Single(list => list.Id=="recently-added").Games.SequenceEqual(new[]{"new2","new1"}),"Recently added sorts new registrations newest first");
+        Check(!CombinedCollections.TrackAddedGames(addedLibrary,addedSettings,400) && addedSettings.GameAddedAt["new1"]==200,"Reimporting and refreshing do not replace first-added timestamps");
+        addedSettings=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(addedSettings));
+        Check(addedSettings.GameAddedAt["new2"]==300,"Added dates survive settings serialization");
+        addedLibrary.Games.RemoveAll(game => game.Id=="new2");
+        Check(CombinedCollections.Options(addedLibrary,addedSettings).Single(list => list.Id=="recently-added").Games.SequenceEqual(new[]{"new1"}),"Unregistered games disappear from Recently added");
+        addedLibrary.Games.Add(new Game {Id="new2",Name="New two"}); CombinedCollections.TrackAddedGames(addedLibrary,addedSettings,500);
+        Check(addedSettings.GameAddedAt["new2"]==300,"Rediscovering a known ID retains its original registration time");
+        addedSettings.HiddenGameIds=new List<string>{"new2"};
+        Check(CombinedCollections.Label(CombinedCollections.Options(addedLibrary,addedSettings).Single(list => list.Id=="recently-added"),addedLibrary,addedSettings.HiddenGameIds).Contains("1 game"),"Recently added counts respect hidden games");
         Console.WriteLine(checks+" custom list checks passed");
     }
 }

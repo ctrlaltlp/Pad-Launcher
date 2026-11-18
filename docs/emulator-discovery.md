@@ -1,10 +1,35 @@
-# Emulator game discovery
+﻿# Emulator game discovery
+
+### xemu (checked 2026-11-18)
+
+Detection recognises `xemu.exe`. Launches use `-full-screen -dvd_path {game}`; global and per-game overrides remain editable. ROM scanning accepts `.iso` and `.xiso` Xbox XISO images; extracted executable files are not imported as standalone titles. Required system files must already be configured in xemu. Pad Launcher never supplies or modifies those files.
+
+Library import reads portable `xemu.toml` beside the executable first, otherwise `%APPDATA%/xemu/xemu/xemu.toml` (and the common single-folder variant). It scans `[general] games_dir` and offers `[sys.files] dvd_path` as the explicitly labelled last-disc partial source. Both paths reuse the same ROM identity, preserving repeat-import idempotence. Manual ROM folders and file addition remain available. Configuration is read-only.
+
+Verified upstream: [launch options](https://xemu.app/docs/cli/), [games directory](https://xemu.app/docs/games-directory/), [configuration fields](https://github.com/xemu-project/xemu/blob/master/config_spec.yml), and [portable/SDL preference paths](https://github.com/xemu-project/xemu/blob/master/ui/xemu-settings.cc). Fixture coverage verifies configuration discovery, folder and last-disc sources, launch flags and deduplication; physical game launching remains untested.
+
+
+### shadPS4 Qt Launcher (checked 2026-11-18)
+
+Executable discovery recognises both `shadPS4.exe` (CLI) and `shadPS4QtLauncher.exe` (frontend), including Start-menu targets. Qt matches are labelled explicitly. Qt defaults to `-d -g {game}`: the launcher selects its configured default emulator version and receives the quoted game path. CLI keeps its positional `{game}` default; user-specified global/per-game arguments remain authoritative. Qt needs an installed, selected default version in its own Version Manager; detecting the frontend alone does not prove an emulator engine has been installed. Pad Launcher does not install versions, launch the frontend during detection, or modify its files.
+
+Native import finds portable `user/config.json` first, otherwise standard `%APPDATA%/shadPS4/config.json`, and reads enabled `General.install_dirs` entries. Disabled folders are excluded, paths are deduplicated, and the existing folder reader selects game `eboot.bin` entries. Explicit installed-games folders and manual scanning remain available; repeated imports retain path-based identity. Fixture-tested detection, quoted launch arguments, custom arguments and configured-folder selection. The user's actual Qt Start-menu shortcut is also checked read-only; no game is launched.
+
+Upstream references: [Qt command-line parser](https://github.com/shadps4-emu/shadps4-qtlauncher/blob/main/src/main.cpp), [portable/installed paths](https://github.com/shadps4-emu/shadps4-qtlauncher/blob/main/src/common/path_util.cpp), [configured game directories](https://github.com/shadps4-emu/shadps4-qtlauncher/blob/main/src/core/emulator_settings.cpp), [version registry](https://github.com/shadps4-emu/shadps4-qtlauncher/blob/main/src/common/versions.cpp).
 
 Research checked against upstream source on 2026-11-10. Pad Launcher supports explicit **Import library** discovery alongside manual add and ROM-folder scanning. Imports create or extend custom lists, and saved imports can be run again without removing previously imported games. Source adapters are verified with fixtures; actual installed-emulator testing remains necessary. The methods below distinguish current support from future extensions.
 
 ## Recommended methods
 
+Library import review offers separate tag removal and title normalisation previews; moving trailing `, The` changes only the chosen display names when the import is committed. Original ROM paths, artwork metadata, cores and emulator-owned library files are preserved. Repeated imports retain path-based identity and do not duplicate renamed entries.
+
+Artwork metadata from RetroArch playlists is retained alongside imported games: `db_name` identifies the thumbnail system and the original label helps match region/disc names. Mixed playlist names do not replace known platform metadata on repeated imports. The optional [Libretro artwork fallback](libretro-artwork.md) uses this metadata without changing launch commands or emulator-owned files.
+
+Missing Libretro-preferred artwork also uses this console/region metadata for offline placeholder sizing. Profiles were measured from public [Libretro box-art catalogues](https://thumbnails.libretro.com/) on 2026-11-17; sample filenames, dimensions and regional exceptions are recorded in [libretro-placeholder-samples.json](libretro-placeholder-samples.json). Unknown consoles retain a square placeholder. These estimates affect no imports, ROM files, emulator settings or loaded image dimensions.
+
 ### Installed-executable detection (2026-11-14)
+
+Steam installations are also checked during explicit emulator detection. The detector reads `steamapps/libraryfolders.vdf` from configured and registered Steam roots (modern and legacy VDF entries), then checks emulator-named folders immediately under each `steamapps/common`, including additional library drives. It probes known executable names at the folder root and `bin`/`x64`, skips reparse-point directories and does not recursively scan game folders or launch executables. Matches retain their Steam-library evidence and still require user review. This covers Steam RetroArch and other supported emulators installed in appropriately named Steam folders.
 
 Executable detection is available in regular Settings and the optional setup wizard. It checks both user/machine and 32/64-bit **App Paths** and **Uninstall** registrations, relevant Start-menu shortcut targets, and emulator-named folders immediately under Program Files and local application locations. It checks known executable filenames, including common alternate builds, without launching them, writing registrations, scanning ROMs or searching entire drives. This is candidate discovery, not proof that an emulator was installed by an installer: portable applications with shortcuts can also appear. Paths outside these sources, renamed binaries, Microsoft Store packages and arbitrary portable folders can be missed; manual Browse remains available.
 
@@ -24,7 +49,7 @@ Changing the saved emulator executable re-detects its library/configuration loca
 | Eden | Read the `gamedirs` array and each entry's `path` / `deep_scan`. | Special entries such as `UserNAND`, `SysNAND`, and `SDMC` are logical sources, not filesystem paths. Installed content needs a separate title-aware adapter. |
 | RPCS3 | Resolve its virtual HDD from VFS configuration; inspect installed games. Also read `games.yml` for registered external/disc games. | Installed PKGs are discovered from installed titles, not installer files. Filter game-data/update entries using metadata, and deduplicate by title identity. |
 | Vita3K | Resolve its configured Vita filesystem root, then enumerate installed `ux0/app` titles. | These installed folders are the inventory; do not import every PKG/VPK as a separate game. Launch by installed title ID. |
-| RetroArch | Read its configured playlist directory and `.lpl` playlists. | Preserve each entry's core, playlist defaults, labels and portable paths. `DETECT` / unresolved cores require user selection. |
+| RetroArch | Read its configured playlist directory and `.lpl` playlists. | Preserve each entry's core, playlist defaults, labels and portable paths. `DETECT` entries use installed core metadata when unambiguous; unresolved or ambiguous matches offer user selection. |
 | PPSSPP | Read pinned paths, its current browser directory, recent games, and the active memory-stick `PSP/GAME` location. | These sources are incomplete hints rather than a guaranteed complete library. Scan confirmed folders; ignore remote/network URLs unless separately supported. |
 | melonDS | Read `RecentROM` and `LastROMFolder`; offer those files/folder as discovery candidates. | Recently played files are not a complete library. Prefer the existing user-selected scan folder for completeness. NAND-installed DSiWare needs separate research and launching support. |
 | mGBA | Read its optional `library.sqlite3` library or use its recorded roots as scan candidates. | Library support depends on the build and whether the user populated it. Archive members need special handling. Retain folder-scan fallback. |
@@ -69,6 +94,16 @@ The configuration resolves a Vita filesystem root, including portable-mode overr
 Source: [configuration, filesystem resolution and installed-title validation](https://github.com/Vita3K/Vita3K/blob/master/vita3k/config/src/config.cpp).
 
 ### RetroArch
+
+Core resolution supports standard playlists whose entries use `DETECT`: preserve valid explicit entry/default core paths or names first, relocate missing paths to the same DLL in the current installation, then use the selected per-source/global fallback. Otherwise, select an installed core only when its `.info` database and supported-extension metadata yield exactly one compatible match. Unknown platforms and multiple matches require an explicit choice. The source selector offers installed cores for unresolved playlists; choices are staged until import and saved with the import definition for later reuse. Existing valid per-game core assignments are preserved; missing assignments may be repaired during a confirmed import. Saving a changed (or already-updated) executable also repairs stale paths to the same installed core DLL, without rewriting ROM paths or RetroArch files.
+
+The inventory honours `libretro_directory` and `libretro_info_path` in the active configuration, with standard `cores`/`info` folders as fallback. Evidence: [playlist default-core behaviour](https://docs.libretro.com/guides/roms-playlists-thumbnails/), [core info metadata](https://github.com/libretro/libretro-core-info/blob/master/00_example_libretro.info), and verified local standard RetroArch configuration/playlist files.
+
+Both individual and bulk library imports offer **One list per playlist** in the destination selector. Each non-empty selected playlist gets a list named after it; games shared across playlists retain one game entry with multiple list memberships. Reimport reuses saved per-playlist destinations, preserving renamed lists and their overlay visibility. The automatic RetroArch list remains available as an alternative destination.
+
+Archive members in playlists use `archive.zip#folder/ROM.ext` (also `.7z#...`). The importer resolves the archive against the RetroArch installation, preserves the member, label, database and core, and passes the full content path as one quoted launch argument. No extraction or emulator-file changes are performed. Different members remain distinct; repeat imports reuse their entries. Missing-game checks use the containing archive rather than treating the virtual member path as a missing Windows file. Member contents are left for RetroArch to validate; Pad Launcher does not enumerate archives or detect individual members deleted inside an existing archive. Other emulators' archive syntax remains unsupported unless separately implemented.
+
+Format reference: [Libretro playlist documentation](https://docs.libretro.com/guides/roms-playlists-thumbnails/).
 
 `playlist_directory` points to saved collections. The playlist implementation stores content paths, labels, per-entry core paths and playlist-level default cores. It also implements legacy/compressed formats and portable-path resolution, so do not assume every `.lpl` is plain JSON with absolute paths. Start with a declared supported format, report unsupported files, and keep explicit core assignment when importing. History/favourites can supplement system playlists but should be deduplicated.
 

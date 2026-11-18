@@ -54,6 +54,16 @@ namespace PadLauncher {
             Func<Version,Version> full=v => new Version(v.Major,v.Minor,Math.Max(0,v.Build),Math.Max(0,v.Revision));
             return full(candidate)>full(current);
         }
+        public static string RateLimitMessage(int status,string remaining,string reset,string retryAfter,DateTimeOffset now) {
+            if(status!=429 && !(status==403 && (remaining=="0" || !String.IsNullOrWhiteSpace(retryAfter)))) return null;
+            DateTimeOffset retryAt; long seconds;
+            bool known=false; retryAt=now;
+            if(Int64.TryParse(retryAfter,out seconds) && seconds>=0 && seconds<=86400*365) {retryAt=now.AddSeconds(seconds); known=true;}
+            else if(!String.IsNullOrWhiteSpace(retryAfter) && DateTimeOffset.TryParse(retryAfter,System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.AssumeUniversal,out retryAt)) known=true;
+            else if(Int64.TryParse(reset,out seconds) && seconds>=0 && seconds<=253402300799L) {retryAt=new DateTimeOffset(1970,1,1,0,0,0,TimeSpan.Zero).AddSeconds(seconds); known=true;}
+            return "GitHub temporarily limited update checks for your network. "+
+                (known && retryAt>now ? "Try again after "+retryAt.ToLocalTime().ToString("g")+" (local time)." : "Please try again later.");
+        }
         static HttpWebResponse Open(string url,CancellationToken token) {
             ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;
             for(int redirects=0;redirects<6;redirects++) {
@@ -67,7 +77,16 @@ namespace PadLauncher {
                 HttpWebResponse response;
                 using(token.Register(request.Abort)) {
                     try {response=(HttpWebResponse)request.GetResponse();}
-                    catch(WebException) {token.ThrowIfCancellationRequested(); throw;}
+                    catch(WebException error) {
+                        token.ThrowIfCancellationRequested();
+                        var failure=error.Response as HttpWebResponse;
+                        if(failure!=null) {
+                            string message=uri.Host=="api.github.com" ? RateLimitMessage((int)failure.StatusCode,failure.Headers["X-RateLimit-Remaining"],failure.Headers["X-RateLimit-Reset"],failure.Headers["Retry-After"],DateTimeOffset.UtcNow) : null;
+                            failure.Dispose();
+                            if(message!=null) throw new IOException(message);
+                        }
+                        throw;
+                    }
                 }
                 if((int)response.StatusCode>=300 && (int)response.StatusCode<400) {
                     string next=response.Headers["Location"]; response.Dispose();

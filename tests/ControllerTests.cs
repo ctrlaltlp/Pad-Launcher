@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows.Interop;
 using PadLauncher;
@@ -15,6 +15,17 @@ public static class ControllerTests {
         Launcher window=null;
         var reader=new PlayStationInput();
         try {
+            var inputFlags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+            var sampleType=typeof(PlayStationInput).GetNestedType("Sample",System.Reflection.BindingFlags.NonPublic);
+            var sample=Activator.CreateInstance(sampleType,true);
+            sampleType.GetField("State").SetValue(sample,new PadState {LX=32767});
+            var samples=(System.Collections.IDictionary)typeof(PlayStationInput).GetField("pads",inputFlags).GetValue(reader);
+            var device=new IntPtr(123); samples.Add(device,sample);
+            System.Threading.Thread.Sleep(1100);
+            Check(reader.ReadAll().Count==1 && reader.ReadAll()[0].Value.LX==32767,"Unchanged held PlayStation input remains valid beyond one second");
+            var messageArguments=new object[]{IntPtr.Zero,0x00fe,new IntPtr(2),device,false};
+            typeof(PlayStationInput).GetMethod("OnMessage",inputFlags).Invoke(reader,messageArguments);
+            Check(reader.ReadAll().Count==0,"PlayStation disconnect notification immediately clears held input");
             var repeat=new NavigationRepeat();
             Check(repeat.Update(1,false,0),"First navigation press responds immediately");
             repeat.CompleteMove(450);
