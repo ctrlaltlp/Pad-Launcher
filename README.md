@@ -31,7 +31,7 @@ Launchers are detected automatically. If detection fails, set the installation f
 
 Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**. Options / Start (or F1) briefly shows control hints and the game title.
 
-Use **Controls → Show/Change controls** to remap controller buttons and keyboard shortcuts independently for the overlay, search keyboard and search results. Conflicting assignments are flagged before saving; **Restore defaults** is available. The table below shows the defaults. [Remapping details](docs/control-bindings.md).
+Use **Controls → Show/Change controls** to remap controller buttons and keyboard shortcuts independently for the overlay, search keyboard and search results. Conflicting assignments are flagged before saving; **Restore defaults** is available. The table below shows the defaults.
 
 Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original Switch Pro Controller through SDL. Switch Pro USB/Bluetooth support is implemented but still awaiting physical-controller testing; Joy-Cons and Switch 2 controllers are not enabled. See [controller support](docs/controller-support.md) for details.
 
