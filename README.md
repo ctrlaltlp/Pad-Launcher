@@ -1,6 +1,6 @@
 # Pad Launcher
 
-![Pad Launcher showing the .Installed Steam collection over a Windows desktop with the taskbar visible](assets/preview.png)
+![Pad Launcher angled artwork carousel showing Alice: Madness Returns in the PC list](assets/preview.png)
 
 A transparent, controller-friendly Windows game launcher with angled, rectangular and grid layouts. Browse games from multiple launchers, emulators and custom entries, with optional game titles and list names. Organise your games into individual or combined lists and use existing launcher artwork, local images or SteamGridDB covers.
 
