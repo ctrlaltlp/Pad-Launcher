@@ -72,6 +72,7 @@ Preconfigured lists:
 - **Recently added:** Newly registered games from all sources, newest first. Tracking starts when this feature is first used; existing games have no historical added date. Refreshing or reimporting a game does not move it to the top.
 - **Favourites:** Your hand-picked games. Press R3 / right stick click or F by default to add or remove the selected game.
 - **Recently played:** Games ordered by their latest launch in Pad Launcher or available launcher play history, newest first.
+
 User lists:
 - **Custom lists:** Pick individual games from any supported source under **Create/Edit lists**.
 - **Combined lists:** Combine source lists into one list that updates with them—for example, a PC list containing Steam collections, other launchers and custom games.
