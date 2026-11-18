@@ -54,9 +54,27 @@ Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original 
 
 Left and right stick speeds are adjustable in Controls (both default to 5×). D-pad and left stick up/down switch lists in Angled and Rectangular layouts. Grid keeps up/down row navigation. R3 toggles favourites; show or hide the Favourites list under **Lists → Overlay lists**.
 
-During search, D-pad/left stick navigates keys or results. Cross / Xbox A / Nintendo B types or plays; Triangle / Xbox Y / Nintendo X inserts a space while typing; Circle / Xbox B / Nintendo A exits search. Square / Xbox X / Nintendo Y backspaces. Up above the first keyboard row focuses the games; Down below the games returns to the keyboard. Triangle / Xbox Y / Nintendo X returns directly to the keyboard when focused on games. L3 cancels and jumps to its configured list; R3 toggles the selected result's favourite status. R2/RT/ZR also switches layouts in search. Enter finishes typing or plays a result; Escape cancels. The temporary layout toggle lasts only for the session and leaves saved layout settings unchanged.
+During search, D-pad/left stick navigates keys or results. Cross / Xbox A / Nintendo B types or plays; Triangle / Xbox Y / Nintendo X inserts a space while typing; Circle / Xbox B / Nintendo A exits search. Square / Xbox X / Nintendo Y backspaces. Up above the first keyboard row focuses the games; Down below the games returns to the keyboard. Triangle / Xbox Y / Nintendo X returns directly to the keyboard when focused on games. L3 cancels and jumps to its configured list; R3 toggles the selected result's favourite status. R2/RT/ZR also switches layouts in search. Enter finishes typing or plays a result; Escape cancels. Layout switches last only for the session by default. Enable **Controls → Remember layout changes made with controls** to save them per list across restarts.
 
-**Recently added** tracks newly registered games from all sources, newest first. Enable or hide it under **Lists → Overlay lists**. Tracking starts with this version; existing games have no historical added date. Refreshing or reimporting an existing game does not move it to the top.
+## Artwork
+
+Pad Launcher uses existing launcher artwork and local images, plus **SteamGridDB (SGDB)** and **Libretro** downloads. SGDB requires your API key; Libretro does not. Downloaded images are cached locally, and manually chosen images take priority.
+
+- **PC launcher games:** Use available launcher artwork, with SGDB for missing covers.
+- **Custom games:** Use manually chosen or available Steam shortcut artwork, with SGDB for missing covers.
+- **Emulator games:** DuckStation, mGBA and melonDS prefer Libretro by default; other emulators, including RetroArch and xemu, prefer SGDB. The other provider is used as fallback.
+
+Change emulator defaults or override individual lists under **Settings → Artwork**. Choose a preferred provider with fallback, or **Only SteamGridDB / Only Libretro**. Lists using **Use emulator defaults** follow each game's emulator preference, even when games are imported into a custom list. Existing preferences are preserved. [Artwork details](docs/libretro-artwork.md).
+
+## Lists
+
+Choose which lists appear and arrange their order under **Settings → Lists → Overlay lists**.
+
+- **Recently added:** Newly registered games from all sources, newest first. Tracking starts when this feature is first used; existing games have no historical added date. Refreshing or reimporting a game does not move it to the top.
+- **Favourites:** Your hand-picked games. Press R3 / right stick click or F by default to add or remove the selected game.
+- **Recently played:** Games ordered by their latest launch in Pad Launcher or available launcher play history, newest first.
+- **Custom lists:** Pick individual games from any supported source under **Create/Edit lists**.
+- **Combined lists:** Combine source lists into one list that updates with them—for example, a PC list containing Steam collections, other launchers and custom games.
 
 ## Credits
 
