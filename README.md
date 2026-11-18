@@ -56,7 +56,7 @@ Left and right stick speeds are adjustable in Controls (both default to 5×). D-
 
 ## Overlay layouts
 
-Choose **Angled** for a slanted artwork carousel, **Rectangular** for a straight carousel, or **Grid** for multiple rows and columns. **Fixed (blurred edges)** keeps consistent panel sizing and fills unused edges with artwork colours; **Fit artwork** follows each cover's proportions to show the full image. Layout and sizing can be set globally or per list.
+Choose **Angled** for a slanted artwork carousel, **Rectangular** for a straight carousel, or **Grid** for multiple rows and columns. **Fixed (blurred edges)** keeps consistent panel sizing and fills unused edges with artwork colours; **Fit artwork** follows each cover's proportions to show the full image. Layout and sizing can be set globally or per list. Enable **Overlay → Remember layout changes made with controls** to keep layout switches for each list across restarts; this is off by default.
 
 ## Artwork
 

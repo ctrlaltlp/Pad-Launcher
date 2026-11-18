@@ -362,6 +362,8 @@ namespace PadLauncher {
         public int SetupWizardPage {get;set;}
         public List<string> HiddenGameIds {get;set;}
         public bool AutoUpdate {get;set;}
+        public bool RememberControlLayoutChanges {get;set;}
+        public Dictionary<string,string> PreviousCarouselLayouts {get;set;}
         public Dictionary<string,ListLayout> ListLayouts {get;set;}
         public Dictionary<string,string> EmulatorArtworkSources {get;set;}
         public Dictionary<string,string> ListArtworkSources {get;set;}

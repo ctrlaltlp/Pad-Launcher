@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.0")]
+[assembly: System.Reflection.AssemblyVersion("0.5.1")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.1")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.1")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -431,9 +431,22 @@ namespace PadLauncher {
             if(previous || !testLayoutTriggerDown || launching || filters.Count==0) return false;
             string id=filters[collectionIndex].Id,layout=ActiveLayout;
             if(layout=="grid") {
-                if(!testPreviousCarouselLayouts.TryGetValue(id,out layout)) layout=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled";
+                if(!testPreviousCarouselLayouts.TryGetValue(id,out layout) && (settings.PreviousCarouselLayouts==null || !settings.PreviousCarouselLayouts.TryGetValue(id,out layout))) layout=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled";
             } else {testPreviousCarouselLayouts[id]=layout; layout="grid";}
             testLayoutOverrides[id]=layout;
+            if(settings.RememberControlLayoutChanges) {
+                var profile=ActiveListLayout==null ? new ListLayout {PanelScale=settings.CarouselScale,RetroPanelScale=settings.RetroPanelScale,PanelSizesLocked=settings.PanelSizesLocked,ShowPanelOutlines=settings.ShowPanelOutlines,Columns=settings.GridColumns,Rows=settings.GridRows,AngledSizing=settings.AngledPanelSizing} : Storage.Json().Deserialize<ListLayout>(Storage.Json().Serialize(ActiveListLayout));
+                profile.Layout=layout;
+                if(layout=="grid") {profile.Columns=5; profile.Rows=3;}
+                if(settings.ListLayouts==null) settings.ListLayouts=new Dictionary<string,ListLayout>();
+                settings.ListLayouts[id]=profile; activeListLayout=profile;
+                string previousCarousel;
+                if(testPreviousCarouselLayouts.TryGetValue(id,out previousCarousel)) {
+                    if(settings.PreviousCarouselLayouts==null) settings.PreviousCarouselLayouts=new Dictionary<string,string>();
+                    settings.PreviousCarouselLayouts[id]=previousCarousel;
+                }
+                testLayoutOverrides.Remove(id); QueueSave();
+            }
             StopListTransition(); navigation.Reset(); exitButton.Reset(); gridScrollPage=-1;
             cards.Clear(); carousel.Children.Clear(); ApplyCarouselScale(); Render(false); return true;
         }
@@ -1065,6 +1078,10 @@ namespace PadLauncher {
                 catch(Exception error) { restoringLayout=true; layoutPicker.SelectedValue=previous; restoringLayout=false; ThemedMessage.Show(dialog,error.Message,"Settings"); }
             };
             layout.Children.Add(layoutPicker);
+            var rememberLayouts=new CheckBox {Name="RememberControlLayoutChangesSetting",Content="Remember layout changes made with controls (default: "+(Prompts.Style(settings)=="Xbox" ? "RT" : Prompts.Style(settings)=="Nintendo" ? "ZR" : "R2")+")",IsChecked=settings.RememberControlLayoutChanges,Margin=new Thickness(0,14,0,6)};
+            layout.Children.Add(rememberLayouts);
+            var rememberLayoutsNote=Label("Save Grid ↔ Angled/Rectangular switches for each list, including after restarting the app.",12,muted); rememberLayoutsNote.TextWrapping=TextWrapping.Wrap; rememberLayoutsNote.Margin=new Thickness(0,0,0,16); layout.Children.Add(rememberLayoutsNote);
+            rememberLayouts.Click+=(s,e) => {settings.RememberControlLayoutChanges=rememberLayouts.IsChecked==true; QueueSave();};
             var sizingCaption=Label("Angled panel sizing",14,mint); sizingCaption.Margin=new Thickness(0,14,0,10); sizingControls.Children.Add(sizingCaption);
             var sizingPicker=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("fixed","Fixed (blurred edges)"),new KeyValuePair<string,string>("fit","Fit artwork")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.AngledPanelSizing=="fixed" ? "fixed" : "fit",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringSizing=false;

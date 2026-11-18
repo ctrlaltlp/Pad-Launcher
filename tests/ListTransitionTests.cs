@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -129,8 +129,20 @@ class ListTransitionTests {
                 persisted.HandleTestLayoutTrigger(new PadState()); persisted.HandleTestLayoutTrigger(new PadState {RT=255});
                 Check((string)active.GetValue(persisted,null)=="rectangular" && savedSettings.CarouselLayout=="rectangular" && savedSettings.ListLayouts["first"].Layout=="grid","R2 restores the previous carousel without modifying saved global or per-list layouts");
                 persisted.HandleTestLayoutTrigger(new PadState());
+                Check(!savedSettings.RememberControlLayoutChanges,"Control layout persistence defaults to disabled");
+                savedSettings.RememberControlLayoutChanges=true;
+                persisted.HandleTestLayoutTrigger(new PadState {RT=255});
+                Check(savedSettings.ListLayouts["recently-added"].Layout=="grid" && savedSettings.PreviousCarouselLayouts["recently-added"]=="rectangular","Enabled persistence saves the active list layout and previous carousel independently");
+                persisted.HandleTestLayoutTrigger(new PadState());
                 Key(persisted,System.Windows.Input.Key.PageUp); persisted.ExitApp();
                 Check(Storage.Read<Settings>("settings.json").CollectionId=="first","Exiting flushes the final navigation selection");
+                var restarted=new Launcher(false,true);
+                try {
+                    restarted.ShowOverlay(); Key(restarted,System.Windows.Input.Key.PageDown);
+                    Check((string)active.GetValue(restarted,null)=="grid","Saved control layout survives app restart");
+                    restarted.HandleTestLayoutTrigger(new PadState {RT=255});
+                    Check((string)active.GetValue(restarted,null)=="rectangular","After restart the toggle restores the saved previous rectangular layout");
+                } finally {restarted.ExitApp();}
             } finally {persisted.ExitApp();}
             Console.WriteLine(checks+" list transition checks passed");
         } finally {if(window!=null) window.ExitApp(); if(Directory.Exists(root)) Directory.Delete(root,true);}
