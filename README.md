@@ -68,7 +68,7 @@ Change emulator defaults or override individual lists under **Settings → Artwo
 
 ## Lists
 
-Choose which lists appear and arrange their order under **Settings → Lists → Overlay lists**.
+Choose which lists appear and arrange their order under **Settings → Lists → Overlay lists**. Each list can have its own layout, panel sizes and outlines under **Per-list layout**, plus its own artwork preference under **Artwork → Per-list artwork**. Create lists from individual games or combine existing lists; combined lists update with their artwork sources. You can show or hide any list you want on the overlay including the preconfigured ones.
 
 - **Recently added:** Newly registered games from all sources, newest first. Tracking starts when this feature is first used; existing games have no historical added date. Refreshing or reimporting a game does not move it to the top.
 - **Favourites:** Your hand-picked games. Press R3 / right stick click or F by default to add or remove the selected game.
