@@ -8,15 +8,6 @@ Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**
 
 Choose **SteamGridDB** or **Libretro** artwork per emulator during setup and per list in Artwork settings, with fallback or single-source choices. Libretro needs no account or API key. [Details](docs/libretro-artwork.md).
 
-## Emulators
-
-Supports **DuckStation, PCSX2, RPCS3, xemu, Xenia, Dolphin, Eden, melonDS, Vita3K, RetroArch, PPSSPP, mGBA, Cemu, Azahar and shadPS4**. Configure emulator paths, import libraries (including RetroArch playlists), scan ROM folders or add games manually. Core selection and launch arguments are configurable; imported games can be organised into lists.
-
-There are 2 ways to import emulator games to the app:
-- Import library from emulator: Reads the emulator’s configured game folders, playlists, registered games or installed titles, depending on the emulator. Folder-based libraries may involve scanning those folders.
-- Scan ROM folders: Separately scans a folder you choose in Pad Launcher, including its subfolders. It does not require a library configured inside the emulator.
-Both let you review detected games, rename new entries and choose a destination list before adding them. Repeating an import or scan reuses existing game entries without creating duplicates.
-
 ## Usage
 
 **[Download the latest PadLauncher.exe](https://github.com/ctrlaltlp/Pad-Launcher/releases/latest/download/PadLauncher.exe)** for Windows 10/11 (64-bit).
@@ -26,6 +17,15 @@ Place `PadLauncher.exe` in its own writable folder before running it. The app cr
 With a fresh data folder, an optional setup wizard helps configure launchers, emulators, artwork, controls and the overlay layout. Every page can be skipped; reopen it from **Settings → System → Restart setup**. Existing installations keep starting quietly in the notification area. Running the executable again toggles the overlay: opens it when hidden, or hides it when visible.
 
 Launchers are detected automatically. If detection fails, set the installation folder in **Settings → Launchers**. Use **Emulators → Settings → Detect installed emulators** to review emulator paths found through Windows registrations, Start-menu shortcuts and standard installation folders, or browse manually. Emulator games can then be imported from libraries, scanned from ROM folders or added manually.
+
+## Emulators
+
+Supports **DuckStation, PCSX2, RPCS3, xemu, Xenia, Dolphin, Eden, melonDS, Vita3K, RetroArch, PPSSPP, mGBA, Cemu, Azahar and shadPS4**. Configure emulator paths, import libraries (including RetroArch playlists), scan ROM folders or add games manually. Core selection and launch arguments are configurable; imported games can be organised into lists.
+
+There are 2 ways to import emulator games to the app:
+- Import library from emulator: Reads the emulator’s configured game folders, playlists, registered games or installed titles, depending on the emulator. Folder-based libraries may involve scanning those folders.
+- Scan ROM folders: Separately scans a folder you choose in Pad Launcher, including its subfolders. It does not require a library configured inside the emulator.
+Both let you review detected games, rename new entries and choose a destination list before adding them. Repeating an import or scan reuses existing game entries without creating duplicates.
 
 ## Controls
 
