@@ -50,7 +50,7 @@ class GameSearchTests {
             Check(shown().Count==2,"Search excludes hidden games and games outside enabled lists");
             search.UpdateLayout(); var keyboardFrame=Find<Border>(search,"SearchKeyboard");
             Check(keyboardFrame.TranslatePoint(new Point(),(UIElement)search.Content).Y>launcher.ActualHeight/2,"Keyboard stays at the bottom and leaves the game panels visible");
-            Check(Elements(search).OfType<Button>().Where(button => button.Name.StartsWith("SearchKey_")).All(button => !Convert.ToString(button.Content).Any(Char.IsUpper)),"Keyboard keys use lowercase text");
+            Check(Elements(search).OfType<Button>().Where(button => button.Name.StartsWith("SearchKey_") && Convert.ToString(button.Content).Length==1).All(button => !Convert.ToString(button.Content).Any(Char.IsUpper)),"Keyboard keys use lowercase text");
             if(args.Length>0) {
                 search.UpdateLayout(); var size=new Size(launcher.ActualWidth,launcher.ActualHeight);
                 var drawing=new System.Windows.Media.DrawingVisual(); using(var context=drawing.RenderOpen()) {
@@ -99,7 +99,13 @@ class GameSearchTests {
             var console=(TextBlock)typeof(Launcher).GetField("searchConsoleLabel",binding).GetValue(launcher);
             Check(caption.Text=="Search: ISS" && console.Text=="PlayStation" && console.TextAlignment==TextAlignment.Center,"Search query appears as the list heading and console is centred below the game title");
             Check(shown().Single().Id=="ps1","Matches are displayed directly in the overlay");
-            Check(!Elements(search).OfType<Button>().Any(button => button.Name.StartsWith("SearchKey_4_")) && Elements(search).OfType<Button>().Count(button => button.Name.StartsWith("SearchKey_"))==36,"Search keyboard contains only number and letter rows");
+            Check(!Elements(search).OfType<Button>().Any(button => button.Name.StartsWith("SearchKey_4_")) && Elements(search).OfType<Button>().Count(button => button.Name.StartsWith("SearchKey_"))==37,"Search keyboard adds Clear on the last letter row");
+            string queryBeforeClear=launcher.GameSearchText;
+            var clearKey=Find<Button>(search,"SearchKey_3_7");
+            Check((string)clearKey.Content=="Clear","Clear is immediately after m");
+            clearKey.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(launcher.GameSearchText=="" && launcher.GameSearchOpen,"Clear resets the query and leaves the keyboard open");
+            launcher.SetGameSearchQuery(queryBeforeClear);
             search.Close();
             var restored=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(launcher);
             Check(!launcher.GameSearchOpen && restored.CollectionId=="pc" && restored.SelectedId=="pc1","Closing without accepting restores the original list and selected game");
@@ -109,10 +115,11 @@ class GameSearchTests {
             launcher.HandleGameSearchController(new PadState(),140); launcher.HandleGameSearchController(new PadState {Buttons=0x2000},141);
             Check(!launcher.GameSearchOpen,"Circle exits directly from the search keyboard");
             launcher.OpenGameSearch();
-            launcher.HandleGameSearchController(new PadState(),144); launcher.HandleGameSearchController(new PadState {RT=255},145);
-            Check(launcher.SearchGamesFocused,"R2 focuses games without changing the layout");
-            launcher.HandleGameSearchController(new PadState(),146); launcher.HandleGameSearchController(new PadState {RT=255},147);
-            Check(!launcher.SearchGamesFocused && launcher.GameSearchOpen,"R2 returns from results to the keyboard");
+            launcher.HandleGameSearchController(new PadState(),144); launcher.HandleGameSearchController(new PadState {LT=255},145);
+            Check(!launcher.SearchGamesFocused,"L2 does not focus games from the keyboard");
+            FocusResults(launcher);
+            launcher.HandleGameSearchController(new PadState(),146); launcher.HandleGameSearchController(new PadState {LT=255},147);
+            Check(!launcher.SearchGamesFocused && launcher.GameSearchOpen,"L2 returns from results to the keyboard");
             launcher.SetGameSearchQuery(""); ((Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher)).Close();
             launcher.OpenGameSearch(); Check(launcher.GameSearchText=="" && shown().Count==2,"Clearing the latest query is remembered too");
             launcher.SetGameSearchQuery("ISS"); ((Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher)).Close();
@@ -127,6 +134,10 @@ class GameSearchTests {
             Check(shown().Single().Id=="ps1","Finished search keeps the matching game panels available for navigation");
             launcher.HandleGameSearchController(new PadState(),151); launcher.HandleGameSearchController(new PadState {Buttons=2},152);
             Check(!launcher.SearchGamesFocused && launcher.GameSearchText=="ISS" && ((Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher)).IsVisible,"Down returns focus to the keyboard without losing the query");
+            var returnedKeyboard=(Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher);
+            var topKey=Elements(returnedKeyboard).OfType<Button>().First(button => button.Name.StartsWith("SearchKey_0_") && ((System.Windows.Media.SolidColorBrush)button.Background).Color==System.Windows.Media.Color.FromRgb(163,240,205));
+            launcher.HandleGameSearchController(new PadState {Buttons=2},600);
+            Check(((System.Windows.Media.SolidColorBrush)topKey.Background).Color==System.Windows.Media.Color.FromRgb(163,240,205),"Holding Down across the results boundary keeps focus on the first keyboard row");
             FocusResults(launcher);
             launcher.HandleGameSearchController(new PadState(),155); launcher.HandleGameSearchController(new PadState {Buttons=0x2000},156);
             var current=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(launcher);
@@ -153,9 +164,9 @@ class GameSearchTests {
                 Check(((TextBlock)typeof(Launcher).GetField("collectionText",binding).GetValue(launcher)).Text=="Search: ISS","Search heading includes its label and query");
                 string originalLayout=(string)typeof(Launcher).GetProperty("ActiveLayout",binding).GetValue(launcher,null);
                 launcher.HandleGameSearchController(new PadState(),197);
-                launcher.HandleGameSearchController(new PadState {LT=255},198);
-                Check(launcher.GameSearchOpen && launcher.GameSearchText=="ISS" && (string)typeof(Launcher).GetProperty("ActiveLayout",binding).GetValue(launcher,null)!=originalLayout,"L2 changes search layout without closing search or changing its query");
-                launcher.HandleGameSearchController(new PadState(),198); launcher.HandleGameSearchController(new PadState {LT=255},199); launcher.HandleGameSearchController(new PadState(),199);
+                launcher.HandleGameSearchController(new PadState {RT=255},198);
+                Check(launcher.GameSearchOpen && launcher.GameSearchText=="ISS" && (string)typeof(Launcher).GetProperty("ActiveLayout",binding).GetValue(launcher,null)!=originalLayout,"R2 changes search layout without closing search or changing its query");
+                launcher.HandleGameSearchController(new PadState(),198); launcher.HandleGameSearchController(new PadState {RT=255},199); launcher.HandleGameSearchController(new PadState(),199);
                 if(focusedResults) FocusResults(launcher);
                 launcher.HandleGameSearchController(new PadState(),202); launcher.HandleGameSearchController(new PadState {Buttons=0x0080},203);
                 current=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(launcher);
@@ -182,8 +193,8 @@ class GameSearchTests {
             launcher.OpenGameSearch(); launcher.SetGameSearchQuery("ISS"); FocusResults(launcher);
             launcher.HandleGameSearchController(new PadState(),232); launcher.HandleGameSearchController(new PadState {Buttons=0x8000},233);
             Check(launcher.GameSearchOpen && launcher.SearchGamesFocused && launcher.GameSearchText=="ISS","Triangle is unassigned in search results");
-            launcher.HandleGameSearchController(new PadState(),234); launcher.HandleGameSearchController(new PadState {RT=255},235);
-            Check(!launcher.SearchGamesFocused && launcher.GameSearchText=="ISS","R2 returns to the keyboard with the query intact");
+            launcher.HandleGameSearchController(new PadState(),234); launcher.HandleGameSearchController(new PadState {LT=255},235);
+            Check(!launcher.SearchGamesFocused && launcher.GameSearchText=="ISS","L2 returns to the keyboard with the query intact");
             ((Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher)).Close();
             settingsWindow=launcher.CreateHelpWindow(); settingsWindow.Show();
             Check(!Elements(settingsWindow).OfType<Expander>().Any(item => item.Name=="LibretroListsSection"),"The redundant Libretro lists checklist is removed");

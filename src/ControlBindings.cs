@@ -25,7 +25,7 @@ namespace PadLauncher {
                 list.Add(new ControlAction {Context=context,Id="down",Name="Browse / navigate down",Button="down",Key="Down",Mask=2});
                 list.Add(new ControlAction {Context=context,Id="favourite",Name="Toggle favourite",Button="rs",Key=context=="overlay" ? "F" : "none",Mask=0x80});
                 list.Add(new ControlAction {Context=context,Id="jump",Name="Jump to configured list",Button="ls",Key="none",Mask=0x40});
-                list.Add(new ControlAction {Context=context,Id="layout",Name="Toggle Grid / carousel",Button=context=="typing" ? "lt" : "west",Key="none"});
+                list.Add(new ControlAction {Context=context,Id="layout",Name="Toggle Grid / carousel",Button=context=="typing" ? "rt" : "west",Key="none"});
                 list.Add(new ControlAction {Context=context,Id="settings",Name="Open Settings",Button="none",Key="none",Mask=0x800});
             }
             Action<string,string,string,string,string,int> add=(context,id,name,button,key,mask) => list.Add(new ControlAction {Context=context,Id=id,Name=name,Button=button,Key=key,Mask=mask});
@@ -35,17 +35,17 @@ namespace PadLauncher {
             add("overlay","previous","Previous list","lb","PageUp",0x100);
             add("overlay","next","Next list","rb","PageDown",0x200);
             add("overlay","search","Search games","north","Ctrl+F",0x8000);
-            add("overlay","monitor","Next monitor","lt","M",0x4000);
+            add("overlay","monitor","Next monitor","rt","M",0x4000);
             add("overlay","refresh","Refresh library","select","F5",0x20);
             add("overlay","hints","Show control hints","start","F1",0x10);
             add("typing","play","Launch selected result","start","none",0x10);
-            add("results","focus","Return to keyboard","rt","none",0x10);
-            add("results","monitor","Next monitor","lt","M",0x4000);
+            add("results","focus","Return to keyboard","lt","none",0x10);
+            add("results","monitor","Next monitor","rt","M",0x4000);
             add("results","play-start","Launch selected result (Start)","start","none",0x1000);
             add("typing","type","Type selected key","south","none",0x1000);
             add("typing","space","Insert space","north","none",0x2000);
             add("typing","backspace","Backspace","west","Back",0x4000);
-            add("typing","finish","Focus found games","rt","Return",0x8000);
+            add("typing","finish","Focus found games","none","Return",0x8000);
             add("typing","cancel","Exit search","east","Escape",0x100);
             add("results","play","Launch selected result","south","Return",0x1000);
             add("results","cancel","Exit search","east","Escape",0x2000);
@@ -118,7 +118,7 @@ namespace PadLauncher {
         }
         public static bool HasJump(Settings settings) {return Contexts.Any(context => Buttons(settings,context+".jump").Length>0 || Get(settings,context+".jump",true)!="none");}
         public static void UpgradeSearchDefaults(Settings settings) {
-            if(settings.ControlBindingVersion>=7) return;
+            if(settings.ControlBindingVersion>=8) return;
             var buttons=settings.ControlButtons; string a,b;
             if(buttons!=null) {
                 if(settings.ControlBindingVersion<1) {
@@ -148,8 +148,8 @@ namespace PadLauncher {
                     if(InContext(added.Context).Any(action => action.FullId!=id && UsesButton(settings,action.FullId,added.Button))) buttons[id]="none";
                 }
             }
-            if(buttons!=null && !buttons.ContainsKey("results.monitor") && InContext("results").Any(action => action.Id!="monitor" && UsesButton(settings,action.FullId,"west"))) buttons["results.monitor"]="none";
-            if(buttons!=null) {
+            if(settings.ControlBindingVersion<7 && buttons!=null && !buttons.ContainsKey("results.monitor") && InContext("results").Any(action => action.Id!="monitor" && UsesButton(settings,action.FullId,"west"))) buttons["results.monitor"]="none";
+            if(settings.ControlBindingVersion<7 && buttons!=null) {
                 foreach(string context in new[]{"overlay","results"}) {
                     string oldLayout,oldMonitor;
                     bool layoutSaved=buttons.TryGetValue(context+".layout",out oldLayout),monitorSaved=buttons.TryGetValue(context+".monitor",out oldMonitor);
@@ -160,7 +160,13 @@ namespace PadLauncher {
                 List<string> extras;
                 if(settings.ControlButtonAlternates!=null && settings.ControlButtonAlternates.TryGetValue("results.keyboard",out extras) && extras!=null) extras.RemoveAll(input => input=="north");
             }
-            settings.ControlBindingVersion=7;
+            if(buttons!=null) {
+                foreach(var binding in new[]{new[]{"overlay.monitor","lt","rt"},new[]{"results.monitor","lt","rt"},
+                    new[]{"results.focus","rt","lt"},new[]{"typing.layout","lt","rt"},new[]{"typing.finish","rt","none"}}) {
+                    if(buttons.TryGetValue(binding[0],out a) && a==binding[1]) buttons[binding[0]]=binding[2];
+                }
+            }
+            settings.ControlBindingVersion=8;
         }
     }
 }

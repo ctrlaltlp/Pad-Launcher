@@ -108,7 +108,7 @@ namespace PadLauncher {
             root.Children.Add(frame);
             if(searchConsoleLabel==null) {searchConsoleLabel=Label("",16,muted); searchConsoleLabel.Name="SearchConsoleLabel"; searchConsoleLabel.HorizontalAlignment=HorizontalAlignment.Center; searchConsoleLabel.VerticalAlignment=VerticalAlignment.Top; searchConsoleLabel.TextAlignment=TextAlignment.Center; searchConsoleLabel.IsHitTestVisible=false; scene.Children.Add(searchConsoleLabel);}
             searchConsoleLabel.Visibility=Visibility.Visible;
-            string[][] labels={"1234567890".Select(ch => ch.ToString()).ToArray(),"qwertyuiop".Select(ch => ch.ToString()).ToArray(),"asdfghjkl".Select(ch => ch.ToString()).ToArray(),"zxcvbnm".Select(ch => ch.ToString()).ToArray()};
+            string[][] labels={"1234567890".Select(ch => ch.ToString()).ToArray(),"qwertyuiop".Select(ch => ch.ToString()).ToArray(),"asdfghjkl".Select(ch => ch.ToString()).ToArray(),"zxcvbnm".Select(ch => ch.ToString()).Concat(new[]{"Clear"}).ToArray()};
             double[] offsets={0,.5,.75,1.25};
             var keys=new List<List<Button>>(); int row=1,column=0;
             Action paint=() => {for(int y=0;y<keys.Count;y++) for(int x=0;x<keys[y].Count;x++) {bool active=y==row && x==column; keys[y][x].Background=active ? mint : new SolidColorBrush(Color.FromRgb(34,51,63)); keys[y][x].Foreground=active ? new SolidColorBrush(Color.FromRgb(13,25,34)) : white;}};
@@ -134,7 +134,7 @@ namespace PadLauncher {
             backspaceSearch=() => {int[] starts=StringInfo.ParseCombiningCharacters(gameSearchText); if(starts.Length>0) SetGameSearchQuery(gameSearchText.Substring(0,starts[starts.Length-1]));};
             spaceSearch=() => SetGameSearchQuery(gameSearchText+" ");
             Action<string> choose=key => {
-                SetGameSearchQuery(gameSearchText+key);
+                SetGameSearchQuery(key=="Clear" ? "" : gameSearchText+key);
                 root.Focus();
             };
             for(int y=0;y<labels.Length;y++) {
@@ -151,6 +151,9 @@ namespace PadLauncher {
             }
             var names=Prompts.Buttons(settings);
             var hint=Label("",12,muted); searchControlHints=hint; RefreshSearchControlHints(); hint.Margin=new Thickness(3,8,3,0); hint.TextWrapping=TextWrapping.Wrap; hint.TextAlignment=TextAlignment.Center; keyboard.Children.Add(hint);
+            var gamesNote=Label("Navigate above keyboard to select games",12,muted);
+            gamesNote.TextAlignment=TextAlignment.Center; gamesNote.Margin=new Thickness(3,4,3,0);
+            keyboard.Children.Add(gamesNote);
             moveSearchCursor=(dx,dy) => {
                 if(dy<0 && row==0) {finishGameSearch(true); return;}
                 if(dy!=0) {int next=row+dy; if(next>=0 && next<keys.Count) {double center=keyCenter(row,column); column=Enumerable.Range(0,keys[next].Count).OrderBy(x => Math.Abs(keyCenter(next,x)-center)).ThenBy(x => Math.Abs(x-column)).First(); row=next;}}
@@ -209,7 +212,11 @@ namespace PadLauncher {
             if(dx!=0) {Move(dx); return;}
             if(dy>0) {
                 if(ActiveLayout=="grid" && visible.Count>0 && selected/GridColumns<(visible.Count-1)/GridColumns) MoveGridRow(1);
-                else ResumeSearchKeyboard();
+                else {
+                    ResumeSearchKeyboard();
+                    searchDirection=2;
+                    searchNextMove=Int64.MaxValue;
+                }
             } else if(dy<0 && ActiveLayout=="grid" && selected/GridColumns>0) MoveGridRow(-1);
         }
         void HandleSearchKey(KeyEventArgs e) {
@@ -224,6 +231,7 @@ namespace PadLauncher {
                     bool controllerMove=action=="left" ? (mapped.Buttons&4)!=0 || mapped.LX< -16000 : action=="right" ? (mapped.Buttons&8)!=0 || mapped.LX>16000 : action=="up" ? (mapped.Buttons&1)!=0 || mapped.LY>16000 : (mapped.Buttons&2)!=0 || mapped.LY< -16000;
                     if(controllerMove) {HandleGameSearchController(physical,(long)(System.Diagnostics.Stopwatch.GetTimestamp()*1000.0/System.Diagnostics.Stopwatch.Frequency)); return;}
                 }
+                if(!searchGamesFocused && action=="down" && e.IsRepeat && searchNextMove==Int64.MaxValue) return;
                 if(searchGamesFocused) NavigateSearchResults(action=="left" ? -1 : action=="right" ? 1 : 0,action=="up" ? -1 : action=="down" ? 1 : 0);
                 else moveSearchCursor(action=="left" ? -1 : action=="right" ? 1 : 0,action=="up" ? -1 : action=="down" ? 1 : 0);
                 return;

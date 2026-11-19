@@ -44,7 +44,7 @@ Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original 
 | Exit app completely | Hold Circle / Xbox B / Nintendo A for 1 second | Tray → Exit app |
 | Change list | L1 / R1, Xbox LB / RB, Nintendo L / R | Page Up / Page Down |
 | Toggle Grid ↔ previous Angled/Rectangular layout | Square / Xbox X / Nintendo Y | — |
-| Move to next monitor | L2 / Xbox LT / Nintendo ZL | M |
+| Move to next monitor | R2 / Xbox RT / Nintendo ZR | M |
 | Search games with the gamepad keyboard | Triangle / Xbox Y / Nintendo X | Ctrl+F |
 | Refresh games, artwork and lists | Select/Create / Xbox Back/View / Nintendo − | F5 |
 | Toggle favourite | R3 / right stick click | F |

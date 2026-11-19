@@ -62,7 +62,7 @@ namespace PadLauncher {
                     var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                     next.ControlButtons=new Dictionary<string,string>(draft.ControlButtons); next.ControlKeys=new Dictionary<string,string>(draft.ControlKeys);
                     next.ControlButtonAlternates=draft.ControlButtonAlternates==null ? null : draft.ControlButtonAlternates.ToDictionary(pair => pair.Key,pair => new List<string>(pair.Value));
-                    next.ControlBindingVersion=7; next.JumpListButton=ControlBindings.HasJump(next) ? "left" : "off";
+                    next.ControlBindingVersion=8; next.JumpListButton=ControlBindings.HasJump(next) ? "left" : "off";
                     Storage.Write("settings.json",next); settings=next; RefreshSearchControlHints();
                     exitButton.Reset(); navigation.Reset(); previousButtons=0; searchButtons=UInt16.MaxValue; bindingLeftTriggerDown=bindingRightTriggerDown=false; testLayoutTriggerDown=false; suppressSearchRelease=true;
                     dialog.Close(); rebuild();

@@ -5,7 +5,9 @@ namespace PadLauncher {
     public partial class Launcher {
         bool bindingLeftTriggerDown,bindingRightTriggerDown;
         void RefreshSearchControlHints() {
-            if(searchControlHints!=null) searchControlHints.Text=ControlBindings.Label(settings,"typing.type")+": type · "+ControlBindings.Label(settings,"typing.space")+": space · "+ControlBindings.Label(settings,"typing.backspace")+": backspace · "+ControlBindings.Label(settings,"typing.cancel")+": exit · "+ControlBindings.Label(settings,"typing.finish")+": games · "+ControlBindings.Label(settings,"typing.play")+": play";
+            if(searchControlHints==null) return;
+            string gamesHint=ControlBindings.Buttons(settings,"typing.finish").Length==0 ? "" : " · "+ControlBindings.Label(settings,"typing.finish")+": games";
+            searchControlHints.Text=ControlBindings.Label(settings,"typing.type")+": type · "+ControlBindings.Label(settings,"typing.space")+": space · "+ControlBindings.Label(settings,"typing.backspace")+": backspace · "+ControlBindings.Label(settings,"typing.cancel")+": exit"+gamesHint+" · "+ControlBindings.Label(settings,"typing.play")+": play";
         }
         PadState RemapController(PadState raw,string context) {
             if(raw.LT<80) bindingLeftTriggerDown=false; else if(raw.LT>=160) bindingLeftTriggerDown=true;
