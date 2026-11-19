@@ -402,6 +402,7 @@ namespace PadLauncher {
         public string SteamShortcutLaunchMode {get;set;}
         public bool SetupWizardShown {get;set;}
         public bool SetupWizardCompleted {get;set;}
+        public bool SetupWizardDeclined {get;set;}
         public int SetupWizardPage {get;set;}
         public List<string> HiddenGameIds {get;set;}
         public bool AutoUpdate {get;set;}
@@ -450,6 +451,7 @@ namespace PadLauncher {
         public bool PanelSizesLocked {get;set;}
         public double ArtworkGap {get;set;}
         public string CarouselLayout { get; set; }
+        public string PreferredCarouselLayout { get; set; }
         string angledPanelSizing;
         public string AngledPanelSizing { get {return angledPanelSizing;} set {angledPanelSizing=value=="mixed" ? "fit" : value;}}
         public int GridColumns { get; set; }
@@ -492,7 +494,7 @@ namespace PadLauncher {
         }
         public static string Help(Settings settings) {
             var names=Buttons(settings);
-            return ControlBindings.Label(settings,"overlay.play")+"  Play     Tap "+ControlBindings.Label(settings,"overlay.dismiss")+"  Dismiss     Hold "+ControlBindings.Label(settings,"overlay.exit")+"  Exit app     "+ControlBindings.Label(settings,"overlay.previous")+" / "+ControlBindings.Label(settings,"overlay.next")+"  Lists     "+ControlBindings.Label(settings,"overlay.layout")+"  Toggle Grid 5×3     "+ControlBindings.Label(settings,"overlay.search")+"  Search     "+ControlBindings.Label(settings,"overlay.refresh")+"  Refresh     "+ControlBindings.Label(settings,"overlay.monitor")+"  Next monitor     Left Stick  Cycle games & lists     Right stick  Cycle games "+settings.RightStickSpeed.ToString("0.#")+"× speed     "+ControlBindings.Label(settings,"overlay.favourite")+"  Toggle favourite"+(ControlBindings.HasJump(settings) ? "     "+ControlBindings.Label(settings,"overlay.jump")+"  Jump to chosen list" : "");
+            return ControlBindings.Label(settings,"overlay.play")+"  Play     Tap "+ControlBindings.Label(settings,"overlay.dismiss")+"  Dismiss     Hold "+ControlBindings.Label(settings,"overlay.exit")+"  Exit app     "+ControlBindings.Label(settings,"overlay.previous")+" / "+ControlBindings.Label(settings,"overlay.next")+"  Lists     "+ControlBindings.Label(settings,"overlay.layout")+"  Toggle Grid     "+ControlBindings.Label(settings,"overlay.search")+"  Search     "+ControlBindings.Label(settings,"overlay.refresh")+"  Refresh     "+ControlBindings.Label(settings,"overlay.monitor")+"  Next monitor     Left Stick  Cycle games & lists     Right stick  Cycle games "+settings.RightStickSpeed.ToString("0.#")+"× speed     "+ControlBindings.Label(settings,"overlay.favourite")+"  Toggle favourite"+(ControlBindings.HasJump(settings) ? "     "+ControlBindings.Label(settings,"overlay.jump")+"  Jump to chosen list" : "");
         }
         public static string RightTrigger(Settings settings) {return Style(settings)=="Xbox" ? "RT" : Style(settings)=="Nintendo" ? "ZR" : "R2";}
         public static string SelectButton(Settings settings) {return Style(settings)=="Xbox" ? "Back / View" : Style(settings)=="Nintendo" ? "−" : "Select / Create";}

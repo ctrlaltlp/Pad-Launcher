@@ -49,13 +49,13 @@ class RetroArchListDefaultsTests {
             var inherit=(CheckBox)Find(owner,"RetroArchListUseGlobalSettings");
             Check(inherit.IsChecked==true && Find(owner,"RetroArchListsPreferLibretro")==null,"RetroArch list settings offer layout inheritance and no duplicate artwork preference checkbox");
             inherit.IsChecked=false; inherit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            ((ComboBox)Find(owner,"RetroArchListLayoutSetting")).SelectedValue="grid";
+            ((ComboBox)Find(owner,"RetroArchListLayoutSetting")).SelectedValue="rectangular";
             ((CheckBox)Find(owner,"RetroArchListShowPanelOutlinesSetting")).IsChecked=true;
             ((Slider)Find(owner,"RetroArchListModernPanelSizeSetting")).Value=.8;
             Check(Find(owner,"RetroArchListArtworkSourceSetting")==null && Find(owner,"RedownloadRetroArchArtwork")==null,"RetroArch layout settings have no duplicate artwork controls");
             ((Button)Find(owner,"SaveRetroArchListDefaults")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); owner.UpdateLayout();
             var saved=Storage.Read<Settings>("settings.json");
-            Check(saved.RetroArchListLayout.Layout=="grid" && saved.RetroArchListLayout.ShowPanelOutlines==true && Math.Abs(saved.RetroArchListLayout.PanelScale-.8)<.01 && saved.RetroArchListArtworkSource==null && saved.RetroArchPreferLibretro==null,"Shared layout and artwork settings save without changing the emulator-level artwork preference");
+            Check(saved.RetroArchListLayout.Layout=="rectangular" && saved.RetroArchListLayout.ShowPanelOutlines==true && Math.Abs(saved.RetroArchListLayout.PanelScale-.8)<.01 && saved.RetroArchListArtworkSource==null && saved.RetroArchPreferLibretro==null,"Shared layout and artwork settings save without changing the emulator-level artwork preference");
             Check(saved.ListLayouts.Count==0 && saved.ListArtworkSources.Count==0 && ((Expander)Find(owner,"RetroArchListsSettingsSection")).IsExpanded,"Saving shared defaults does not manufacture per-list overrides and preserves the expanded section");
             CollectUi();
             int cleanupCount=((List<Action>)owner.Resources["PadLauncher.SettingsContentCleanup"]).Count;

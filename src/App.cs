@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.2")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.2")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.2")]
+[assembly: System.Reflection.AssemblyVersion("0.5.3")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.3")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.3")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -409,12 +409,22 @@ namespace PadLauncher {
             ApplyCarouselScale();
             Render(false);
         }
+        string DefaultCarouselLayout {
+            get {
+                string layout=settings.CarouselLayout=="grid" ? settings.PreferredCarouselLayout : settings.CarouselLayout;
+                return layout=="rectangular" ? "rectangular" : "angled";
+            }
+        }
         public void SetCarouselLayout(string layout) {
             StopListTransition();
             if(layout!="angled" && layout!="rectangular" && layout!="grid") throw new ArgumentException("Choose an angled, rectangular or grid layout.");
             string previous=settings.CarouselLayout;
-            try { settings.CarouselLayout=layout; Storage.Write("settings.json",settings); }
-            catch { settings.CarouselLayout=previous; throw; }
+            string previousPreference=settings.PreferredCarouselLayout;
+            try {
+                settings.PreferredCarouselLayout=layout=="grid" ? DefaultCarouselLayout : layout;
+                settings.CarouselLayout=layout; Storage.Write("settings.json",settings);
+            }
+            catch { settings.CarouselLayout=previous; settings.PreferredCarouselLayout=previousPreference; throw; }
             cards.Clear(); carousel.Children.Clear(); Render(false);
         }
         public void SetAngledPanelSizing(string sizing) {
@@ -436,13 +446,12 @@ namespace PadLauncher {
             if(previous || !testLayoutTriggerDown || launching || filters.Count==0) return false;
             string id=filters[collectionIndex].Id,layout=ActiveLayout;
             if(layout=="grid") {
-                if(!testPreviousCarouselLayouts.TryGetValue(id,out layout) && (settings.PreviousCarouselLayouts==null || !settings.PreviousCarouselLayouts.TryGetValue(id,out layout))) layout=settings.CarouselLayout=="rectangular" ? "rectangular" : "angled";
+                if(!testPreviousCarouselLayouts.TryGetValue(id,out layout) && (settings.PreviousCarouselLayouts==null || !settings.PreviousCarouselLayouts.TryGetValue(id,out layout))) layout=DefaultCarouselLayout;
             } else {testPreviousCarouselLayouts[id]=layout; layout="grid";}
             testLayoutOverrides[id]=layout;
             if(settings.RememberControlLayoutChanges) {
                 var profile=ActiveListLayout==null ? new ListLayout {PanelScale=settings.CarouselScale,RetroPanelScale=settings.RetroPanelScale,PanelSizesLocked=settings.PanelSizesLocked,ShowPanelOutlines=settings.ShowPanelOutlines,Columns=settings.GridColumns,Rows=settings.GridRows,AngledSizing=settings.AngledPanelSizing} : Storage.Json().Deserialize<ListLayout>(Storage.Json().Serialize(ActiveListLayout));
                 profile.Layout=layout;
-                if(layout=="grid") {profile.Columns=5; profile.Rows=3;}
                 if(settings.ListLayouts==null) settings.ListLayouts=new Dictionary<string,ListLayout>();
                 settings.ListLayouts[id]=profile; activeListLayout=profile;
                 string previousCarousel;
@@ -458,9 +467,8 @@ namespace PadLauncher {
         bool ActivePanelOutlines {get {var layout=ActiveListLayout; return layout!=null && layout.ShowPanelOutlines.HasValue ? layout.ShowPanelOutlines.Value : settings.ShowPanelOutlines;}}
         double ActivePanelScale { get {return ActiveListLayout==null ? settings.CarouselScale : ActiveListLayout.PanelScale;}}
         string ActiveAngledSizing { get {return GameSearchOpen ? "fit" : ActiveListLayout==null ? (visible.Count>0 && visible.All(game => game.PreferredArtworkSource=="libretro") ? "fit" : settings.AngledPanelSizing) : ActiveListLayout.AngledSizing;}}
-        bool TestGridLayout {get {string layout; return filters.Count>collectionIndex && testLayoutOverrides.TryGetValue(filters[collectionIndex].Id,out layout) && layout=="grid";}}
-        int GridColumns { get {if(TestGridLayout) return 5; int value=ActiveListLayout==null ? settings.GridColumns : ActiveListLayout.Columns; return value>=2 && value<=10 ? value : 5;} }
-        int GridRows { get {if(TestGridLayout) return 3; int value=ActiveListLayout==null ? settings.GridRows : ActiveListLayout.Rows; return value>=1 && value<=5 ? value : 3;} }
+        int GridColumns { get {int value=ActiveListLayout==null ? settings.GridColumns : ActiveListLayout.Columns; return value>=2 && value<=10 ? value : 5;} }
+        int GridRows { get {int value=ActiveListLayout==null ? settings.GridRows : ActiveListLayout.Rows; return value>=1 && value<=5 ? value : 3;} }
         public void SetGridRows(int rows) {
             if(rows<1 || rows>5) throw new ArgumentOutOfRangeException("rows","Choose between 1 and 5 rows.");
             int previous=settings.GridRows;
@@ -1131,16 +1139,16 @@ namespace PadLauncher {
             };
             layout.Children.Add(monitorPicker);
             var layoutCaption=Label("Layout",14,mint); layoutCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(layoutCaption);
-            var columnsControls=new StackPanel {Name="GridColumnsSettings",Visibility=settings.CarouselLayout=="grid" ? Visibility.Visible : Visibility.Collapsed};
+            var columnsControls=new StackPanel {Name="GridColumnsSettings"};
             bool angledSizingAvailable=settings.CarouselLayout!="grid" && settings.CarouselLayout!="rectangular";
             var sizingControls=new StackPanel {Name="AngledPanelSizingSettings",Visibility=angledSizingAvailable ? Visibility.Visible : Visibility.Collapsed};
-            var layoutPicker=new SettingsComboBox {Name="CarouselLayoutSetting",ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular"),new KeyValuePair<string,string>("grid","Grid")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled",FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
+            var layoutPicker=new SettingsComboBox {Name="CarouselLayoutSetting",ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular")},DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=DefaultCarouselLayout,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringLayout=false;
             layoutPicker.SelectionChanged+=(s,e) => {
                 if(restoringLayout) return;
-                string choice=layoutPicker.SelectedValue as string,previous=settings.CarouselLayout=="rectangular" || settings.CarouselLayout=="grid" ? settings.CarouselLayout : "angled";
+                string choice=layoutPicker.SelectedValue as string,previous=DefaultCarouselLayout;
                 if(choice==null || choice==previous) return;
-                try { SetCarouselLayout(choice); columnsControls.Visibility=choice=="grid" ? Visibility.Visible : Visibility.Collapsed; sizingControls.Visibility=choice=="angled" ? Visibility.Visible : Visibility.Collapsed; }
+                try { SetCarouselLayout(choice); sizingControls.Visibility=choice=="angled" ? Visibility.Visible : Visibility.Collapsed; }
                 catch(Exception error) { restoringLayout=true; layoutPicker.SelectedValue=previous; restoringLayout=false; ThemedMessage.Show(dialog,error.Message,"Settings"); }
             };
             layout.Children.Add(layoutPicker);
@@ -1160,28 +1168,28 @@ namespace PadLauncher {
             };
             sizingControls.Children.Add(sizingPicker); layout.Children.Add(sizingControls);
             var columnsCaption=Label("Grid columns",14,mint); columnsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(columnsCaption);
-            var columnsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToArray(),SelectedItem=GridColumns,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
+            var columnsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToArray(),SelectedItem=settings.GridColumns >= 2 && settings.GridColumns <= 10 ? settings.GridColumns : 5,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringColumns=false;
             columnsPicker.SelectionChanged+=(s,e) => {
                 if(restoringColumns || columnsPicker.SelectedItem==null) return;
-                int previous=GridColumns,columns=(int)columnsPicker.SelectedItem;
+                int previous=(settings.GridColumns >= 2 && settings.GridColumns <= 10 ? settings.GridColumns : 5),columns=(int)columnsPicker.SelectedItem;
                 if(columns==previous) return;
                 try { SetGridColumns(columns); }
                 catch(Exception error) { restoringColumns=true; columnsPicker.SelectedItem=previous; restoringColumns=false; ThemedMessage.Show(dialog,error.Message,"Settings"); }
             };
             columnsControls.Children.Add(columnsPicker);
             var rowsCaption=Label("Grid rows",14,mint); rowsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(rowsCaption);
-            var rowsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(1,5).ToArray(),SelectedItem=GridRows,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
+            var rowsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(1,5).ToArray(),SelectedItem=settings.GridRows >= 1 && settings.GridRows <= 5 ? settings.GridRows : 3,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringRows=false;
             rowsPicker.SelectionChanged+=(s,e) => {
                 if(restoringRows || rowsPicker.SelectedItem==null) return;
-                int previous=GridRows,rowCount=(int)rowsPicker.SelectedItem;
+                int previous=(settings.GridRows >= 1 && settings.GridRows <= 5 ? settings.GridRows : 3),rowCount=(int)rowsPicker.SelectedItem;
                 if(rowCount==previous) return;
                 try { SetGridRows(rowCount); }
                 catch(Exception error) { restoringRows=true; rowsPicker.SelectedItem=previous; restoringRows=false; ThemedMessage.Show(dialog,error.Message,"Settings"); }
             };
             columnsControls.Children.Add(rowsPicker);
-            var rowsTip=Label("Rows keep their panel size. The grid scrolls to keep the selected row visible.",12,muted); rowsTip.TextWrapping=TextWrapping.Wrap; rowsTip.Margin=new Thickness(0,7,0,0); columnsControls.Children.Add(rowsTip);
+            var rowsTip=Label("These defaults also apply when switching to Grid with the controller. Individual lists can override them. The grid scrolls to keep the selected row visible.",12,muted); rowsTip.TextWrapping=TextWrapping.Wrap; rowsTip.Margin=new Thickness(0,7,0,0); columnsControls.Children.Add(rowsTip);
             layout.Children.Add(columnsControls);
             AddPanelSizeControls(layout,dialog);
             var gapCaption=Label("Artwork gap",14,mint); gapCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(gapCaption);

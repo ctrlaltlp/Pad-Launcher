@@ -22,10 +22,45 @@ namespace PadLauncher {
         Window setupWindow;
         bool setupTemplateOnly,setupDismissed;
         readonly bool freshProfile;
-        internal bool NeedsInitialSetup {get {return !demo && !preview && !setupDismissed && !settings.SetupWizardShown && (freshProfile || TestEnvironment.EmulatorDetection);}}
+        internal bool NeedsInitialSetup {get {return !demo && !preview && !setupDismissed && !settings.SetupWizardShown && !settings.SetupWizardDeclined && (freshProfile || TestEnvironment.EmulatorDetection);}}
         public void StartInitialSetup() {
-            if(NeedsInitialSetup) ShowSetupWizard();
-            else if(TestEnvironment.EmulatorDetection && !demo && !preview) OpenSettingsTab(5);
+            StartInitialSetup(AskToRunSetup);
+        }
+        bool AskToRunSetup() {
+            var prompt=new Window {
+                Title="Pad Launcher · Setup", Width=440, SizeToContent=SizeToContent.Height,
+                ResizeMode=ResizeMode.NoResize, WindowStartupLocation=WindowStartupLocation.CenterScreen,
+                Background=new SolidColorBrush(Color.FromRgb(13,25,34)), Foreground=white,
+                FontFamily=FontFamily, Icon=Icon
+            };
+            ApplySettingsTheme(prompt);
+            var panel=new StackPanel {Margin=new Thickness(24)};
+            prompt.Content=panel;
+            panel.Children.Add(Label("Run first-launch setup wizard?",20,white));
+            var note=Label("You can also start setup later from Settings → System.",13,muted);
+            note.TextWrapping=TextWrapping.Wrap;
+            note.Margin=new Thickness(0,10,0,0);
+            panel.Children.Add(note);
+            var buttons=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,20,0,0)};
+            panel.Children.Add(buttons);
+            var no=new Button {Content="No",IsCancel=true,Padding=new Thickness(16,8,16,8)};
+            var yes=new Button {Content="Yes",IsDefault=true,Padding=new Thickness(16,8,16,8),Margin=new Thickness(10,0,0,0)};
+            yes.Click+=(s,e) => prompt.DialogResult=true;
+            buttons.Children.Add(no);
+            buttons.Children.Add(yes);
+            return prompt.ShowDialog()==true;
+        }
+        internal void StartInitialSetup(Func<bool> offerSetup) {
+            if(NeedsInitialSetup) {
+                if(offerSetup()) { ShowSetupWizard(); return; }
+                setupDismissed=true;
+                settings.SetupWizardDeclined=true;
+                try { Storage.Write("settings.json",settings); }
+                catch(Exception error) { ThemedMessage.Show(helpWindow,"Could not save your setup choice. "+error.Message,"Setup"); }
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,new Action(() => {
+                    if(!exiting) RefreshLibrary();
+                }));
+            } else if(TestEnvironment.EmulatorDetection && !demo && !preview) OpenSettingsTab(5);
         }
         static Dictionary<string,string> DetectSetupLaunchers() {
             return new Dictionary<string,string> {
@@ -207,7 +242,7 @@ namespace PadLauncher {
                     var picker=new SettingsComboBox {Name=name,ItemsSource=options.ToList(),DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=value,Padding=new Thickness(8)}; panel.Children.Add(picker); if(picker.SelectedIndex<0) picker.SelectedIndex=0; return picker;
                 };
                 var buttons=choice("Button style","SetupButtonStyle",new[]{"PlayStation","Xbox","Nintendo"}.Select(item => new KeyValuePair<string,string>(item,item)),Prompts.Style(settings));
-                var layout=choice("Overlay layout","SetupLayout",new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular"),new KeyValuePair<string,string>("grid","Grid")},settings.CarouselLayout);
+                var layout=choice("Overlay layout","SetupLayout",new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular")},DefaultCarouselLayout);
                 AddLayoutPreviews(panel,layout);
                 var monitors=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
                 int index=1; foreach(var screen in System.Windows.Forms.Screen.AllScreens) monitors.Add(new KeyValuePair<string,string>(screen.DeviceName,"Monitor "+(index++)+" · "+screen.DeviceName));

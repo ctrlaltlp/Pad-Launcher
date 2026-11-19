@@ -33,7 +33,7 @@ public static class OverlayTests {
             Check(defaults.OpenMonitor=="cursor","Older configuration files default to the cursor's monitor");
             Check(defaults.DefaultCollectionId=="remember" && defaults.CarouselScale==1,"Older settings preserve last-collection behaviour, normal size");
             Check(Prompts.Help(defaults).Contains("✕") && !Prompts.Help(defaults).Contains("LB"),"PlayStation hint uses cross, circle and L1/R1");
-            Check(Prompts.Help(defaults).Contains("◻  Toggle Grid 5×3") && Prompts.RightTrigger(new Settings {ButtonPrompts="Xbox"})=="RT" && Prompts.RightTrigger(new Settings {ButtonPrompts="Nintendo"})=="ZR","Grid-toggle hints use L2 and trigger labels match each controller style");
+            Check(Prompts.Help(defaults).Contains("◻  Toggle Grid") && Prompts.RightTrigger(new Settings {ButtonPrompts="Xbox"})=="RT" && Prompts.RightTrigger(new Settings {ButtonPrompts="Nintendo"})=="ZR","Grid-toggle hints use L2 and trigger labels match each controller style");
             defaults.ButtonPrompts="Xbox";
             Storage.Write("settings.json",defaults);
             var restored=Storage.Read<Settings>("settings.json");
@@ -293,15 +293,13 @@ public static class OverlayTests {
             ((Button)settingsStyleButtons.Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(helpTabs.SelectedIndex==0 && Prompts.Style(Storage.Read<Settings>("settings.json"))=="Xbox","Button style remains configurable in Controls without the reference list");
             var settingLayoutPicker=(ComboBox)FindElement((FrameworkElement)settingsPage.Content,"CarouselLayoutSetting");
-            settingLayoutPicker.SelectedValue="grid";
-            Check(FindElement((FrameworkElement)settingsPage.Content,"GridColumnsSettings").Visibility==Visibility.Visible,"Grid column settings appear when Grid is selected");
-            var sizingSettings=FindElement((FrameworkElement)settingsPage.Content,"AngledPanelSizingSettings");
-            Check(sizingSettings.Visibility==Visibility.Collapsed,"Angled panel sizing is hidden in Grid layout");
             settingLayoutPicker.SelectedValue="rectangular";
+            Check(!settingLayoutPicker.Items.Cast<System.Collections.Generic.KeyValuePair<string,string>>().Any(item => item.Key=="grid"),"Grid is available through the shortcut rather than the layout picker");
+            var sizingSettings=FindElement((FrameworkElement)settingsPage.Content,"AngledPanelSizingSettings");
             Check(sizingSettings.Visibility==Visibility.Collapsed,"Angled panel sizing is hidden in Rectangular layout");
             settingLayoutPicker.SelectedValue="angled";
             Check(sizingSettings.Visibility==Visibility.Visible,"Angled panel sizing appears in Angled layout");
-            Check(FindElement((FrameworkElement)settingsPage.Content,"GridColumnsSettings").Visibility==Visibility.Collapsed,"Grid column settings disappear for other layouts");
+            Check(FindElement((FrameworkElement)settingsPage.Content,"GridColumnsSettings").Visibility==Visibility.Visible,"Grid dimensions remain configurable in carousel layouts");
             settingsPage.ScrollToTop(); helpRoot.UpdateLayout();
             var wheelItems=new System.Collections.Generic.List<string>(); for(int i=0;i<100;i++) wheelItems.Add("Game "+i);
             var wheelCombo=new SettingsComboBox {ItemsSource=wheelItems,SelectedIndex=0,Style=(Style)helpDialog.Resources[typeof(SettingsComboBox)]};

@@ -46,7 +46,7 @@ class SetupWizardTests {
             Find<TextBox>(wizard,"SetupEmulatorPath_retroarch").Text=emulatorExe;
             Find<TextBox>(wizard,"SetupEmulatorPath_pcsx2").Text=emulatorExe; Click(wizard,"SetupNext");
             Find<PasswordBox>(wizard,"SetupArtworkKey").Password="unsaved-key"; Click(wizard,"SetupNext");
-            Find<ComboBox>(wizard,"SetupLayout").SelectedValue="grid"; Click(wizard,"SetupNext");
+            Find<ComboBox>(wizard,"SetupLayout").SelectedValue="rectangular"; Click(wizard,"SetupNext");
             Check(!File.Exists(Path.Combine(Storage.Root,"settings.json")) && ArtworkKey.Load()==null,"Fresh setup writes neither settings nor API key before Finish");
             wizard.Close();
             var library=(Library)typeof(Launcher).GetField("library",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(instance);
@@ -83,14 +83,21 @@ class SetupWizardTests {
     static void CheckStartupProfiles(string root) {
         string previous=Storage.Root;
         try {
-            foreach(string profile in new[]{"fresh","existing","cached"}) {
+            foreach(string profile in new[]{"fresh","decline","existing","cached"}) {
                 Storage.Root=Path.Combine(root,profile); Directory.CreateDirectory(Storage.Root);
                 if(profile=="existing") Storage.Write("settings.json",new Settings {LeftStickSpeed=2});
                 if(profile=="cached") Storage.Write("library.json",new Library());
                 var instance=new Launcher(false,false);
                 try {
-                    Check(instance.NeedsInitialSetup==(profile=="fresh"),"First-run setup is only automatic for a fresh profile: "+profile);
-                    instance.StartInitialSetup();
+                    Check(instance.NeedsInitialSetup==(profile=="fresh" || profile=="decline"),"First-run setup is only automatic for a fresh profile: "+profile);
+                    int offers=0;
+                    instance.StartInitialSetup(() => {offers++; return profile=="fresh";});
+                    Check(offers==(profile=="fresh" || profile=="decline" ? 1 : 0),"Only fresh profiles receive the setup offer");
+                    if(profile=="decline") {
+                        var declined=Storage.Read<Settings>("settings.json");
+                        Check(declined.SetupWizardDeclined && !declined.SetupWizardCompleted,"Declining is saved without completing setup");
+                        instance.StartInitialSetup(() => {throw new Exception("Setup was offered again after declining");});
+                    }
                     Check((Wizard(instance)!=null)==(profile=="fresh"),"Startup does not force setup onto existing data: "+profile);
                     if(profile=="existing") Check(Storage.Read<Settings>("settings.json").LeftStickSpeed==2 && !Storage.Read<Settings>("settings.json").SetupWizardShown,"Existing settings are not rewritten by a setup prompt");
                 } finally {
@@ -157,7 +164,7 @@ class SetupWizardTests {
             Click(wizard,"SetupSkip"); Check(Find<TextBlock>(wizard,"SetupProgress").Text=="Step 2 of 5","Skip bypasses invalid optional input");
             Find<TextBox>(wizard,"SetupEmulatorPath_pcsx2").Text="invalid emulator path"; Click(wizard,"SetupSkip");
             Find<PasswordBox>(wizard,"SetupArtworkKey").Password="skip-this-key"; Click(wizard,"SetupSkip");
-            Find<ComboBox>(wizard,"SetupButtonStyle").SelectedValue="Nintendo"; Find<ComboBox>(wizard,"SetupLayout").SelectedValue="grid"; Click(wizard,"SetupSkip");
+            Find<ComboBox>(wizard,"SetupButtonStyle").SelectedValue="Nintendo"; Find<ComboBox>(wizard,"SetupLayout").SelectedValue="rectangular"; Click(wizard,"SetupSkip");
             Check(Find<Button>(wizard,"SetupSkip").Visibility==Visibility.Collapsed && Find<Button>(wizard,"SetupNext").Visibility==Visibility.Collapsed && Find<Button>(wizard,"SetupRestart").Visibility==Visibility.Visible && Find<Button>(wizard,"SetupFinish").Visibility==Visibility.Visible,"Last page replaces Skip and Next with Restart setup and Finish");
             var skipped=Storage.Read<Settings>("settings.json");
             Check(skipped.GogEnabled==false && skipped.ButtonPrompts=="PlayStation" && skipped.CarouselLayout=="angled" && EmulatorLibrary.Config(skipped,"pcsx2").Path==oldExe && ArtworkKey.Load()=="existing-key","Skipped pages preserve launchers, emulator paths, artwork keys and appearance");
@@ -189,9 +196,9 @@ class SetupWizardTests {
             Check(EmulatorLibrary.Config(applied,"pcsx2").Path==oldExe && EmulatorLibrary.Config(applied,"pcsx2").RomFolder=="keep-rom-folder" && EmulatorLibrary.Config(applied,"pcsx2").Arguments=="--existing {game}","Wizard keeps staged emulator paths out of saved settings");
             Find<PasswordBox>(wizard,"SetupArtworkKey").Password="new-key"; Click(wizard,"SetupNext");
             Check(ArtworkKey.Load()=="existing-key","Next does not replace the saved artwork key");
-            Check(Descendants(wizard).OfType<Image>().Count(image => image.Source is System.Windows.Media.Imaging.BitmapSource)==3,"All three layout options have template pictures");
-            Click(wizard,"SetupLayoutPreview_grid");
-            Check((string)Find<ComboBox>(wizard,"SetupLayout").SelectedValue=="grid","Clicking a layout picture selects that layout");
+            Check(Descendants(wizard).OfType<Image>().Count(image => image.Source is System.Windows.Media.Imaging.BitmapSource)==2,"Both carousel layout options have template pictures");
+            Click(wizard,"SetupLayoutPreview_angled");
+            Check((string)Find<ComboBox>(wizard,"SetupLayout").SelectedValue=="angled","Clicking a layout picture selects that layout");
             Click(wizard,"SetupLayoutPreview_rectangular");
             Check((string)Find<ComboBox>(wizard,"SetupLayout").SelectedValue=="rectangular","The rectangular preview selects the same option as the dropdown");
             Find<ComboBox>(wizard,"SetupButtonStyle").SelectedValue="Nintendo"; Find<ComboBox>(wizard,"SetupLayout").SelectedValue="rectangular"; Find<CheckBox>(wizard,"SetupShowTitle").IsChecked=false; Click(wizard,"SetupNext");

@@ -120,10 +120,11 @@ class ListTransitionTests {
                 Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("Two"),"Returning to Recently added starts on the newest game");
                 savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
                 savedSettings.CarouselLayout="rectangular";
+                savedSettings.GridColumns=4; savedSettings.GridRows=2;
                 var active=typeof(Launcher).GetProperty("ActiveLayout",binding);
                 persisted.HandleTestLayoutTrigger(new PadState {RT=255});
                 Check((string)active.GetValue(persisted,null)=="grid","R2 temporarily changes Rectangular to Grid");
-                Check((int)typeof(Launcher).GetProperty("GridColumns",binding).GetValue(persisted,null)==5 && (int)typeof(Launcher).GetProperty("GridRows",binding).GetValue(persisted,null)==3,"R2 testing grid uses 5x3 even when different dimensions were saved");
+                Check((int)typeof(Launcher).GetProperty("GridColumns",binding).GetValue(persisted,null)==4 && (int)typeof(Launcher).GetProperty("GridRows",binding).GetValue(persisted,null)==2,"The layout shortcut uses configured grid dimensions");
                 persisted.HandleTestLayoutTrigger(new PadState {RT=255});
                 Check((string)active.GetValue(persisted,null)=="grid","Holding R2 does not repeatedly switch layouts");
                 persisted.HandleTestLayoutTrigger(new PadState()); persisted.HandleTestLayoutTrigger(new PadState {RT=255});

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -57,7 +57,7 @@ namespace PadLauncher {
         void AddLayoutPreviews(StackPanel panel,ComboBox selection) {
             var grid=new Grid {Margin=new Thickness(0,10,0,0)};
             var buttons=new Dictionary<string,Button>();
-            foreach(var option in new[]{new[]{"angled","Angled"},new[]{"rectangular","Rectangular"},new[]{"grid","Grid"}}) {
+            foreach(var option in new[]{new[]{"angled","Angled"},new[]{"rectangular","Rectangular"}}) {
                 string id=option[0]; int column=grid.ColumnDefinitions.Count; grid.ColumnDefinitions.Add(new ColumnDefinition());
                 var content=new StackPanel(); content.Children.Add(new Image {Source=LayoutPreviews.Get(id),Width=150,Height=100,Stretch=Stretch.Uniform});
                 var label=Label(option[1],13,white); label.HorizontalAlignment=HorizontalAlignment.Center; label.Margin=new Thickness(0,6,0,0); content.Children.Add(label);

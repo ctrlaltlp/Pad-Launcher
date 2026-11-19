@@ -199,7 +199,7 @@ namespace PadLauncher {
             panel.Children.Add(inherit); inherit.Visibility=artworkOnly ? Visibility.Collapsed : Visibility.Visible;
             var fields=new StackPanel {Visibility=artworkOnly ? Visibility.Collapsed : Visibility.Visible}; panel.Children.Add(fields);
             fields.Children.Add(Label("Layout",12,mint));
-            var layout=new SettingsComboBox {Name=retroArchDefaults ? "RetroArchListLayoutSetting" : "ListLayoutSetting",ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular"),new KeyValuePair<string,string>("grid","Grid")},DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(0,6,0,10)};
+            var layout=new SettingsComboBox {Name=retroArchDefaults ? "RetroArchListLayoutSetting" : "ListLayoutSetting",ItemsSource=new[]{new KeyValuePair<string,string>("angled","Angled"),new KeyValuePair<string,string>("rectangular","Rectangular")},DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(0,6,0,10)};
             fields.Children.Add(layout);
             var angled=new StackPanel();
             angled.Children.Add(Label("Angled sizing",12,mint));
@@ -223,7 +223,7 @@ namespace PadLauncher {
             var columns=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToList(),Padding=new Thickness(8),Margin=new Thickness(0,6,0,10)}; grid.Children.Add(columns);
             grid.Children.Add(Label("Grid rows",12,mint));
             var rows=new SettingsComboBox {ItemsSource=Enumerable.Range(1,5).ToList(),Padding=new Thickness(8),Margin=new Thickness(0,6,0,10)}; grid.Children.Add(rows); fields.Children.Add(grid);
-            Action update=() => {fields.IsEnabled=inherit.IsChecked!=true; grid.Visibility=(string)layout.SelectedValue=="grid" ? Visibility.Visible : Visibility.Collapsed; angled.Visibility=(string)layout.SelectedValue=="angled" ? Visibility.Visible : Visibility.Collapsed;};
+            Action update=() => {fields.IsEnabled=inherit.IsChecked!=true; angled.Visibility=(string)layout.SelectedValue=="angled" ? Visibility.Visible : Visibility.Collapsed;};
             Action load=() => {
                 ListLayout saved=null;
                 if(retroArchDefaults) saved=settings.RetroArchListLayout;
@@ -234,7 +234,7 @@ namespace PadLauncher {
                 var shown=saved ?? (followsRetro ? settings.RetroArchListLayout : null);
                 outlines.IsChecked=shown!=null && shown.ShowPanelOutlines.HasValue ? shown.ShowPanelOutlines.Value : settings.ShowPanelOutlines;
                 artworkSource.SelectedValue=retroArchDefaults ? settings.RetroArchListArtworkSource ?? "auto" : ArtworkService.ListSource(settings,picker.SelectedValue as string);
-                layout.SelectedValue=shown==null ? settings.CarouselLayout : shown.Layout;
+                layout.SelectedValue=shown==null ? DefaultCarouselLayout : shown.Layout=="grid" ? DefaultCarouselLayout : shown.Layout;
                 loadingSizes=true;
                 scale.Value=shown==null ? settings.CarouselScale : shown.PanelScale;
                 lockSizes.IsChecked=shown!=null && shown.PanelSizesLocked.HasValue ? shown.PanelSizesLocked.Value : settings.PanelSizesLocked;

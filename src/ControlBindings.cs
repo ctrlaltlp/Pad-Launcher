@@ -25,7 +25,7 @@ namespace PadLauncher {
                 list.Add(new ControlAction {Context=context,Id="down",Name="Browse / navigate down",Button="down",Key="Down",Mask=2});
                 list.Add(new ControlAction {Context=context,Id="favourite",Name="Toggle favourite",Button="rs",Key=context=="overlay" ? "F" : "none",Mask=0x80});
                 list.Add(new ControlAction {Context=context,Id="jump",Name="Jump to configured list",Button="ls",Key="none",Mask=0x40});
-                list.Add(new ControlAction {Context=context,Id="layout",Name="Toggle Grid 5×3 / carousel",Button=context=="typing" ? "lt" : "west",Key="none"});
+                list.Add(new ControlAction {Context=context,Id="layout",Name="Toggle Grid / carousel",Button=context=="typing" ? "lt" : "west",Key="none"});
                 list.Add(new ControlAction {Context=context,Id="settings",Name="Open Settings",Button="none",Key="none",Mask=0x800});
             }
             Action<string,string,string,string,string,int> add=(context,id,name,button,key,mask) => list.Add(new ControlAction {Context=context,Id=id,Name=name,Button=button,Key=key,Mask=mask});
