@@ -21,6 +21,7 @@ namespace PadLauncher {
         Action refreshSearchView;
         ushort searchButtons;
         int searchDirection;
+        readonly NavigationRepeat searchStickRepeat=new NavigationRepeat();
         long searchNextMove;
         bool suppressSearchRelease;
         bool searchGamesFocused;
@@ -127,7 +128,7 @@ namespace PadLauncher {
             finishGameSearch=accept => {
                 if(!accept) {dialog.Close(); return;}
                 if(visible.Count==0) return;
-                searchGamesFocused=true; dialog.Hide(); searchButtons=UInt16.MaxValue; searchDirection=0;
+                searchGamesFocused=true; dialog.Hide(); searchButtons=UInt16.MaxValue; searchDirection=0; searchStickRepeat.Reset();
                 cards.Clear(); carousel.Children.Clear(); ApplyCarouselScale(); Render(false); Activate(); Focus();
                 if(!preview) {Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).Handle); controllerTimer.Start();}
             };
@@ -164,9 +165,9 @@ namespace PadLauncher {
             activateSearchKey=() => {choose(labels[row][column]); paint();};
             dialog.PreviewTextInput+=(s,e) => HandleSearchText(e);
             dialog.PreviewKeyDown+=(s,e) => HandleSearchKey(e);
-            searchButtons=UInt16.MaxValue; searchDirection=0;
+            searchButtons=UInt16.MaxValue; searchDirection=0; searchStickRepeat.Reset();
             var poll=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(16)};
-            poll.Tick+=(s,e) => {if(!dialog.IsActive || preview) return; PadState pad; if(Gamepad.Read(out pad)) HandleGameSearchController(pad,(long)(System.Diagnostics.Stopwatch.GetTimestamp()*1000.0/System.Diagnostics.Stopwatch.Frequency)); else {searchButtons=UInt16.MaxValue; searchDirection=0;}};
+            poll.Tick+=(s,e) => {if(!dialog.IsActive || preview) return; PadState pad; if(Gamepad.Read(out pad)) HandleGameSearchController(pad,(long)(System.Diagnostics.Stopwatch.GetTimestamp()*1000.0/System.Diagnostics.Stopwatch.Frequency)); else {searchButtons=UInt16.MaxValue; searchDirection=0; searchStickRepeat.Reset();}};
             dialog.Closed+=(s,e) => {
                 searchControlHints=null;
                 noticeTimer.Stop(); notice.Visibility=Visibility.Collapsed;
@@ -191,7 +192,7 @@ namespace PadLauncher {
         }
         void ResumeSearchKeyboard() {
             if(!GameSearchOpen) return;
-            searchGamesFocused=false; searchButtons=UInt16.MaxValue; searchDirection=0;
+            searchGamesFocused=false; searchButtons=UInt16.MaxValue; searchDirection=0; searchStickRepeat.Reset();
             if(focusSearchTopRow!=null) focusSearchTopRow();
             cards.Clear(); carousel.Children.Clear(); Render(false);
             gameSearchWindow.Show(); gameSearchWindow.Activate(); ((Grid)gameSearchWindow.Content).Focus();
@@ -280,7 +281,21 @@ namespace PadLauncher {
                 if((pressed&0x4000)!=0) {backspaceSearch(); return;}
                 if((pressed&0x1000)!=0) {activateSearchKey(); return;}
             }
-            int direction=(pad.Buttons&1)!=0 || pad.LY>16000 ? -2 : (pad.Buttons&2)!=0 || pad.LY< -16000 ? 2 : (pad.Buttons&4)!=0 || pad.LX< -16000 ? -1 : (pad.Buttons&8)!=0 || pad.LX>16000 ? 1 : 0;
+            int dpadDirection=(pad.Buttons&1)!=0 ? -2 : (pad.Buttons&2)!=0 ? 2 : (pad.Buttons&4)!=0 ? -1 : (pad.Buttons&8)!=0 ? 1 : 0;
+            if(searchGamesFocused && dpadDirection==0) {
+                bool grid=ActiveLayout=="grid";
+                int rightStick=pad.RX< -16000 ? -1 : pad.RX>16000 ? 1 :
+                    grid && pad.RY>16000 ? -2 : grid && pad.RY< -16000 ? 2 : 0;
+                int stick=rightStick!=0 ? rightStick :
+                    pad.LY>16000 ? -2 : pad.LY< -16000 ? 2 : pad.LX< -16000 ? -1 : pad.LX>16000 ? 1 : 0;
+                searchDirection=0;
+                if(searchStickRepeat.Update(stick,rightStick!=0,milliseconds,settings.RightStickSpeed,settings.LeftStickSpeed))
+                    NavigateSearchResults(Math.Abs(stick)==1 ? Math.Sign(stick) : 0,Math.Abs(stick)==2 ? Math.Sign(stick) : 0);
+                return;
+            }
+            searchStickRepeat.Reset();
+            int direction=dpadDirection!=0 ? dpadDirection :
+                pad.LY>16000 ? -2 : pad.LY< -16000 ? 2 : pad.LX< -16000 ? -1 : pad.LX>16000 ? 1 : 0;
             if(direction==0) {searchDirection=0; return;}
             if(direction!=searchDirection || milliseconds>=searchNextMove) {
                 bool initial=direction!=searchDirection; searchDirection=direction; searchNextMove=milliseconds+(initial ? 330 : 110);
