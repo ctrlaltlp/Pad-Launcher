@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.6")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.6")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.6")]
+[assembly: System.Reflection.AssemblyVersion("0.5.7")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.7")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.7")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -468,7 +468,7 @@ namespace PadLauncher {
             } else {testPreviousCarouselLayouts[id]=layout; layout="grid";}
             testLayoutOverrides[id]=layout;
             if(settings.RememberControlLayoutChanges) {
-                var profile=ActiveListLayout==null ? new ListLayout {PanelScale=settings.CarouselScale,RetroPanelScale=settings.RetroPanelScale,PanelSizesLocked=settings.PanelSizesLocked,ShowPanelOutlines=settings.ShowPanelOutlines,Columns=settings.GridColumns,Rows=settings.GridRows,AngledSizing=settings.AngledPanelSizing} : Storage.Json().Deserialize<ListLayout>(Storage.Json().Serialize(ActiveListLayout));
+                var profile=ActiveListLayout==null ? new ListLayout {PanelScale=settings.CarouselScale,RetroPanelScale=settings.RetroPanelScale,PanelSizesLocked=settings.PanelSizesLocked,ShowPanelOutlines=settings.ShowPanelOutlines,Columns=settings.GridColumns,Rows=settings.GridRows} : Storage.Json().Deserialize<ListLayout>(Storage.Json().Serialize(ActiveListLayout));
                 profile.Layout=layout;
                 if(settings.ListLayouts==null) settings.ListLayouts=new Dictionary<string,ListLayout>();
                 settings.ListLayouts[id]=profile; activeListLayout=profile;
@@ -484,7 +484,22 @@ namespace PadLauncher {
         }
         bool ActivePanelOutlines {get {var layout=ActiveListLayout; return layout!=null && layout.ShowPanelOutlines.HasValue ? layout.ShowPanelOutlines.Value : settings.ShowPanelOutlines;}}
         double ActivePanelScale { get {return ActiveListLayout==null ? settings.CarouselScale : ActiveListLayout.PanelScale;}}
-        string ActiveAngledSizing { get {return GameSearchOpen ? "fit" : ActiveListLayout==null ? (visible.Count>0 && visible.All(game => game.PreferredArtworkSource=="libretro") ? "fit" : settings.AngledPanelSizing) : ActiveListLayout.AngledSizing;}}
+        string ResolveArtworkSizing(string listId,ListLayout profile,IList<Game> games) {
+            string sizing=profile==null ? null : profile.AngledSizing;
+            if(sizing=="fit" || sizing=="fixed") return sizing;
+            string source=ArtworkService.ListDefaultSource(settings,listId);
+            if(ArtworkService.PrimaryArtworkSource(source)=="libretro") return "fit";
+            if(source=="auto" && games.Count>0 && games.All(game =>
+                ArtworkService.PrimaryArtworkSource(ArtworkService.GameListSource(settings,game,listId,source))=="libretro")) return "fit";
+            return settings.AngledPanelSizing;
+        }
+        string ActiveAngledSizing {
+            get {
+                if(GameSearchOpen) return "fit";
+                string id=collectionIndex>=0 && collectionIndex<filters.Count ? filters[collectionIndex].Id : null;
+                return ResolveArtworkSizing(id,ActiveListLayout,visible);
+            }
+        }
         int GridColumns { get {int value=ActiveListLayout==null ? settings.GridColumns : ActiveListLayout.Columns; return value>=2 && value<=10 ? value : 5;} }
         int GridRows { get {int value=ActiveListLayout==null ? settings.GridRows : ActiveListLayout.Rows; return value>=1 && value<=5 ? value : 3;} }
         public void SetGridRows(int rows) {
@@ -2165,6 +2180,7 @@ namespace PadLauncher {
             int first=row*GridColumns,last=Math.Min(first+GridColumns,visible.Count),targetPage=first/pageSize*pageSize;
             var targets=ArtworkPanelPositions(Math.Min(pageSize,visible.Count-targetPage),0,targetPage,true,out ignored);
             int next=first; double nearest=Double.PositiveInfinity;
+            bool fitAngledArtwork=ActiveAngledSizing!="fixed";
             for(int candidate=first;candidate<last;candidate++) {
                 Rect target=targets[candidate-targetPage];
                 double distance=Math.Abs(target.X+target.Width/2-center);
@@ -2212,6 +2228,7 @@ namespace PadLauncher {
                 if(rowTop+gridHeight>gridScrollOffset+gridViewportHeight) gridScrollOffset=rowTop+gridHeight-gridViewportHeight;
                 gridScrollOffset=Math.Max(0,Math.Min(Math.Max(0,gridContentHeight-gridViewportHeight),gridScrollOffset));
             }
+            bool fitAngledArtwork=ActiveAngledSizing!="fixed";
             for (int slot = 0; slot < count; slot++) {
                 int offset=start+slot, i=gridLayout ? pageStart+slot : (selected+offset+visible.Count)%visible.Count;
                 bool active=i==selected;
@@ -2223,7 +2240,7 @@ namespace PadLauncher {
                 if(rectangular) w=offset==0 ? 300 : 250;
                 double x = 800 - w/2 + offset*(rectangular ? 285 : 254);
                 double y = offset == 0 ? 0 : (490-h)/2;
-                if(!gridLayout && !rectangular && ActiveAngledSizing!="fixed") {
+                if(!gridLayout && !rectangular && fitAngledArtwork) {
                     FrameworkElement retainedCard;
                     var image=cards.TryGetValue(game.Id,out retainedCard) ? retainedCard.Tag as BitmapSource : LoadImage(game.Art,700);
                     if(image!=null && image.PixelWidth>0 && image.PixelHeight>0) {

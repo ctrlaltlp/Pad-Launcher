@@ -203,7 +203,7 @@ namespace PadLauncher {
             fields.Children.Add(layout);
             var angled=new StackPanel();
             angled.Children.Add(Label("Angled sizing",12,mint));
-            var sizing=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("fit","Fit artwork"),new KeyValuePair<string,string>("fixed","Fixed (blurred edges)")},DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(0,6,0,10)}; angled.Children.Add(sizing); fields.Children.Add(angled);
+            var sizing=new SettingsComboBox {ItemsSource=new[]{new KeyValuePair<string,string>("auto","Automatic"),new KeyValuePair<string,string>("fit","Fit artwork"),new KeyValuePair<string,string>("fixed","Fixed (blurred edges)")},DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(0,6,0,10)}; angled.Children.Add(sizing); fields.Children.Add(angled);
             var outlines=new CheckBox {Name=retroArchDefaults ? "RetroArchListShowPanelOutlinesSetting" : "ListShowPanelOutlinesSetting",Content="Show panel outlines",Margin=new Thickness(0,0,0,10)}; fields.Children.Add(outlines);
             fields.Children.Add(Label("Modern panel size",12,mint));
             var scaleValue=Label("",12,muted); fields.Children.Add(scaleValue);
@@ -242,7 +242,7 @@ namespace PadLauncher {
                 retroValue.Text=retroScale.Value.ToString("0%"); loadingSizes=false;
                 columns.SelectedItem=shown==null ? settings.GridColumns : shown.Columns;
                 rows.SelectedItem=shown==null ? settings.GridRows : shown.Rows;
-                sizing.SelectedValue=shown==null ? settings.AngledPanelSizing : shown.AngledSizing;
+                sizing.SelectedValue=shown!=null && (shown.AngledSizing=="fit" || shown.AngledSizing=="fixed") ? shown.AngledSizing : "auto";
                 update(); updateEffectiveArtwork();
             };
             picker.SelectionChanged+=(s,e) => {if(!retroArchDefaults) {if(artworkOnly) editedArtworkListId=picker.SelectedValue as string; else editedListLayoutId=picker.SelectedValue as string;} load();}; inherit.Click+=(s,e) => update(); layout.SelectionChanged+=(s,e) => update();
