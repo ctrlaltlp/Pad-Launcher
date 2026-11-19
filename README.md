@@ -43,7 +43,7 @@ Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original 
 | Dismiss overlay | Tap Circle / Xbox B / Nintendo A | Esc |
 | Exit app completely | Hold Circle / Xbox B / Nintendo A for 1 second | Tray → Exit app |
 | Change list | L1 / R1, Xbox LB / RB, Nintendo L / R | Page Up / Page Down |
-| Toggle Grid ↔ previous Angled/Rectangular layout | Square / Xbox X / Nintendo Y | — |
+| Toggle Grid 5×3 ↔ previous Angled/Rectangular layout | Square / Xbox X / Nintendo Y | — |
 | Move to next monitor | L2 / Xbox LT / Nintendo ZL | M |
 | Search games with the gamepad keyboard | Triangle / Xbox Y / Nintendo X | Ctrl+F |
 | Refresh games, artwork and lists | Select/Create / Xbox Back/View / Nintendo − | F5 |
@@ -58,7 +58,7 @@ Left and right stick speeds are adjustable in Controls (both default to 5×). D-
 
 **Overlay settings:** Choose your layout, artwork sizing, panel sizes, spacing and outlines. Adjust title and list-name visibility, select a monitor, and optionally remember layout switches across restarts. Individual lists can override layout and artwork preferences.
 
-Choose **Angled** for a slanted artwork carousel or **Rectangular** for a straight carousel. Use the **Grid / carousel** shortcut to switch to Grid. Set its default size under **Overlay → Grid columns** and **Grid rows**. **Fixed (blurred edges)** keeps consistent panel sizing and fills unused edges with artwork colours; **Fit artwork** follows each cover's proportions to show the full image. Layout and sizing can be set globally or per list. Enable **Overlay → Remember layout changes made with controls** to keep layout switches for each list across restarts; this is off by default.
+Choose **Angled** for a slanted artwork carousel, **Rectangular** for a straight carousel, or **Grid** for multiple rows and columns. **Fixed (blurred edges)** keeps consistent panel sizing and fills unused edges with artwork colours; **Fit artwork** follows each cover's proportions to show the full image. Layout and sizing can be set globally or per list. Enable **Overlay → Remember layout changes made with controls** to keep layout switches for each list across restarts; this is off by default.
 
 ## Artwork
 
