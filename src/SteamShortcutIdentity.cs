@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -89,6 +89,11 @@ namespace PadLauncher {
                 string id=map(key); if(id==key) continue;
                 long previous; settings.LaunchHistory.TryGetValue(id,out previous);
                 settings.LaunchHistory[id]=Math.Max(previous,settings.LaunchHistory[key]); settings.LaunchHistory.Remove(key);
+            }
+            if(settings.LaunchCounts!=null) foreach(string key in settings.LaunchCounts.Keys.ToList()) {
+                string id=map(key); if(id==key) continue;
+                long previous; settings.LaunchCounts.TryGetValue(id,out previous);
+                settings.LaunchCounts[id]=previous+settings.LaunchCounts[key]; settings.LaunchCounts.Remove(key);
             }
             if(library!=null) foreach(var item in library.Collections) item.Games=list(item.Games);
         }

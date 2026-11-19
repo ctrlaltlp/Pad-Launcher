@@ -266,6 +266,7 @@ namespace PadLauncher {
             foreach(string gameId in ids) {
                 if(settings.ArtworkOverrides!=null) settings.ArtworkOverrides.Remove(gameId);
                 if(settings.LaunchHistory!=null) settings.LaunchHistory.Remove(gameId);
+                if(settings.LaunchCounts!=null) settings.LaunchCounts.Remove(gameId);
             }
             if(settings.SelectedGamesByList!=null) foreach(string key in settings.SelectedGamesByList.Where(pair => ids.Contains(pair.Value)).Select(pair => pair.Key).ToArray()) settings.SelectedGamesByList.Remove(key);
             if(ids.Contains(settings.SelectedId)) settings.SelectedId=null;
@@ -317,6 +318,10 @@ namespace PadLauncher {
             if(settings.LaunchHistory!=null) settings.LaunchHistory.TryGetValue(game.Id,out launched);
             return Math.Max(game.LastPlayed,launched);
         }
+        public static long LaunchCount(Settings settings,Game game) {
+            long count;
+            return settings.LaunchCounts!=null && settings.LaunchCounts.TryGetValue(game.Id,out count) ? count : 0;
+        }
         public static List<Collection> Options(Library library,Settings settings) {
             var options=new List<Collection> {new Collection {Id="all",Name="All games",Games=library.Games.Select(g => g.Id).ToList()}};
             options.AddRange((library.Collections ?? new List<Collection>()).Select(c => new Collection {
@@ -336,6 +341,13 @@ namespace PadLauncher {
             var customSource=options.FirstOrDefault(list => list.Id=="source:custom");
             if(customSource!=null) customSource.Games=CustomGameLibrary.CustomListGameIds(library,settings);
             options.Add(new Collection {Id="recent",Name="Recently played",Games=library.Games.Where(g => RecentPlayed(settings,g)>0).OrderByDescending(g => RecentPlayed(settings,g)).Select(g => g.Id).ToList()});
+            bool mostPlayedNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Most played",StringComparison.OrdinalIgnoreCase)) ||
+                (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => String.Equals(list.Name,"Most played",StringComparison.OrdinalIgnoreCase));
+            options.Add(new Collection {
+                Id="most-played",Name=mostPlayedNameUsed ? "Most played (automatic)" : "Most played",
+                Games=library.Games.Where(game => LaunchCount(settings,game)>0).OrderByDescending(game => LaunchCount(settings,game))
+                    .ThenBy(game => game.Name,StringComparer.CurrentCultureIgnoreCase).Select(game => game.Id).ToList()
+            });
             bool addedNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Recently added",StringComparison.OrdinalIgnoreCase)) || (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => String.Equals(list.Name,"Recently added",StringComparison.OrdinalIgnoreCase));
             options.Add(new Collection {Id="recently-added",Name=addedNameUsed ? "Recently added (automatic)" : "Recently added",Games=library.Games.Where(g => AddedAt(settings,g)>0).OrderByDescending(g => AddedAt(settings,g)).ThenBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).Select(g => g.Id).ToList()});
             bool favouriteNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Favourites",StringComparison.OrdinalIgnoreCase)) ||
@@ -426,6 +438,7 @@ namespace PadLauncher {
         public double RightStickSpeed {get;set;}
         public double LeftStickSpeed {get;set;}
         public Dictionary<string,long> LaunchHistory {get;set;}
+        public Dictionary<string,long> LaunchCounts {get;set;}
         public Dictionary<string,string> ArtworkOverrides {get;set;}
         public Dictionary<string,List<string>> ListGameAdditions {get;set;}
         public List<CustomGame> CustomGames {get;set;}

@@ -347,6 +347,7 @@ namespace PadLauncher {
             if(settings.HiddenGameIds!=null) settings.HiddenGameIds.RemoveAll(value => value==gameId);
             if(settings.ArtworkOverrides!=null) settings.ArtworkOverrides.Remove(gameId);
             if(settings.LaunchHistory!=null) settings.LaunchHistory.Remove(gameId);
+            if(settings.LaunchCounts!=null) settings.LaunchCounts.Remove(gameId);
             if(settings.SelectedGamesByList!=null) foreach(string listId in settings.SelectedGamesByList.Where(pair => pair.Value==gameId).Select(pair => pair.Key).ToArray()) settings.SelectedGamesByList.Remove(listId);
             if(settings.SelectedId==gameId) settings.SelectedId=null;
         }

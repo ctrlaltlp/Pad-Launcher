@@ -78,6 +78,9 @@ Preconfigured lists:
 - **Recently added:** Newly registered games from all sources, newest first. Tracking starts when this feature is first used; existing games have no historical added date. Refreshing or reimporting a game does not move it to the top.
 - **Favourites:** Your hand-picked games. Press R3 / right stick click or F by default to add or remove the selected game.
 - **Recently played:** Games ordered by their latest launch in Pad Launcher or available launcher play history, newest first.
+- **Most played:** Games ranked by how often you launch them through Pad Launcher. Counting starts with version 0.5.5.
+
+**Favourites**, **Recently played**, and **Most played** can be selected under **Lists → Jump to list** even when disabled in **Overlay lists**. Those choices are marked **(not in overlay)**. Use the assigned Jump to list button to open it. Regular list cycling skips it after you switch away.
 
 Open **Settings → Lists → List editor** to manage your lists.
 

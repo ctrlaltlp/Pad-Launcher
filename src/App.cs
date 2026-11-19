@@ -271,6 +271,7 @@ namespace PadLauncher {
             demo = demoMode; preview = renderPreview;
             freshProfile=!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json")) && !File.Exists(System.IO.Path.Combine(Storage.Root,"library.json"));
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
+            if(IsSpecialJumpList(settings.DefaultCollectionId)) settings.DefaultCollectionId="remember";
             ControlBindings.UpgradeSearchDefaults(settings);
             ArtworkService.UpgradeArtworkPreferences(settings);
             var beforeShortcutCleanup=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
@@ -375,8 +376,24 @@ namespace PadLauncher {
                 Focus();
             }));
         }
+        static bool IsSpecialJumpList(string id) {
+            return id=="favourites" || id=="recent" || id=="most-played";
+        }
+        List<KeyValuePair<string,string>> DefaultListChoices() {
+            var choices=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last list")};
+            foreach(var list in CollectionOptions()) {
+                bool enabled=CollectionEnabled(list.Id);
+                if(enabled && !IsSpecialJumpList(list.Id))
+                    choices.Add(new KeyValuePair<string,string>(list.Id,ListLabel(list)));
+            }
+            return choices;
+        }
+        List<KeyValuePair<string,string>> JumpListChoices() {
+            return CollectionOptions().Where(list => CollectionEnabled(list.Id) || IsSpecialJumpList(list.Id))
+                .Select(list => new KeyValuePair<string,string>(list.Id,ListLabel(list)+(CollectionEnabled(list.Id) ? "" : " (not in overlay)"))).ToList();
+        }
         public void SetDefaultCollection(string id) {
-            if(id!="remember" && !CollectionOptions().Any(c => c.Id==id && CollectionEnabled(id))) throw new ArgumentException("Choose an available list.");
+            if(id!="remember" && !CollectionOptions().Any(c => c.Id==id && CollectionEnabled(id) && !IsSpecialJumpList(id))) throw new ArgumentException("Choose an available list.");
             string previous=settings.DefaultCollectionId;
             try { settings.DefaultCollectionId=id; Storage.Write("settings.json",settings); }
             catch { settings.DefaultCollectionId=previous; throw; }
@@ -701,12 +718,6 @@ namespace PadLauncher {
             var speedValue=Label(settings.RightStickSpeed.ToString("0.#")+"×",13,white); helpLayout.Children.Add(speedValue);
             var speedPicker=new Slider {Name="RightStickSpeedSetting",Minimum=1,Maximum=10,Value=settings.RightStickSpeed,TickFrequency=.5,IsSnapToTickEnabled=true,SmallChange=.5,LargeChange=1,Margin=new Thickness(0,4,0,10)};
             speedPicker.ValueChanged+=(s,e) => {settings.RightStickSpeed=speedPicker.Value; speedValue.Text=settings.RightStickSpeed.ToString("0.#")+"×"; navigation.Reset(); QueueSave();}; helpLayout.Children.Add(speedPicker);
-            var jumpCaption=Label("Jump to list",14,mint); jumpCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(jumpCaption);
-            var jumpLists=CollectionOptions().Where(list => CollectionEnabled(list.Id)).Select(list => new KeyValuePair<string,string>(list.Id,ListLabel(list))).ToList();
-            var jumpDestination=new SettingsComboBox {ItemsSource=jumpLists,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.JumpListId,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0),IsEnabled=ControlBindings.HasJump(settings)};
-            helpLayout.Children.Add(jumpDestination);
-            var jumpNote=Label("Assign Jump to configured list in Change controls, then choose its destination here.",12,muted); jumpNote.TextWrapping=TextWrapping.Wrap; jumpNote.Margin=new Thickness(0,8,0,0); helpLayout.Children.Add(jumpNote);
-            jumpDestination.SelectionChanged+=(s,e) => {settings.JumpListId=jumpDestination.SelectedValue as string; QueueSave();};
             var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,12)};
             titleToggle.Click+=(s,e) => {
                 try { SetShowGameTitle(titleToggle.IsChecked==true); }
@@ -752,8 +763,7 @@ namespace PadLauncher {
             listCountRow.Children.Add(listCountToggle);
             layout.Children.Add(listCountRow);
             var defaultCaption=Label("Default list",14,mint); defaultCaption.Margin=new Thickness(0,14,0,10);
-            var collectionOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last list")};
-            foreach(var list in CollectionOptions().Where(c => CollectionEnabled(c.Id))) collectionOptions.Add(new KeyValuePair<string,string>(list.Id,ListLabel(list)));
+            var collectionOptions=DefaultListChoices();
             string defaultId=String.IsNullOrEmpty(settings.DefaultCollectionId) ? "remember" : settings.DefaultCollectionId;
             if(!collectionOptions.Any(p => p.Key==defaultId)) collectionOptions.Add(new KeyValuePair<string,string>(defaultId,"Saved list (unavailable)"));
             var defaultPicker=new SettingsComboBox {Name="DefaultListSetting",ItemsSource=collectionOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=defaultId,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
@@ -766,6 +776,18 @@ namespace PadLauncher {
                 catch(Exception error) { restoringDefault=true; defaultPicker.SelectedValue=previous; restoringDefault=false; ThemedMessage.Show(dialog,error.Message,"Settings"); }
             };
 
+            string jumpBinding=ControlBindings.Label(settings,"overlay.jump");
+            if(jumpBinding=="Unassigned") jumpBinding=ControlBindings.KeyLabel(ControlBindings.Get(settings,"overlay.jump",true));
+            var jumpCaption=Label("Jump to list ("+jumpBinding+")",14,mint);
+            jumpCaption.Margin=new Thickness(0,14,0,8);
+            var jumpDestination=new SettingsComboBox {Name="JumpListSetting",ItemsSource=JumpListChoices(),DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.JumpListId,Padding=new Thickness(8)};
+            bool restoringJump=false;
+            jumpDestination.SelectionChanged+=(s,e) => {
+                if(restoringJump || jumpDestination.SelectedValue==null) return;
+                settings.JumpListId=jumpDestination.SelectedValue as string; QueueSave();
+            };
+            var jumpNote=Label("Assign Jump to configured list in Show/Change controls, then choose its destination here.",12,muted);
+            jumpNote.TextWrapping=TextWrapping.Wrap; jumpNote.Margin=new Thickness(0,8,0,0);
             var availableSection=new Expander {Name="AvailableListsSection",Header="Overlay lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0)};
             var availablePanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             var allCollections=new CheckBox {Content="Include all lists (including new ones)",Foreground=white,IsChecked=settings.EnabledCollectionIds==null,Margin=new Thickness(0,0,0,10)};
@@ -777,9 +799,8 @@ namespace PadLauncher {
             Action saveAvailability=() => {
                 try {
                     SetAvailableCollections(allCollections.IsChecked==true ? null : collectionBoxes.Where(p => p.Value.IsChecked==true).Select(p => p.Key));
-                    var defaults=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last list")};
-                    defaults.AddRange(CollectionOptions().Where(c => CollectionEnabled(c.Id)).Select(c => new KeyValuePair<string,string>(c.Id,ListLabel(c))));
-                    restoringDefault=true; defaultPicker.ItemsSource=defaults; defaultPicker.SelectedValue=settings.DefaultCollectionId ?? "remember"; restoringDefault=false;
+                    restoringDefault=true; defaultPicker.ItemsSource=DefaultListChoices(); defaultPicker.SelectedValue=settings.DefaultCollectionId ?? "remember"; restoringDefault=false;
+                    restoringJump=true; jumpDestination.ItemsSource=JumpListChoices(); jumpDestination.SelectedValue=settings.JumpListId; restoringJump=false;
                 } catch(Exception error) {
                     allCollections.IsChecked=settings.EnabledCollectionIds==null;
                     foreach(var item in collectionBoxes) item.Value.IsChecked=CollectionEnabled(item.Key);
@@ -876,7 +897,7 @@ namespace PadLauncher {
                 noListMatches.Visibility=matches==0 ? Visibility.Visible : Visibility.Collapsed;
                 orderScroll.ScrollToTop();
             };
-            var availableTip=Label("Changes save immediately. Only selected lists appear when switching lists. Select at least one. Hidden lists are also removed from Default list.",12,muted); availableTip.TextWrapping=TextWrapping.Wrap; availableTip.Margin=new Thickness(0,8,0,0); availablePanel.Children.Add(availableTip);
+            var availableTip=Label("Changes save immediately. Only selected lists appear when switching lists. Select at least one. Favourites, Recently played and Most played can still be jump destinations when hidden here.",12,muted); availableTip.TextWrapping=TextWrapping.Wrap; availableTip.Margin=new Thickness(0,8,0,0); availablePanel.Children.Add(availableTip);
             availableSection.Content=availablePanel; listsLayout.Children.Add(availableSection);
             var listLayoutSection=new Expander {Header="Per-list layout",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listLayoutExpanded};
             listLayoutSection.Expanded+=(s,e) => listLayoutExpanded=true; listLayoutSection.Collapsed+=(s,e) => listLayoutExpanded=false;
@@ -1102,6 +1123,7 @@ namespace PadLauncher {
             }
             refreshEditor(); customListSection.Content=editorPanel; listsLayout.Children.Add(customListSection);
             listsLayout.Children.Add(CreateHiddenGamesSettings(rebuild));
+            listsLayout.Children.Add(jumpCaption); listsLayout.Children.Add(jumpDestination); listsLayout.Children.Add(jumpNote);
             listsLayout.Children.Add(defaultCaption); listsLayout.Children.Add(defaultPicker);
             layout.Children.Add(skipEmpty);
             var removeMissing=new CheckBox {Content="Remove missing emulator and custom games on refresh",IsChecked=settings.RemoveMissingEmulatorGames,FontSize=14,Foreground=white,Margin=new Thickness(0,0,0,8)};
@@ -1605,7 +1627,7 @@ namespace PadLauncher {
             note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,12,0,16); header.Children.Add(note);
             var select=new Button {Content="Select all",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,12)}; header.Children.Add(select);
             var destinations=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("source:custom","Custom games"),new KeyValuePair<string,string>("","Keep existing lists")};
-            destinations.AddRange(CollectionOptions().Where(c => c.Id!="all" && c.Id!="recent" && !c.Id.StartsWith("source:")).Select(c => new KeyValuePair<string,string>(c.Id,c.Name)));
+            destinations.AddRange(CollectionOptions().Where(c => c.Id!="all" && c.Id!="recent" && c.Id!="most-played" && !c.Id.StartsWith("source:")).Select(c => new KeyValuePair<string,string>(c.Id,c.Name)));
             var bulkOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("bulk","Add all to list…")}; bulkOptions.AddRange(destinations);
             bulkOptions.Add(new KeyValuePair<string,string>("create","Create new list…"));
             var bulk=new SettingsComboBox {Name="SteamShortcutBulkList",ItemsSource=bulkOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue="bulk",Width=220,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,0,0,12)}; header.Children.Add(bulk);
@@ -2043,6 +2065,8 @@ namespace PadLauncher {
             StopListTransition();
             string previousFilter=filters.Count>0 ? filters[collectionIndex].Id : null;
             SetFilters();
+            if(!opening && previousFilter==settings.JumpListId && settings.CollectionId==previousFilter && IsSpecialJumpList(previousFilter))
+                collectionIndex=Math.Max(0,IncludeJumpList());
             if(opening && !String.IsNullOrEmpty(settings.DefaultCollectionId) && settings.DefaultCollectionId!="remember") {
                 collectionIndex=Math.Max(0,filters.FindIndex(c => c.Id==settings.DefaultCollectionId));
                 settings.CollectionId=filters[collectionIndex].Id;
@@ -2064,11 +2088,12 @@ namespace PadLauncher {
             string oldId = remember ? settings.SelectedId : visible.Count > selected ? visible[selected].Id : null;
             string remembered;
             if(settings.SelectedGamesByList!=null && settings.SelectedGamesByList.TryGetValue(filter.Id,out remembered)) oldId=remembered;
-            if(filter.Id=="recent" || filter.Id=="recently-added") oldId=null;
+            if(filter.Id=="recent" || filter.Id=="recently-added" || filter.Id=="most-played") oldId=null;
             var membership=new HashSet<string>(filter.Games ?? new List<string>());
             var hidden=new HashSet<string>(settings.HiddenGameIds ?? new List<string>());
             visible = library.Games.Where(g => !hidden.Contains(g.Id) && (filter.Id == "all" || (!filter.UnsupportedDynamic && membership.Contains(g.Id)))).ToList();
             if(filter.Id=="recent") visible=visible.OrderByDescending(g => CombinedCollections.RecentPlayed(settings,g)).ToList();
+            if(filter.Id=="most-played") visible=visible.OrderByDescending(g => CombinedCollections.LaunchCount(settings,g)).ThenBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
             if(filter.Id=="recently-added") visible=visible.OrderByDescending(g => CombinedCollections.AddedAt(settings,g)).ThenBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
             string artworkSource=ArtworkService.ListDefaultSource(settings,filter.Id);
             visible=visible.Select(game => ArtworkService.ForList(game,settings,filter.Id,artworkSource)).ToList();
@@ -2081,6 +2106,10 @@ namespace PadLauncher {
             int next=(collectionIndex+delta+filters.Count)%filters.Count;
             if(next==collectionIndex) return;
             var oldList=DetachOutgoingList();
+            if(!CollectionEnabled(filters[collectionIndex].Id)) {
+                filters.RemoveAt(collectionIndex);
+                if(next>collectionIndex) next--;
+            }
             collectionIndex=next;
             try {
                 settings.CollectionId = filters[collectionIndex].Id; FilterGames(false);
@@ -2134,7 +2163,7 @@ namespace PadLauncher {
             if(!GameSearchOpen) {
                 settings.SelectedId = current.Id;
                 if(settings.SelectedGamesByList==null) settings.SelectedGamesByList=new Dictionary<string,string>();
-                if(filters[collectionIndex].Id=="recent" || filters[collectionIndex].Id=="recently-added") settings.SelectedGamesByList.Remove(filters[collectionIndex].Id);
+                if(filters[collectionIndex].Id=="recent" || filters[collectionIndex].Id=="recently-added" || filters[collectionIndex].Id=="most-played") settings.SelectedGamesByList.Remove(filters[collectionIndex].Id);
                 else settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
             } else if(searchConsoleLabel!=null) searchConsoleLabel.Text=SearchSourceLabel(current,settings);
             string availabilityIssue=GameAvailabilityIssue(current);
@@ -2380,7 +2409,10 @@ namespace PadLauncher {
                 Save();
                 Process.Start(GameLaunch.StartInfo(game,settings));
                 if(settings.LaunchHistory==null) settings.LaunchHistory=new Dictionary<string,long>();
-                settings.LaunchHistory[game.Id]=DateTimeOffset.UtcNow.ToUnixTimeSeconds(); Save();
+                settings.LaunchHistory[game.Id]=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                if(settings.LaunchCounts==null) settings.LaunchCounts=new Dictionary<string,long>();
+                settings.LaunchCounts[game.Id]=CombinedCollections.LaunchCount(settings,game)+1;
+                Save();
                 Close();
             } catch (Exception e) { launching=false; ShowNotice("Game could not be opened: "+e.Message); }
 #endif
@@ -2485,9 +2517,18 @@ namespace PadLauncher {
             if((pressed&0x0040)!=0) JumpToConfiguredList();
             if((pressed&0x0800)!=0) ShowHelpWindow();
         }
-        void JumpToConfiguredList() {
+        int IncludeJumpList() {
             int target=filters.FindIndex(list => list.Id==settings.JumpListId);
-            if(target<0) ShowNotice("Choose an available, non-empty jump list in Controls.");
+            if(target>=0 || !IsSpecialJumpList(settings.JumpListId)) return target;
+            var destination=CollectionOptions().FirstOrDefault(list => list.Id==settings.JumpListId);
+            if(destination==null) return -1;
+            filters.Add(destination);
+            return filters.Count-1;
+        }
+        void JumpToConfiguredList() {
+            if(launching) return;
+            int target=IncludeJumpList();
+            if(target<0) ShowNotice("Choose an available jump list in Settings → Lists.");
             else if(target!=collectionIndex) ChangeCollection(target-collectionIndex);
         }
         internal bool TryControllerNavigationKey(System.Windows.Input.Key key,PadState pad) {
