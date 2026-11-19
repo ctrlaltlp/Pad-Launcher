@@ -24,6 +24,9 @@ namespace PadLauncher {
             var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
             var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
             header.Children.Add(Label("Change controls",25,white));
+            var styleCaption=Label("Button style",14,mint); styleCaption.Margin=new Thickness(0,12,0,6); header.Children.Add(styleCaption);
+            var styles=new StackPanel {Name="ButtonStyleChoices",Orientation=Orientation.Horizontal};
+            header.Children.Add(styles);
             var note=Label("Click a controller label to assign an action. Yellow labels share an action with another button. Use Keyboard shortcuts to change keys. Save changes applies all edits; Close discards unsaved edits.",12,muted); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,10,0,12); header.Children.Add(note);
             var footer=new StackPanel(); DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
             var status=Label("",12,muted); status.Name="ControlBindingsStatus"; status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,12,0,10); footer.Children.Add(status);
@@ -34,6 +37,7 @@ namespace PadLauncher {
             var save=new Button {Name="SaveControlBindings",Content="Save changes",Background=mint,Foreground=Brushes.Black,Padding=new Thickness(12,8,12,8)}; right.Children.Add(save); right.Children.Add(cancel);
             var tabs=new TabControl {Name="ControlBindingContexts",Background=dialog.Background}; root.Children.Add(tabs); StyleSettingsSubtabs(tabs);
             var diagramUpdates=new List<Action>();
+            var rebuildDiagrams=new List<Action>();
             Action validate=() => {
                 foreach(var update in diagramUpdates) update();
                 string conflict=ControlBindings.Conflict(draft);
@@ -46,10 +50,41 @@ namespace PadLauncher {
                 var keyboard=new Button {Name="EditKeyboard_"+context,Content="Keyboard shortcuts…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,6)};
                 DockPanel.SetDock(keyboard,Dock.Top); content.Children.Add(keyboard);
                 keyboard.Click+=(s,e) => ShowKeyboardShortcuts(dialog,draft,context,validate);
-                Action updateDiagram;
-                content.Children.Add(new Viewbox {Name="ControlPreviewFit_"+context,Stretch=Stretch.Uniform,StretchDirection=StretchDirection.DownOnly,Child=CreateControlDiagram(draft,context,out updateDiagram,validate),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top});
-                diagramUpdates.Add(updateDiagram);
+                var diagram=new Viewbox {Name="ControlPreviewFit_"+context,Stretch=Stretch.Uniform,StretchDirection=StretchDirection.DownOnly,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top};
+                content.Children.Add(diagram);
+                int index=diagramUpdates.Count;
+                diagramUpdates.Add(null);
+                Action rebuildDiagram=() => {
+                    Action update;
+                    diagram.Child=CreateControlDiagram(draft,context,out update,validate);
+                    diagramUpdates[index]=update;
+                };
+                rebuildDiagram();
+                rebuildDiagrams.Add(rebuildDiagram);
             }
+            var styleButtons=new Dictionary<string,Button>();
+            Action refreshStyleButtons=() => {
+                foreach(var pair in styleButtons) {
+                    bool selected=Prompts.Style(draft)==pair.Key;
+                    pair.Value.Content=pair.Key;
+                    pair.Value.Background=selected ? mint : new SolidColorBrush(Color.FromRgb(34,51,63));
+                    pair.Value.Foreground=selected ? Brushes.Black : white;
+                }
+            };
+            foreach(string style in new[]{"PlayStation","Xbox","Nintendo"}) {
+                string selectedStyle=style;
+                var choice=new Button {Padding=new Thickness(13,7,13,7),Margin=new Thickness(0,0,8,0)};
+                choice.Click+=(s,e) => {
+                    if(Prompts.Style(draft)==selectedStyle) return;
+                    draft.ButtonPrompts=selectedStyle;
+                    refreshStyleButtons();
+                    foreach(var buildDiagram in rebuildDiagrams) buildDiagram();
+                    validate();
+                };
+                styleButtons.Add(style,choice);
+                styles.Children.Add(choice);
+            }
+            refreshStyleButtons();
             restore.Click+=(s,e) => {
                 var defaults=new Settings {JumpListButton="off"};
                 draft.ControlButtons=ControlBindings.Actions.ToDictionary(action => action.FullId,action => ControlBindings.Get(defaults,action.FullId));
@@ -60,6 +95,7 @@ namespace PadLauncher {
                 if(ControlBindings.Conflict(draft)!=null) {validate(); return;}
                 try {
                     var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    next.ButtonPrompts=draft.ButtonPrompts;
                     next.ControlButtons=new Dictionary<string,string>(draft.ControlButtons); next.ControlKeys=new Dictionary<string,string>(draft.ControlKeys);
                     next.ControlButtonAlternates=draft.ControlButtonAlternates==null ? null : draft.ControlButtonAlternates.ToDictionary(pair => pair.Key,pair => new List<string>(pair.Value));
                     next.ControlBindingVersion=8; next.JumpListButton=ControlBindings.HasJump(next) ? "left" : "off";

@@ -68,6 +68,16 @@ class ControlBindingTests {
                 Check(Find<Button>(dialog,"EditKeyboard_"+context)!=null,"Each diagram retains keyboard shortcut access");
             }
             contexts.SelectedIndex=0; dialog.UpdateLayout();
+            var styles=Find<StackPanel>(dialog,"ButtonStyleChoices");
+            var originalStyle=styles.Children.OfType<Button>().First(button => (string)button.Content==Prompts.Style(State(launcher)));
+            var alternateStyle=styles.Children.OfType<Button>().First(button => button!=originalStyle);
+            string alternateName=(string)alternateStyle.Content;
+            alternateStyle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var styledDiagram=Find<StackPanel>(dialog,"ControllerDiagram_overlay");
+            Check(((TextBlock)styledDiagram.Children[0]).Text.StartsWith(alternateName+" ·") && File.ReadAllText(Path.Combine(Storage.Root,"settings.json"))==before,"Button style previews immediately and stays staged until Save changes");
+            originalStyle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            dialog.UpdateLayout();
+
             var fitted=Find<Viewbox>(dialog,"ControlPreviewFit_overlay"); var host=(FrameworkElement)fitted.Parent;
             Check(fitted.ActualHeight<=host.ActualHeight+1 && fitted.ActualWidth<=host.ActualWidth+1,"Full controller diagram fits without scrolling");
             if(restore) Find<Button>(dialog,"RestoreControlBindings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

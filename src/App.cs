@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.7.2")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.7.2")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.7.2")]
+[assembly: System.Reflection.AssemblyVersion("0.5.7.3")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.7.3")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.7.3")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -711,19 +711,6 @@ namespace PadLauncher {
             var names=Prompts.Buttons(settings);
             var heading=Label("Overlay",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
             var helpHeading=Label("Controls",26,white); helpHeading.FontWeight=FontWeights.SemiBold; helpHeading.Margin=new Thickness(0,0,0,22); helpLayout.Children.Add(helpHeading);
-            var caption=Label("Button style",14,mint); caption.Margin=new Thickness(0,0,0,10); helpLayout.Children.Add(caption);
-            var styles=new StackPanel {Name="ButtonStyleChoices",Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,10)};
-            foreach(string style in new[]{"PlayStation","Xbox","Nintendo"}) {
-                string selectedStyle=style; bool selected=Prompts.Style(settings)==style;
-                var choice=new Button {Content=(selected ? "✓ " : "")+style,FontSize=14,Padding=new Thickness(13,9,13,9),Margin=new Thickness(0,0,8,0),BorderThickness=new Thickness(0),Background=selected ? mint : new SolidColorBrush(Color.FromRgb(34,51,63)),Foreground=selected ? new SolidColorBrush(Color.FromRgb(13,25,34)) : white};
-                choice.Click+=(s,e) => {
-                    string previous=settings.ButtonPrompts;
-                    try { settings.ButtonPrompts=selectedStyle; Storage.Write("settings.json",settings); rebuild(); }
-                    catch(Exception error) { settings.ButtonPrompts=previous; ThemedMessage.Show(dialog,"Could not save button style: "+error.Message,"Settings"); }
-                };
-                styles.Children.Add(choice);
-            }
-            helpLayout.Children.Add(styles);
             var changeControls=new Button {Name="ChangeControls",Content="Show/Change controls",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,8,0,18)};
             changeControls.Click+=(s,e) => ShowControlSettings(dialog,rebuild); helpLayout.Children.Add(changeControls);
             var lockStickSpeeds=new CheckBox {

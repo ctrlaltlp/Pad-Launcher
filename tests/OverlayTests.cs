@@ -289,9 +289,7 @@ public static class OverlayTests {
             slimBar.ApplyTemplate();
             var mintThumb=(System.Windows.Controls.Primitives.Thumb)slimBar.Template.FindName("MintThumb",slimBar);
             Check(slimBar.ActualWidth<=6.1 && ((SolidColorBrush)mintThumb.Background).Color==Color.FromRgb(163,240,205),"Scrollbar is six pixels wide and matches the mint selection colour");
-            var settingsStyleButtons=(StackPanel)FindElement((FrameworkElement)helpPage.Content,"ButtonStyleChoices");
-            ((Button)settingsStyleButtons.Children[1]).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(helpTabs.SelectedIndex==0 && Prompts.Style(Storage.Read<Settings>("settings.json"))=="Xbox","Button style remains configurable in Controls without the reference list");
+            Check(FindElement((FrameworkElement)helpPage.Content,"ButtonStyleChoices")==null,"Button style lives inside the control editor");
             var settingLayoutPicker=(ComboBox)FindElement((FrameworkElement)settingsPage.Content,"CarouselLayoutSetting");
             settingLayoutPicker.SelectedValue="rectangular";
             Check(!settingLayoutPicker.Items.Cast<System.Collections.Generic.KeyValuePair<string,string>>().Any(item => item.Key=="grid"),"Grid is available through the shortcut rather than the layout picker");
