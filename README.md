@@ -68,7 +68,7 @@ Pad Launcher uses existing launcher artwork and local images, plus **SteamGridDB
 - **Custom games:** Use manually chosen or available Steam shortcut artwork, with SGDB for missing covers.
 - **Emulator games:** DuckStation, PCSX2, xemu, mGBA and melonDS prefer Libretro by default; other emulators, including RetroArch, prefer SGDB. The other provider is used as fallback.
 
-Change emulator defaults or override individual lists under **Settings → Artwork**. Choose a preferred provider with fallback, or **Only SteamGridDB / Only Libretro**. Lists using **Automatic** follow each game's emulator preference, even when games are imported into a custom list. Existing preferences are preserved. [Artwork details](docs/libretro-artwork.md).
+Change emulator defaults or override individual lists under **Settings → Artwork**. Choose a preferred provider with fallback, or **Only SteamGridDB / Only Libretro**. Lists using **Automatic** follow each game's emulator preference, even when games are imported into a custom list. Existing preferences are preserved.
 
 ## Lists
 
