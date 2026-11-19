@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.5")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.5")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.5")]
+[assembly: System.Reflection.AssemblyVersion("0.5.6")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.6")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.6")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -271,6 +271,7 @@ namespace PadLauncher {
             demo = demoMode; preview = renderPreview;
             freshProfile=!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json")) && !File.Exists(System.IO.Path.Combine(Storage.Root,"library.json"));
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
+            if(settings.StickSpeedsLocked) settings.RightStickSpeed=settings.LeftStickSpeed;
             if(IsSpecialJumpList(settings.DefaultCollectionId)) settings.DefaultCollectionId="remember";
             ControlBindings.UpgradeSearchDefaults(settings);
             ArtworkService.UpgradeArtworkPreferences(settings);
@@ -710,14 +711,40 @@ namespace PadLauncher {
             helpLayout.Children.Add(styles);
             var changeControls=new Button {Name="ChangeControls",Content="Show/Change controls",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,8,0,18)};
             changeControls.Click+=(s,e) => ShowControlSettings(dialog,rebuild); helpLayout.Children.Add(changeControls);
+            var lockStickSpeeds=new CheckBox {
+                Name="LockStickSpeedsSetting",Content="Lock stick speeds together",IsChecked=settings.StickSpeedsLocked,
+                Margin=new Thickness(0,16,0,0)
+            };
+            helpLayout.Children.Add(lockStickSpeeds);
             var leftSpeedCaption=Label("Left stick speed",14,mint); leftSpeedCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(leftSpeedCaption);
             var leftSpeedValue=Label(settings.LeftStickSpeed.ToString("0.#")+"×",13,white); helpLayout.Children.Add(leftSpeedValue);
             var leftSpeedPicker=new Slider {Name="LeftStickSpeedSetting",Minimum=1,Maximum=10,Value=settings.LeftStickSpeed,TickFrequency=.5,IsSnapToTickEnabled=true,SmallChange=.5,LargeChange=1,Margin=new Thickness(0,4,0,10)};
-            leftSpeedPicker.ValueChanged+=(s,e) => {settings.LeftStickSpeed=leftSpeedPicker.Value; leftSpeedValue.Text=settings.LeftStickSpeed.ToString("0.#")+"×"; navigation.Reset(); QueueSave();}; helpLayout.Children.Add(leftSpeedPicker);
+            helpLayout.Children.Add(leftSpeedPicker);
             var speedCaption=Label("Right stick speed",14,mint); speedCaption.Margin=new Thickness(0,16,0,8); helpLayout.Children.Add(speedCaption);
             var speedValue=Label(settings.RightStickSpeed.ToString("0.#")+"×",13,white); helpLayout.Children.Add(speedValue);
             var speedPicker=new Slider {Name="RightStickSpeedSetting",Minimum=1,Maximum=10,Value=settings.RightStickSpeed,TickFrequency=.5,IsSnapToTickEnabled=true,SmallChange=.5,LargeChange=1,Margin=new Thickness(0,4,0,10)};
-            speedPicker.ValueChanged+=(s,e) => {settings.RightStickSpeed=speedPicker.Value; speedValue.Text=settings.RightStickSpeed.ToString("0.#")+"×"; navigation.Reset(); QueueSave();}; helpLayout.Children.Add(speedPicker);
+            helpLayout.Children.Add(speedPicker);
+            bool syncingStickSpeeds=false;
+            Action<Slider,Slider> updateStickSpeeds=(changed,other) => {
+                if(syncingStickSpeeds) return;
+                if(settings.StickSpeedsLocked) {
+                    syncingStickSpeeds=true;
+                    other.Value=changed.Value;
+                    syncingStickSpeeds=false;
+                }
+                settings.LeftStickSpeed=leftSpeedPicker.Value;
+                settings.RightStickSpeed=speedPicker.Value;
+                leftSpeedValue.Text=settings.LeftStickSpeed.ToString("0.#")+"×";
+                speedValue.Text=settings.RightStickSpeed.ToString("0.#")+"×";
+                navigation.Reset();
+                QueueSave();
+            };
+            leftSpeedPicker.ValueChanged+=(s,e) => updateStickSpeeds(leftSpeedPicker,speedPicker);
+            speedPicker.ValueChanged+=(s,e) => updateStickSpeeds(speedPicker,leftSpeedPicker);
+            lockStickSpeeds.Click+=(s,e) => {
+                settings.StickSpeedsLocked=lockStickSpeeds.IsChecked==true;
+                updateStickSpeeds(leftSpeedPicker,speedPicker);
+            };
             var titleToggle=new CheckBox {Content="Show game title",IsChecked=settings.ShowGameTitle,FontSize=14,Foreground=white,Margin=new Thickness(0,18,0,12)};
             titleToggle.Click+=(s,e) => {
                 try { SetShowGameTitle(titleToggle.IsChecked==true); }
