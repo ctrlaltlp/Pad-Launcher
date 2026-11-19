@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -10,7 +10,7 @@ namespace PadLauncher {
         bool updateBusy,automaticUpdateStarted;
         AppRelease availableUpdate;
         TextBlock updateStatus;
-        Button checkUpdateButton,installUpdateButton;
+        Button checkUpdateButton,installUpdateButton,releaseNotesButton;
         string lastUpdateStatus="";
         DateTime nextAutomaticCheck=DateTime.UtcNow.AddSeconds(15);
         string pendingUpdatePayload;
@@ -23,19 +23,58 @@ namespace PadLauncher {
             auto.Click+=(s,e) => {settings.AutoUpdate=auto.IsChecked==true; QueueSave(); if(settings.AutoUpdate) {nextAutomaticCheck=DateTime.UtcNow; StartAutomaticUpdates();}}; panel.Children.Add(auto);
             var note=Label("Checks periodically for newer stable releases. Automatic installation waits until Settings is closed and the overlay is dismissed. Updates preserve your data and keep an executable backup.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
-            var actions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,12,0,8)};
+            var actions=new WrapPanel {Margin=new Thickness(0,12,0,8)};
             checkUpdateButton=new Button {Content="Check for updates",Padding=new Thickness(12,7,12,7)};
             installUpdateButton=new Button {Content="Update & restart",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0),Background=mint,Foreground=System.Windows.Media.Brushes.Black};
+            releaseNotesButton=new Button {Content="Release notes",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
+            releaseNotesButton.Click+=(s,e) => ShowReleaseNotes();
             checkUpdateButton.Click+=async (s,e) => await CheckForUpdates(false);
             installUpdateButton.Click+=async (s,e) => await InstallAvailableUpdate();
-            actions.Children.Add(checkUpdateButton); actions.Children.Add(installUpdateButton); panel.Children.Add(actions);
+            actions.Children.Add(checkUpdateButton); actions.Children.Add(installUpdateButton); actions.Children.Add(releaseNotesButton); panel.Children.Add(actions);
             updateStatus=Label(lastUpdateStatus,12,muted); updateStatus.TextWrapping=TextWrapping.Wrap; panel.Children.Add(updateStatus);
             UpdateControls(lastUpdateStatus);
+        }
+        void ShowReleaseNotes() {
+            var release=availableUpdate;
+            if(release==null) return;
+            var dialog=new Window {
+                Title="Release notes",Owner=helpWindow,Width=680,Height=550,MinWidth=340,MinHeight=260,
+                WindowStartupLocation=WindowStartupLocation.CenterOwner,ShowInTaskbar=false,
+                Background=helpWindow.Background,Foreground=white,FontFamily=FontFamily,Icon=Icon
+            };
+            ApplySettingsTheme(dialog);
+            SettingsWindowSizing.Attach(dialog);
+            var panel=new DockPanel {Margin=new Thickness(24)};
+            dialog.Content=panel;
+            var heading=Label("Available updates · "+AppUpdates.DisplayVersion+" → "+release.Version,18,white);
+            heading.Margin=new Thickness(0,0,0,12);
+            DockPanel.SetDock(heading,Dock.Top);
+            panel.Children.Add(heading);
+            var close=new Button {Content="Close",IsCancel=true,HorizontalAlignment=HorizontalAlignment.Right,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,12,0,0)};
+            DockPanel.SetDock(close,Dock.Bottom);
+            panel.Children.Add(close);
+            var notes=new TextBox {Text="Loading release notes…",IsReadOnly=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Padding=new Thickness(10)};
+            panel.Children.Add(notes);
+            using(var cancellation=CancellationTokenSource.CreateLinkedTokenSource(updateCancellation.Token)) {
+                var token=cancellation.Token;
+                dialog.Closed+=(s,e) => cancellation.Cancel();
+                dialog.Loaded+=async (s,e) => {
+                    try {
+                        string text=await Task.Run(() => AppUpdates.ReadReleaseNotes(AppUpdates.CurrentVersion,release.Version,token),token);
+                        if(!token.IsCancellationRequested) notes.Text=text;
+                    } catch(OperationCanceledException) {}
+                    catch(Exception error) {
+                        if(!token.IsCancellationRequested) notes.Text="Could not load release notes. "+error.GetBaseException().Message;
+                    }
+                };
+                dialog.ShowDialog();
+            }
         }
         void UpdateControls(string message) {
             lastUpdateStatus=message;
             if(updateStatus!=null) updateStatus.Text=message;
             if(checkUpdateButton!=null) checkUpdateButton.IsEnabled=!updateBusy;
+            if(releaseNotesButton!=null) releaseNotesButton.Visibility=availableUpdate==null ? Visibility.Collapsed : Visibility.Visible;
             if(installUpdateButton!=null) {installUpdateButton.IsEnabled=!updateBusy; installUpdateButton.Visibility=availableUpdate==null ? Visibility.Collapsed : Visibility.Visible;}
         }
         async void StartAutomaticUpdates() {

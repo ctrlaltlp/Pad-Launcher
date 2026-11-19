@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Linq;
@@ -34,8 +34,9 @@ namespace PadLauncher {
         public static AppRelease Parse(string json) {
             var release=Vdf.Map(Storage.Json().DeserializeObject(json));
             if(Vdf.Str(release,"draft")=="True" || Vdf.Str(release,"prerelease")=="True") throw new InvalidDataException("Only stable releases are supported.");
+            string tag=Vdf.Str(release,"tag_name");
             Version version;
-            if(!Version.TryParse(Vdf.Str(release,"tag_name").TrimStart('v','V'),out version)) throw new InvalidDataException("The release has an invalid version.");
+            if(!Version.TryParse(tag.TrimStart('v','V'),out version)) throw new InvalidDataException("The release has an invalid version.");
             var assets=Vdf.Get(release,"assets") as System.Collections.IEnumerable;
             if(assets!=null) foreach(var item in assets) {
                 var asset=Vdf.Map(item);
@@ -101,6 +102,31 @@ namespace PadLauncher {
                 Copy(stream,output,2*1024*1024,token);
                 return Parse(System.Text.Encoding.UTF8.GetString(output.ToArray()));
             }
+        }
+        public static string ReadReleaseNotes(Version installed,Version available,CancellationToken token) {
+            const int pageSize=30;
+            var notes=new SortedDictionary<Version,string>();
+            for(int page=1;page<=20;page++) {
+                var url=LatestUrl.Substring(0,LatestUrl.LastIndexOf('/'))+"?per_page="+pageSize+"&page="+page;
+                using(var response=Open(url,token))
+                using(var stream=response.GetResponseStream())
+                using(var output=new MemoryStream()) {
+                    Copy(stream,output,4*1024*1024,token);
+                    var entries=Storage.Json().DeserializeObject(System.Text.Encoding.UTF8.GetString(output.ToArray())) as object[];
+                    if(entries==null) throw new InvalidDataException("Unexpected GitHub release history.");
+                    foreach(var entry in entries) {
+                        var release=Vdf.Map(entry);
+                        if(Vdf.Str(release,"draft")=="True" || Vdf.Str(release,"prerelease")=="True") continue;
+                        string tag=Vdf.Str(release,"tag_name");
+                        Version version;
+                        if(!Version.TryParse(tag.TrimStart('v','V'),out version) || !IsNewer(version,installed) || IsNewer(version,available)) continue;
+                        string body=Vdf.Str(release,"body").Trim();
+                        notes[version]=tag+Environment.NewLine+(body.Length==0 ? "No release notes were provided." : body);
+                    }
+                    if(entries.Length<pageSize) return notes.Count==0 ? "No release notes found for these versions." : String.Join(Environment.NewLine+Environment.NewLine,notes.Values.Reverse());
+                }
+            }
+            throw new InvalidDataException("GitHub release history exceeded the page limit.");
         }
         static void Copy(Stream input,Stream output,long limit,CancellationToken token) {
             var buffer=new byte[65536]; long total=0; int read;
