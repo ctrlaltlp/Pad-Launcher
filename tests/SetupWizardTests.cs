@@ -217,8 +217,8 @@ class SetupWizardTests {
 
             Check(!Descendants(wizard).OfType<CheckBox>().Any(box => box.Name=="SetupLibretroArtwork"),"Wizard artwork uses per-emulator sources instead of a global Libretro checkbox");
             foreach(string emulator in new[]{"duckstation","mgba","melonds"}) Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_"+emulator).SelectedValue=="libretro","Older emulator defaults prefer Libretro: "+emulator);
-            Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_pcsx2").SelectedValue=="sgdb","Other emulators default to SteamGridDB");
-            Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_xemu").SelectedValue=="sgdb","xemu defaults to Prefer SteamGridDB");
+            Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_pcsx2").SelectedValue=="libretro","PCSX2 defaults to Libretro");
+            Check((string)Find<ComboBox>(wizard,"SetupArtworkSource_xemu").SelectedValue=="libretro","xemu defaults to Prefer Libretro");
             Find<ComboBox>(wizard,"SetupArtworkSource_dolphin").SelectedValue="libretro-only";
             Find<PasswordBox>(wizard,"SetupArtworkKey").Password="temporary-key";
             Find<PasswordBox>(wizard,"SetupArtworkKey").Password="";

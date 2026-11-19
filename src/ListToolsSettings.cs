@@ -121,6 +121,46 @@ namespace PadLauncher {
             };
             load(); dialog.Show();
         }
+        string listEditorMode="create";
+        bool listEditorExpanded;
+        string editedCombinedListId;
+        StackPanel CreateCombinedListEditor(Window owner,Action rebuild) {
+            var panel=new StackPanel();
+            var note=Label("",12,muted);
+            note.Inlines.Add(new System.Windows.Documents.Run("Combine two or more source lists into "));
+            note.Inlines.Add(new System.Windows.Documents.Run("a live list that updates with them") {Foreground=new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255,218,106))});
+            note.Inlines.Add(new System.Windows.Documents.Run(". Games are included once and the source lists stay in place. Use Merge for an independent copy instead.")); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,12,0,0); panel.Children.Add(note);
+            var choices=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new combined list")};
+            choices.AddRange((settings.CombinedCollections ?? new List<CombinedCollection>()).Select(list => new KeyValuePair<string,string>(list.Id,list.Name)));
+            var picker=new SettingsComboBox {Name="CombinedListPicker",ItemsSource=choices,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=editedCombinedListId ?? "",Padding=new Thickness(8),Margin=new Thickness(0,12,0,10)};
+            if(picker.SelectedIndex<0) picker.SelectedIndex=0; panel.Children.Add(picker);
+            var caption=Label("List name",12,mint); caption.Margin=new Thickness(0,4,0,6); panel.Children.Add(caption);
+            var name=new TextBox {Name="CombinedListName",Padding=new Thickness(8),MaxLength=80}; panel.Children.Add(name);
+            var select=new Button {Content="Select all",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,12,0,8)}; panel.Children.Add(select);
+            var rows=new StackPanel {Name="CombineSourceLists"};
+            panel.Children.Add(new ScrollViewer {Content=rows,MaxHeight=260,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+            var boxes=new Dictionary<string,CheckBox>();
+            BindSelectionToggle(select,() => boxes.Values);
+            var save=new Button {Name="SaveCombinedList",Content="Create combined list",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,12,0,0)}; panel.Children.Add(save);
+            Action load=() => {
+                string id=picker.SelectedValue as string;
+                var existing=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(list => list.Id==id);
+                name.Text=existing==null ? "" : existing.Name; boxes.Clear(); rows.Children.Clear();
+                var combinedIds=new HashSet<string>((settings.CombinedCollections ?? new List<CombinedCollection>()).Select(list => list.Id));
+                foreach(var source in CollectionOptions().Where(list => !combinedIds.Contains(list.Id))) {
+                    var box=new CheckBox {Content=ListLabel(source),Tag=source.Id,IsChecked=existing!=null && (existing.Sources ?? new List<string>()).Contains(source.Id),Margin=new Thickness(0,5,0,5)};
+                    boxes[source.Id]=box; rows.Children.Add(box);
+                }
+                save.Content=existing==null ? "Create combined list" : "Save changes";
+            };
+            picker.SelectionChanged+=(s,e) => load(); load();
+            save.Click+=(s,e) => {try {
+                var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                editedCombinedListId=CombinedCollections.Save(next,library,String.IsNullOrEmpty(picker.SelectedValue as string) ? null : (string)picker.SelectedValue,name.Text,boxes.Where(pair => pair.Value.IsChecked==true).Select(pair => pair.Key));
+                Storage.Write("settings.json",next); settings=next; ApplyLibrary(); rebuild();
+            } catch(Exception error) {ThemedMessage.Show(owner,error.Message,"Combine lists");}};
+            return panel;
+        }
         bool listLayoutExpanded;
         bool retroArchListSettingsExpanded;
         string editedListLayoutId;
@@ -139,14 +179,14 @@ namespace PadLauncher {
         }
         StackPanel CreateListLayoutSettings(Window owner,Action rebuild,bool retroArchDefaults=false,bool artworkOnly=false) {
             var panel=new StackPanel {Margin=new Thickness(0,12,0,0)};
-            var note=Label(retroArchDefaults ? "Shared defaults for RetroArch-only lists, including imported playlists and future lists. Individual list overrides take priority; mixed lists keep their own settings." : artworkOnly ? "Choose a list’s artwork source. Saving reuses downloaded images when available; missing artwork is downloaded. Clear and redownload is optional." : "Choose a list’s layout. Artwork preferences are in the Artwork tab.",12,muted);
+            var note=Label(retroArchDefaults ? "Shared defaults for RetroArch-only lists, including imported playlists and future lists. Individual list overrides take priority; mixed lists keep their own settings." : artworkOnly ? "Choose a list’s artwork source. Saving reuses downloaded images when available; missing artwork is downloaded." : "Choose a list’s layout. Artwork preferences are in the Artwork tab.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
             var choices=retroArchDefaults ? new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("defaults:retroarch","RetroArch lists")} : CollectionOptions().Select(list => new KeyValuePair<string,string>(list.Id,list.Name)).ToList();
             var picker=new SettingsComboBox {Name=retroArchDefaults ? "RetroArchListDefaultsPicker" : artworkOnly ? "ListArtworkPicker" : "ListLayoutPicker",ItemsSource=choices,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,10,0,10)};
             string selectedList=artworkOnly ? editedArtworkListId : editedListLayoutId;
             if(!retroArchDefaults && choices.Any(choice => choice.Key==selectedList)) picker.SelectedValue=selectedList;
             if(!retroArchDefaults) panel.Children.Add(picker);
-            var artworkFields=new StackPanel {Visibility=retroArchDefaults || artworkOnly ? Visibility.Visible : Visibility.Collapsed}; panel.Children.Add(artworkFields);
+            var artworkFields=new StackPanel {Visibility=artworkOnly ? Visibility.Visible : Visibility.Collapsed}; if(artworkOnly) panel.Children.Add(artworkFields);
             artworkFields.Children.Add(Label("Artwork source",12,mint));
             var artworkSource=new SettingsComboBox {Name=retroArchDefaults ? "RetroArchListArtworkSourceSetting" : artworkOnly ? "ListArtworkSourceSetting" : "LayoutArtworkSourceHidden",ItemsSource=ArtworkService.ArtworkSourceChoices(),DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(0,6,0,8)};
             artworkFields.Children.Add(artworkSource);
@@ -154,7 +194,7 @@ namespace PadLauncher {
             effectiveArtwork.TextWrapping=TextWrapping.Wrap; effectiveArtwork.Margin=new Thickness(0,0,0,10); artworkFields.Children.Add(effectiveArtwork);
             Action updateEffectiveArtwork=() => {effectiveArtwork.Visibility=(string)artworkSource.SelectedValue=="auto" ? Visibility.Visible : Visibility.Collapsed; effectiveArtwork.Text=AutomaticArtworkDescription(picker.SelectedValue as string,retroArchDefaults);};
             artworkSource.SelectionChanged+=(s,e) => updateEffectiveArtwork();
-            var artworkNote=Label("Manual images take priority. Prefer choices allow fallback; Only choices exclude the other provider. Cached images are kept when switching. SteamGridDB downloads require an enabled API key.",12,muted); artworkNote.TextWrapping=TextWrapping.Wrap; artworkNote.Margin=new Thickness(0,0,0,14); artworkFields.Children.Add(artworkNote);
+            var artworkNote=Label("Source priority: manually chosen image → this list’s source → each game’s emulator default. PC/custom games use launcher/local artwork, then SteamGridDB. Automatic follows this hierarchy. Prefer choices allow fallback; Only choices restrict it. Cached downloads are kept; SteamGridDB requires a key.",12,muted); artworkNote.TextWrapping=TextWrapping.Wrap; artworkNote.Margin=new Thickness(0,0,0,14); artworkFields.Children.Add(artworkNote);
             var inherit=new CheckBox {Name=retroArchDefaults ? "RetroArchListUseGlobalSettings" : "ListUseGlobalSettings",Content="Use global Overlay settings",Margin=new Thickness(0,0,0,10)};
             panel.Children.Add(inherit); inherit.Visibility=artworkOnly ? Visibility.Collapsed : Visibility.Visible;
             var fields=new StackPanel {Visibility=artworkOnly ? Visibility.Collapsed : Visibility.Visible}; panel.Children.Add(fields);
@@ -190,7 +230,7 @@ namespace PadLauncher {
                 else if(settings.ListLayouts!=null && picker.SelectedValue is string) settings.ListLayouts.TryGetValue((string)picker.SelectedValue,out saved);
                 inherit.IsChecked=saved==null;
                 bool followsRetro=!retroArchDefaults && RetroArchListDefaults.Applies(settings,picker.SelectedValue as string);
-                inherit.Content=followsRetro ? "Use RetroArch lists settings" : "Use global Overlay settings";
+                inherit.Content=followsRetro ? "Use RetroArch list settings" : "Use global Overlay settings";
                 var shown=saved ?? (followsRetro ? settings.RetroArchListLayout : null);
                 outlines.IsChecked=shown!=null && shown.ShowPanelOutlines.HasValue ? shown.ShowPanelOutlines.Value : settings.ShowPanelOutlines;
                 artworkSource.SelectedValue=retroArchDefaults ? settings.RetroArchListArtworkSource ?? "auto" : ArtworkService.ListSource(settings,picker.SelectedValue as string);
@@ -214,7 +254,7 @@ namespace PadLauncher {
                 if(next.ListArtworkSources==null) next.ListArtworkSources=new Dictionary<string,string>();
                 string source=artworkSource.SelectedValue as string;
                 var profile=inherit.IsChecked==true ? null : new ListLayout {Layout=(string)layout.SelectedValue,ShowPanelOutlines=outlines.IsChecked==true,PanelScale=scale.Value,RetroPanelScale=retroScale.Value,PanelSizesLocked=lockSizes.IsChecked==true,Columns=(int)columns.SelectedItem,Rows=(int)rows.SelectedItem,AngledSizing=(string)sizing.SelectedValue};
-                if(retroArchDefaults) {next.RetroArchListArtworkSource=ArtworkService.ValidArtworkSource(source) ? source : null; next.RetroArchListLayout=profile; if(source=="libretro") next.RetroArchPreferLibretro=true;}
+                if(retroArchDefaults) {next.RetroArchListLayout=profile;}
                 else {
                     if(artworkOnly) {if(ArtworkService.ValidArtworkSource(source)) next.ListArtworkSources[id]=source; else next.ListArtworkSources.Remove(id);}
                     else {if(profile==null) next.ListLayouts.Remove(id); else next.ListLayouts[id]=profile;}
@@ -222,21 +262,7 @@ namespace PadLauncher {
                 Storage.Write("settings.json",next); settings=next; ApplyLibrary(); rebuild();
             } catch(Exception error) {ThemedMessage.Show(owner,error.Message,"List layout");}};
             panel.Children.Add(save);
-            var redownload=new Button {Name=retroArchDefaults ? "RedownloadRetroArchArtwork" : "RedownloadListArtwork",Content=retroArchDefaults ? "Redownload RetroArch artwork…" : "Clear and redownload list artwork…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,10,0,0)};
-            var artworkStatus=Label("",12,muted); artworkStatus.TextWrapping=TextWrapping.Wrap; artworkStatus.Margin=new Thickness(0,8,0,0);
-            Func<string> artworkJobId=() => retroArchDefaults ? "source:emulator:retroarch" : picker.SelectedValue as string;
-            Action updateArtworkJob=() => {string id=artworkJobId(),message; redownload.IsEnabled=id!=null && !artworkRefreshJobs.ContainsKey(id); artworkStatus.Text=id!=null && artworkRefreshStatuses.TryGetValue(id,out message) ? message : "";};
-            string viewKey=retroArchDefaults ? "retroarch" : artworkOnly ? "list" : "layout"; artworkRefreshViews[viewKey]=updateArtworkJob;
-            RegisterSettingsCleanup(owner,() => {Action current; if(artworkRefreshViews.TryGetValue(viewKey,out current) && current==updateArtworkJob) artworkRefreshViews.Remove(viewKey);});
-            picker.SelectionChanged+=(s,e) => updateArtworkJob();
-            redownload.Click+=async (s,e) => {
-                string id=artworkJobId(); if(id==null) return;
-                redownload.IsEnabled=false;
-                try {await RedownloadListArtwork(owner,id,text => {artworkRefreshStatuses[id]=text; NotifyArtworkRefreshViews();});}
-                finally {updateArtworkJob();}
-            };
-            updateArtworkJob();
-            if(artworkOnly || retroArchDefaults) {panel.Children.Add(redownload); panel.Children.Add(artworkStatus);} load(); return panel;
+            load(); return panel;
         }
         void ShowMissingFileRepair(Window owner,Action rebuild) {
             var dialog=new Window {Title="Repair missing game paths",Owner=owner,Width=740,Height=560,MinWidth=500,MinHeight=350,Background=owner.Background,Foreground=white,FontFamily=owner.FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,ShowInTaskbar=false};

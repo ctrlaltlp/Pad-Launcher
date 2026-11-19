@@ -4,7 +4,9 @@
 
 **Import library** reads configured folders, playlists, databases or installed titles, depending on the emulator; reading configured folders can include scanning ROM files. **Scan ROM folders** is a separate action for a folder selected in Pad Launcher. Both offer review before import, reuse registered games on repeated imports and leave emulator-owned files unchanged. **Import all emulator libraries** uses each emulator's supported library adapter; it is not restricted to saved database entries.
 
-In review, already-added games can be hidden or shown, and selected titles can be cleaned using **Remove tags from game titles** or **Normalise titles**. These edits apply on import. RetroArch defaults to **One list per playlist**, with an automatic RetroArch list or chosen list available instead. Sources show the resolved core, or **No usable core found**; unresolved sources require choosing an installed core before they can be imported. Cancelling review returns to source selection and allows loading sources again.
+In review, already-added games can be hidden or shown, and selected titles can be cleaned using **Remove tags from game titles** or **Normalise titles**. These edits apply on import. RetroArch defaults to **One automatic list per playlist**, with an automatic RetroArch list or chosen list available instead. Sources show the resolved core, or **No usable core found**; unresolved sources require choosing an installed core before they can be imported. Cancelling review returns to source selection and allows loading sources again.
+
+RetroArch playlist lists are automatic emulator lists: rename, hide, duplicate and configure them per list; manage registered games under Emulators. Older imported lists stay custom. Import the playlists with the automatic option to create their new lists. Reimporting a playlist reuses its automatic list.
 
 The sections below preserve dated upstream research and adapter limitations. They are implementation references, not claims of physical testing for every emulator/version.
 
@@ -170,3 +172,7 @@ Installed discovery follows `sdmc/Nintendo 3DS/<zero ID0>/<zero ID1>/title/00040
 Manual add and recursive folder scans accept cartridge/homebrew formats, including current upstream `.3ds`, `.cci`, compressed/bundled formats, and executable installed `.app` files. Default launch: `-f {game}`, with global/per-game argument editing. Repeat imports retain the existing path-based identity. Fixture-tested configuration discovery, recursion, installed-title filtering, title extraction, launching and duplicate prevention; real Azahar/game testing remains necessary.
 
 Sources: [configuration paths](https://github.com/azahar-emu/azahar/blob/master/src/citra_qt/configuration/config.cpp), [installed titles and game directories](https://github.com/azahar-emu/azahar/blob/master/src/citra_qt/game_list_worker.cpp), [portable and installed data roots](https://github.com/azahar-emu/azahar/blob/master/src/common/file_util.cpp), [command-line launch and formats](https://github.com/azahar-emu/azahar/blob/master/src/citra_qt/citra_qt.cpp).
+
+Imported RetroArch playlists are editable user lists, not Custom games memberships. Their registered games retain `Source=emulator` and `EmulatorId=retroarch`. The List editor can edit or merge these lists without changing game launch sources. Emulator subtabs now show Games before Settings.
+
+Automatic import destinations show both emulator and console names, for example **DuckStation · PS1 (automatic list)** and **Dolphin · GameCube / Wii (automatic list)**. This is a display label for the existing emulator list, not a second list or a console-based import destination. The same labels are used in individual and bulk library imports.

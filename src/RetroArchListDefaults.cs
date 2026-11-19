@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections.Generic;
 
@@ -12,7 +12,7 @@ namespace PadLauncher {
             Func<string,bool> isRetro=game => known.Contains(game) || (game ?? "").StartsWith("emulator:retroarch:",StringComparison.Ordinal);
             List<string> extra;
             if(settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(id,out extra) && extra!=null && !extra.All(isRetro)) return false;
-            if(id=="source:emulator:retroarch") return true;
+            if(id=="source:emulator:retroarch" || (settings.RetroArchPlaylistLists ?? new List<CustomList>()).Any(list => list.Id==id)) return true;
             var custom=(settings.CustomLists ?? new List<CustomList>()).FirstOrDefault(list => list.Id==id);
             if(custom!=null) {
                 var ids=custom.Games ?? new List<string>();

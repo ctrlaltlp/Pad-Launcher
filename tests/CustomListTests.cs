@@ -74,6 +74,35 @@ class CustomListTests {
         Check(addedSettings.GameAddedAt["new2"]==300,"Rediscovering a known ID retains its original registration time");
         addedSettings.HiddenGameIds=new List<string>{"new2"};
         Check(CombinedCollections.Label(CombinedCollections.Options(addedLibrary,addedSettings).Single(list => list.Id=="recently-added"),addedLibrary,addedSettings.HiddenGameIds).Contains("1 game"),"Recently added counts respect hidden games");
+        var mergeSettings=new Settings {CustomLists=new List<CustomList> {new CustomList {Id="left",Name="Left",Games=new List<string>{"a","b"}},new CustomList {Id="right",Name="Right",Games=new List<string>{"b","c"}}}};
+        var mergeLibrary=new Library {Games=new List<Game> {new Game {Id="a"},new Game {Id="b"},new Game {Id="c"}}};
+        string merged=CustomLists.Merge(mergeSettings,mergeLibrary,"Merged",new[]{"left","right"});
+        Check(mergeSettings.CustomLists.Single(list => list.Id==merged).Games.SequenceEqual(new[]{"a","b","c"}),"Merge unions game identities without duplicates");
+        mergeSettings.CustomLists.Single(list => list.Id=="left").Games.Clear();
+        Check(mergeSettings.CustomLists.Count==3 && mergeSettings.CustomLists.Single(list => list.Id==merged).Games.Count==3,"Merge keeps source lists and creates an independent snapshot");
+        bool oneRejected=false; try {CustomLists.Merge(mergeSettings,mergeLibrary,"Bad",new[]{"right"});} catch(ArgumentException) {oneRejected=true;}
+        Check(oneRejected,"Merge requires at least two source lists");
+        var deleteMerge=new Settings {CustomLists=new List<CustomList> {new CustomList {Id="left",Name="Left",Games=new List<string>{"a","b"}},new CustomList {Id="right",Name="Right",Games=new List<string>{"b","c"}}}};
+        string replaced=CustomLists.Merge(deleteMerge,mergeLibrary,"Replacement",new[]{"left","right"},false);
+        Check(deleteMerge.CustomLists.Count==1 && deleteMerge.CustomLists[0].Id==replaced && deleteMerge.CustomLists[0].Games.Count==3 && mergeLibrary.Games.Count==3,"Optional source deletion keeps merged games registered");
+        var builtInMerge=new Settings();
+        CustomLists.Merge(builtInMerge,mergeLibrary,"Built-in copy",new[]{"all","source:steam"},false);
+        Check(CombinedCollections.Options(mergeLibrary,builtInMerge).Any(list => list.Id=="all"),"Merging never deletes automatic source lists");
+        var emulatorLists=new Settings {CustomLists=new List<CustomList> {
+            new CustomList {Id="retro",Name="Retro",Games=new List<string>{"rom"}},new CustomList {Id="mixed",Name="PC",Games=new List<string>{"rom","pc"}},new CustomList {Id="empty-import",Name="Empty import",Games=new List<string>()}},
+            EmulatorImports=new List<EmulatorImportDefinition> {new EmulatorImportDefinition {EmulatorId="retroarch",ListId="empty-import"}}};
+        var emulatorPool=new Library {Games=new List<Game>{new Game {Id="rom",Source="emulator",EmulatorId="retroarch"},new Game {Id="pc",Source="steam"}}};
+        Check(CustomLists.IsEmulatorOnlyList(emulatorLists,emulatorPool,"retro") && CustomLists.IsEmulatorOnlyList(emulatorLists,emulatorPool,"empty-import"),"Emulator-only lists are identified by content or import provenance when empty");
+        Check(!CustomLists.IsEmulatorOnlyList(emulatorLists,emulatorPool,"mixed"),"Mixed PC lists remain custom-game destinations");
+        var partialDelete=new Settings {CustomLists=new List<CustomList>{new CustomList {Id="left",Name="Left",Games=new List<string>{"a"}},new CustomList {Id="right",Name="Right",Games=new List<string>{"b"}}}};
+        CustomLists.Merge(partialDelete,mergeLibrary,"Partial merge",new[]{"left","right"},new[]{"left"});
+        Check(!partialDelete.CustomLists.Any(list => list.Id=="left") && partialDelete.CustomLists.Any(list => list.Id=="right") && partialDelete.CustomLists.Single(list => list.Name=="Partial merge").Games.Count==2,"Selective merge deletion removes only chosen sources");
+        bool unrelatedRejected=false; try {CustomLists.Merge(partialDelete,mergeLibrary,"Invalid merge",new[]{"all","source:steam"},new[]{"right"});} catch(ArgumentException) {unrelatedRejected=true;}
+        Check(unrelatedRejected && partialDelete.CustomLists.Count==2,"Merge rejects deleting a list that is not a selected source before mutation");
+        var cleared=new Settings {CustomLists=new List<CustomList>{new CustomList {Id="clear",Name="Clear me",Games=new List<string>{"a"}}}};
+        CustomLists.Save(cleared,mergeLibrary,"clear","Clear me",new string[0]);
+        Check(cleared.CustomLists.Single().Games.Count==0,"Existing lists can be saved empty after Uncheck added");
+        Reject(() => CustomLists.Save(cleared,mergeLibrary,null,"New empty list",new string[0]),"New lists still require a game");
         Console.WriteLine(checks+" custom list checks passed");
     }
 }

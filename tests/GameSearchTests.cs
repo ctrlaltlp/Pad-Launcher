@@ -106,6 +106,13 @@ class GameSearchTests {
             Check((string)typeof(Launcher).GetField("lastSearchQuery",binding).GetValue(launcher)=="ISS","Closing search remembers its latest query in memory");
             launcher.OpenGameSearch();
             Check(launcher.GameSearchText=="ISS" && shown().Single().Id=="ps1" && !launcher.SearchGamesFocused,"Reopening search restores the latest query and matching games with keyboard focus");
+            launcher.HandleGameSearchController(new PadState(),140); launcher.HandleGameSearchController(new PadState {Buttons=0x2000},141);
+            Check(!launcher.GameSearchOpen,"Circle exits directly from the search keyboard");
+            launcher.OpenGameSearch();
+            launcher.HandleGameSearchController(new PadState(),144); launcher.HandleGameSearchController(new PadState {RT=255},145);
+            Check(launcher.SearchGamesFocused,"R2 focuses games without changing the layout");
+            launcher.HandleGameSearchController(new PadState(),146); launcher.HandleGameSearchController(new PadState {RT=255},147);
+            Check(!launcher.SearchGamesFocused && launcher.GameSearchOpen,"R2 returns from results to the keyboard");
             launcher.SetGameSearchQuery(""); ((Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher)).Close();
             launcher.OpenGameSearch(); Check(launcher.GameSearchText=="" && shown().Count==2,"Clearing the latest query is remembered too");
             launcher.SetGameSearchQuery("ISS"); ((Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher)).Close();
@@ -146,9 +153,9 @@ class GameSearchTests {
                 Check(((TextBlock)typeof(Launcher).GetField("collectionText",binding).GetValue(launcher)).Text=="Search: ISS","Search heading includes its label and query");
                 string originalLayout=(string)typeof(Launcher).GetProperty("ActiveLayout",binding).GetValue(launcher,null);
                 launcher.HandleGameSearchController(new PadState(),197);
-                launcher.HandleGameSearchController(new PadState {RT=255},198);
-                Check(launcher.GameSearchOpen && launcher.GameSearchText=="ISS" && (string)typeof(Launcher).GetProperty("ActiveLayout",binding).GetValue(launcher,null)!=originalLayout,"R2 changes search layout without closing search or changing its query");
-                launcher.HandleGameSearchController(new PadState(),198); launcher.HandleGameSearchController(new PadState {RT=255},199); launcher.HandleGameSearchController(new PadState(),199);
+                launcher.HandleGameSearchController(new PadState {LT=255},198);
+                Check(launcher.GameSearchOpen && launcher.GameSearchText=="ISS" && (string)typeof(Launcher).GetProperty("ActiveLayout",binding).GetValue(launcher,null)!=originalLayout,"L2 changes search layout without closing search or changing its query");
+                launcher.HandleGameSearchController(new PadState(),198); launcher.HandleGameSearchController(new PadState {LT=255},199); launcher.HandleGameSearchController(new PadState(),199);
                 if(focusedResults) FocusResults(launcher);
                 launcher.HandleGameSearchController(new PadState(),202); launcher.HandleGameSearchController(new PadState {Buttons=0x0080},203);
                 current=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(launcher);
@@ -174,7 +181,9 @@ class GameSearchTests {
             Check(!launcher.GameSearchOpen,"Circle exits from the keyboard");
             launcher.OpenGameSearch(); launcher.SetGameSearchQuery("ISS"); FocusResults(launcher);
             launcher.HandleGameSearchController(new PadState(),232); launcher.HandleGameSearchController(new PadState {Buttons=0x8000},233);
-            Check(launcher.GameSearchOpen && !launcher.SearchGamesFocused && launcher.GameSearchText=="ISS","One Triangle press returns directly from game results to keyboard with the query intact");
+            Check(launcher.GameSearchOpen && launcher.SearchGamesFocused && launcher.GameSearchText=="ISS","Triangle is unassigned in search results");
+            launcher.HandleGameSearchController(new PadState(),234); launcher.HandleGameSearchController(new PadState {RT=255},235);
+            Check(!launcher.SearchGamesFocused && launcher.GameSearchText=="ISS","R2 returns to the keyboard with the query intact");
             ((Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher)).Close();
             settingsWindow=launcher.CreateHelpWindow(); settingsWindow.Show();
             Check(!Elements(settingsWindow).OfType<Expander>().Any(item => item.Name=="LibretroListsSection"),"The redundant Libretro lists checklist is removed");
@@ -211,6 +220,16 @@ class GameSearchTests {
             string firstId=shown()[(int)typeof(Launcher).GetField("selected",binding).GetValue(launcher)].Id; bool wasFavourite=(current.FavouriteGameIds ?? new List<string>()).Contains(firstId);
             launcher.ApplyControllerState(new PadState {Buttons=0x80},"reopen-test",5000);
             Check(((Settings)typeof(Launcher).GetField("settings",binding).GetValue(launcher)).FavouriteGameIds.Contains(firstId)!=wasFavourite,"First button press works immediately after reopening without a neutral frame");
+            Storage.Write("settings.json",new Settings());
+            var demoSearch=new Launcher(true,true);
+            try {
+                demoSearch.OpenGameSearch();
+                demoSearch.HandleGameSearchController(new PadState(),6000); demoSearch.HandleGameSearchController(new PadState {Buttons=0x10},6001);
+                Check(!demoSearch.GameSearchOpen,"Start dispatches the selected match directly from the keyboard (demo never launches games)");
+                demoSearch.OpenGameSearch(); FocusResults(demoSearch);
+                demoSearch.HandleGameSearchController(new PadState(),6010); demoSearch.HandleGameSearchController(new PadState {Buttons=0x10},6011);
+                Check(!demoSearch.GameSearchOpen,"Start dispatches the selected match from results (demo never launches games)");
+            } finally {demoSearch.ExitApp();}
             Console.WriteLine(checks+" search and artwork-list checks passed.");
         } finally {
             if(settingsWindow!=null) settingsWindow.Close(); if(launcher!=null) launcher.ExitApp();

@@ -54,7 +54,7 @@ class LibretroPickerTests {
             bool invalidGap=false; try {launcher.SetArtworkGap(65);} catch(ArgumentOutOfRangeException) {invalidGap=true;}
             Check(invalidGap && Storage.Read<Settings>("settings.json").ArtworkGap==32,"Invalid spacing cannot overwrite the saved gap");
             var listPicker=Find<ComboBox>(owner,"ListLayoutPicker"); string listId=listPicker.SelectedValue as string;
-            Check(Find<Button>(owner,"RedownloadListArtwork")!=null,"Per-list artwork settings offer clean artwork redownloading");
+            Check(!Children(owner).OfType<Button>().Any(button => button.Name=="RedownloadListArtwork"),"Per-list artwork settings no longer duplicate redownload actions");
             var listSource=Find<ComboBox>(owner,"ListArtworkSourceSetting");
             Check(listSource.IsEnabled && listSource.Items.Count==5,"Artwork source remains editable when the list inherits its layout");
             listSource.SelectedValue="libretro"; Find<Button>(owner,"SaveListArtwork").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -121,7 +121,7 @@ class LibretroPickerTests {
             chooser.Close(); Dispatcher.CurrentDispatcher.Invoke(DispatcherPriority.ApplicationIdle,new Action(() => {}));
             Check(!chosen && File.ReadAllText(Path.Combine(root,"settings.json"))==before,"Closing the custom-game picker does not modify forms or stored artwork");
             var currentSettings=(Settings)typeof(Launcher).GetField("settings",stateBinding).GetValue(launcher);
-            currentSettings.ListArtworkSources=new Dictionary<string,string>(); currentSettings.RetroArchListArtworkSource="libretro"; currentSettings.RetroArchPreferLibretro=true;
+            currentSettings.ListArtworkSources=new Dictionary<string,string>(); currentSettings.EmulatorArtworkSources=new Dictionary<string,string>{{"retroarch","libretro"}}; currentSettings.RetroArchPreferLibretro=true;
             var retroGame=new Game {Id="missing-retro",Name="Game One",Source="emulator",EmulatorId="retroarch",ArtworkSystem="Sony - PlayStation"};
             Check(launcher.PreferredArtworkPickerSource(retroGame)=="libretro","Missing RetroArch artwork inherits the shared Libretro preference");
             currentSettings.ListArtworkSources["all"]="sgdb";

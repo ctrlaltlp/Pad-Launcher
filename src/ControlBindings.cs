@@ -25,7 +25,7 @@ namespace PadLauncher {
                 list.Add(new ControlAction {Context=context,Id="down",Name="Browse / navigate down",Button="down",Key="Down",Mask=2});
                 list.Add(new ControlAction {Context=context,Id="favourite",Name="Toggle favourite",Button="rs",Key=context=="overlay" ? "F" : "none",Mask=0x80});
                 list.Add(new ControlAction {Context=context,Id="jump",Name="Jump to configured list",Button="ls",Key="none",Mask=0x40});
-                list.Add(new ControlAction {Context=context,Id="layout",Name="Toggle Grid 5×3 / carousel",Button=context=="overlay" ? "west" : "rt",Key="none"});
+                list.Add(new ControlAction {Context=context,Id="layout",Name="Toggle Grid 5×3 / carousel",Button=context=="typing" ? "lt" : "west",Key="none"});
                 list.Add(new ControlAction {Context=context,Id="settings",Name="Open Settings",Button="none",Key="none",Mask=0x800});
             }
             Action<string,string,string,string,string,int> add=(context,id,name,button,key,mask) => list.Add(new ControlAction {Context=context,Id=id,Name=name,Button=button,Key=key,Mask=mask});
@@ -35,18 +35,22 @@ namespace PadLauncher {
             add("overlay","previous","Previous list","lb","PageUp",0x100);
             add("overlay","next","Next list","rb","PageDown",0x200);
             add("overlay","search","Search games","north","Ctrl+F",0x8000);
-            add("overlay","monitor","Next monitor","rt","M",0x4000);
+            add("overlay","monitor","Next monitor","lt","M",0x4000);
             add("overlay","refresh","Refresh library","select","F5",0x20);
             add("overlay","hints","Show control hints","start","F1",0x10);
+            add("typing","play","Launch selected result","start","none",0x10);
+            add("results","focus","Return to keyboard","rt","none",0x10);
+            add("results","monitor","Next monitor","lt","M",0x4000);
+            add("results","play-start","Launch selected result (Start)","start","none",0x1000);
             add("typing","type","Type selected key","south","none",0x1000);
             add("typing","space","Insert space","north","none",0x2000);
             add("typing","backspace","Backspace","west","Back",0x4000);
-            add("typing","finish","Focus games (optional shortcut)","none","Return",0x8000);
+            add("typing","finish","Focus found games","rt","Return",0x8000);
             add("typing","cancel","Exit search","east","Escape",0x100);
             add("results","play","Launch selected result","south","Return",0x1000);
             add("results","cancel","Exit search","east","Escape",0x2000);
             add("results","cancel-alt","Exit search (alternate)","none","none",0x2000);
-            add("results","keyboard","Return to keyboard","north","Back",0x8000);
+            add("results","keyboard","Return to keyboard","none","Back",0x8000);
             return list;
         }
         public static string ContextName(string context) {return context=="overlay" ? "Overlay" : context=="typing" ? "Search keyboard" : "Search results";}
@@ -114,7 +118,7 @@ namespace PadLauncher {
         }
         public static bool HasJump(Settings settings) {return Contexts.Any(context => Buttons(settings,context+".jump").Length>0 || Get(settings,context+".jump",true)!="none");}
         public static void UpgradeSearchDefaults(Settings settings) {
-            if(settings.ControlBindingVersion>=4) return;
+            if(settings.ControlBindingVersion>=7) return;
             var buttons=settings.ControlButtons; string a,b;
             if(buttons!=null) {
                 if(settings.ControlBindingVersion<1) {
@@ -127,10 +131,36 @@ namespace PadLauncher {
                 buttons["results.cancel"]="east"; buttons["results.keyboard"]="north";
                 if(buttons.TryGetValue("results.cancel-alt",out b) && b=="east") buttons["results.cancel-alt"]="none";
             }
-            if(buttons!=null && buttons.TryGetValue("overlay.layout",out a) && a=="rt" && buttons.TryGetValue("overlay.monitor",out b) && b=="west") {
+            if(settings.ControlBindingVersion<4 && buttons!=null && buttons.TryGetValue("overlay.layout",out a) && a=="rt" && buttons.TryGetValue("overlay.monitor",out b) && b=="west") {
                 buttons["overlay.layout"]="west"; buttons["overlay.monitor"]="rt";
             }
-            settings.ControlBindingVersion=4;
+            if(settings.ControlBindingVersion<5 && buttons!=null) {
+                foreach(string context in Contexts) {
+                    string old=context=="overlay" ? "west" : "rt";
+                    bool occupied=InContext(context).Any(action => action.Id!="layout" && UsesButton(settings,action.FullId,"lt"));
+                    if(!occupied && buttons.TryGetValue(context+".layout",out a) && a==old) buttons[context+".layout"]="lt";
+                }
+                if(!InContext("overlay").Any(action => action.Id!="monitor" && UsesButton(settings,action.FullId,"west")) && buttons.TryGetValue("overlay.monitor",out a) && a=="rt") buttons["overlay.monitor"]="west";
+                if(!InContext("typing").Any(action => action.Id!="finish" && UsesButton(settings,action.FullId,"rt")) && buttons.TryGetValue("typing.finish",out a) && a=="none") buttons["typing.finish"]="rt";
+                foreach(string id in new[]{"typing.play","results.focus","results.play-start"}) {
+                    if(buttons.ContainsKey(id)) continue;
+                    var added=byId[id];
+                    if(InContext(added.Context).Any(action => action.FullId!=id && UsesButton(settings,action.FullId,added.Button))) buttons[id]="none";
+                }
+            }
+            if(buttons!=null && !buttons.ContainsKey("results.monitor") && InContext("results").Any(action => action.Id!="monitor" && UsesButton(settings,action.FullId,"west"))) buttons["results.monitor"]="none";
+            if(buttons!=null) {
+                foreach(string context in new[]{"overlay","results"}) {
+                    string oldLayout,oldMonitor;
+                    bool layoutSaved=buttons.TryGetValue(context+".layout",out oldLayout),monitorSaved=buttons.TryGetValue(context+".monitor",out oldMonitor);
+                    bool occupied=InContext(context).Any(action => action.Id!="layout" && action.Id!="monitor" && (UsesButton(settings,action.FullId,"lt") || UsesButton(settings,action.FullId,"west")));
+                    if(!occupied && (!layoutSaved || oldLayout=="lt") && (!monitorSaved || oldMonitor=="west")) {buttons[context+".layout"]="west"; buttons[context+".monitor"]="lt";}
+                }
+                if(buttons.TryGetValue("results.keyboard",out a) && a=="north") buttons["results.keyboard"]="none";
+                List<string> extras;
+                if(settings.ControlButtonAlternates!=null && settings.ControlButtonAlternates.TryGetValue("results.keyboard",out extras) && extras!=null) extras.RemoveAll(input => input=="north");
+            }
+            settings.ControlBindingVersion=7;
         }
     }
 }

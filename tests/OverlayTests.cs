@@ -33,7 +33,7 @@ public static class OverlayTests {
             Check(defaults.OpenMonitor=="cursor","Older configuration files default to the cursor's monitor");
             Check(defaults.DefaultCollectionId=="remember" && defaults.CarouselScale==1,"Older settings preserve last-collection behaviour, normal size");
             Check(Prompts.Help(defaults).Contains("✕") && !Prompts.Help(defaults).Contains("LB"),"PlayStation hint uses cross, circle and L1/R1");
-            Check(Prompts.Help(defaults).Contains("◻  Toggle Grid 5×3") && Prompts.RightTrigger(new Settings {ButtonPrompts="Xbox"})=="RT" && Prompts.RightTrigger(new Settings {ButtonPrompts="Nintendo"})=="ZR","Grid-toggle hints use Square and trigger labels match each controller style");
+            Check(Prompts.Help(defaults).Contains("◻  Toggle Grid 5×3") && Prompts.RightTrigger(new Settings {ButtonPrompts="Xbox"})=="RT" && Prompts.RightTrigger(new Settings {ButtonPrompts="Nintendo"})=="ZR","Grid-toggle hints use L2 and trigger labels match each controller style");
             defaults.ButtonPrompts="Xbox";
             Storage.Write("settings.json",defaults);
             var restored=Storage.Read<Settings>("settings.json");
@@ -267,12 +267,11 @@ public static class OverlayTests {
             Check(xboxSection!=null && FindElement((FrameworkElement)xboxSection.Content,"XboxEnabledSetting") is CheckBox,"Xbox app has its own integration and inclusion checkbox");
             var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[1]).Content).Content;
             Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
-            var customSection=(Expander)FindElement(listsContents,"CustomListsSection");
-            var individualSection=(Expander)FindElement(listsContents,"EditListGamesSection");
-            Check(customSection!=null && (string)customSection.Header=="Combine lists" && individualSection!=null && (string)individualSection.Header=="Create/Edit lists","Combine lists and individual game editor have separate dropdown sections");
-            customSection.IsExpanded=true; individualSection.IsExpanded=true; helpTabs.SelectedIndex=1;
+            var editorSection=(Expander)FindElement(listsContents,"ListEditorSection");
+            Check(editorSection!=null && (string)editorSection.Header=="List editor" && FindElement(listsContents,"CustomListsSection")==null,"List editor replaces separate combine and game-edit sections");
+            editorSection.IsExpanded=true; helpTabs.SelectedIndex=1;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
-            Check(FindElement((FrameworkElement)individualSection.Content,"CustomListPicker")!=null && FindElement((FrameworkElement)individualSection.Content,"CustomListName")!=null && FindElement((FrameworkElement)individualSection.Content,"SaveCustomList")!=null,"Individual list editor keeps picker, name and save action");
+            Check(FindElement(listsContents,"CustomListName")!=null && FindElement(listsContents,"SaveCustomList")!=null,"Create mode provides name and game selection");
             helpTabs.SelectedIndex=0;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             var listNameToggle=(CheckBox)FindElement((FrameworkElement)settingsPage.Content,"ShowListNameSetting");

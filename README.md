@@ -44,7 +44,7 @@ Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original 
 | Exit app completely | Hold Circle / Xbox B / Nintendo A for 1 second | Tray → Exit app |
 | Change list | L1 / R1, Xbox LB / RB, Nintendo L / R | Page Up / Page Down |
 | Toggle Grid 5×3 ↔ previous Angled/Rectangular layout | Square / Xbox X / Nintendo Y | — |
-| Move to next monitor | R2 / Xbox RT / Nintendo ZR | M |
+| Move to next monitor | L2 / Xbox LT / Nintendo ZL | M |
 | Search games with the gamepad keyboard | Triangle / Xbox Y / Nintendo X | Ctrl+F |
 | Refresh games, artwork and lists | Select/Create / Xbox Back/View / Nintendo − | F5 |
 | Toggle favourite | R3 / right stick click | F |
@@ -56,6 +56,8 @@ Left and right stick speeds are adjustable in Controls (both default to 5×). D-
 
 ## Overlay layouts
 
+**Overlay settings:** Choose your layout, artwork sizing, panel sizes, spacing and outlines. Adjust title and list-name visibility, select a monitor, and optionally remember layout switches across restarts. Individual lists can override layout and artwork preferences.
+
 Choose **Angled** for a slanted artwork carousel, **Rectangular** for a straight carousel, or **Grid** for multiple rows and columns. **Fixed (blurred edges)** keeps consistent panel sizing and fills unused edges with artwork colours; **Fit artwork** follows each cover's proportions to show the full image. Layout and sizing can be set globally or per list. Enable **Overlay → Remember layout changes made with controls** to keep layout switches for each list across restarts; this is off by default.
 
 ## Artwork
@@ -64,13 +66,13 @@ Pad Launcher uses existing launcher artwork and local images, plus **SteamGridDB
 
 - **PC launcher games:** Use available launcher artwork, with SGDB for missing covers.
 - **Custom games:** Use manually chosen or available Steam shortcut artwork, with SGDB for missing covers.
-- **Emulator games:** DuckStation, mGBA and melonDS prefer Libretro by default; other emulators, including RetroArch and xemu, prefer SGDB. The other provider is used as fallback.
+- **Emulator games:** DuckStation, PCSX2, xemu, mGBA and melonDS prefer Libretro by default; other emulators, including RetroArch, prefer SGDB. The other provider is used as fallback.
 
-Change emulator defaults or override individual lists under **Settings → Artwork**. Choose a preferred provider with fallback, or **Only SteamGridDB / Only Libretro**. Lists using **Use emulator defaults** follow each game's emulator preference, even when games are imported into a custom list. Existing preferences are preserved. [Artwork details](docs/libretro-artwork.md).
+Change emulator defaults or override individual lists under **Settings → Artwork**. Choose a preferred provider with fallback, or **Only SteamGridDB / Only Libretro**. Lists using **Automatic** follow each game's emulator preference, even when games are imported into a custom list. Existing preferences are preserved. [Artwork details](docs/libretro-artwork.md).
 
 ## Lists
 
-Choose which lists appear and arrange their order under **Settings → Lists → Overlay lists**. Each list can have its own layout, panel sizes and outlines under **Per-list layout**, plus its own artwork preference under **Artwork → Per-list artwork**. Create lists from individual games or combine existing lists; combined lists update with their source lists. You can show or hide any list you want on the overlay including the preconfigured ones.
+Choose which lists appear and arrange their order under **Settings → Lists → Overlay lists**. Each list can have its own layout, panel sizes and outlines under **Per-list layout**, plus its own artwork preference under **Artwork → Per-list artwork**. Create lists from individual games or merge existing lists into an independent new list. Existing combined lists still update with their source lists. You can show or hide any list you want on the overlay including the preconfigured ones.
 
 Preconfigured lists:
 - **Recently added:** Newly registered games from all sources, newest first. Tracking starts when this feature is first used; existing games have no historical added date. Refreshing or reimporting a game does not move it to the top.
@@ -78,8 +80,13 @@ Preconfigured lists:
 - **Recently played:** Games ordered by their latest launch in Pad Launcher or available launcher play history, newest first.
 
 User lists:
-- **Custom lists:** Pick individual games from any supported source under **Create/Edit lists**.
-- **Combined lists:** Combine source lists into one list that updates with them—for example, a PC list containing Steam collections, other launchers and custom games.
+Open **Settings → Lists → List editor** to create or edit a list by picking individual games. In **Edit**, turn on **Show added games** to see current members. **Uncheck added** clears those selections in the draft, and **Restore added** puts them back before you save.
+
+- **Combine** links source lists and updates as their games change.
+- **Merge** makes a snapshot and lets you choose which source lists to keep.
+- **Duplicate** makes an independent copy. **Delete** lets you remove a custom list while keeping its games registered, or unregister those games too.
+
+Automatic emulator lists, including imported RetroArch playlists, can be renamed, duplicated, hidden, and configured per list. Manage their games under **Emulators**.
 
 ## Credits
 

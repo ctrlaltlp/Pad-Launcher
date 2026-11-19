@@ -26,3 +26,9 @@ Primary references checked on 2026-11-17:
 - [SDL gamepad API header](https://github.com/libsdl-org/SDL/blob/release-3.4.20/include/SDL3/SDL_gamepad.h): physical button positions, gamepad type values and axis ranges.
 - [SDL initialization](https://wiki.libsdl.org/SDL3/SDL_InitSubSystem) and [event pumping](https://wiki.libsdl.org/SDL3/SDL_PumpEvents): native calls run on the WPF UI thread.
 - [SDL release](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.20): pinned official x64 runtime.
+
+## Temporary navigation diagnostics
+
+For intermittent cycling pauses, `build.ps1 -NavigationDiagnostics` includes a bounded navigation trace in `PadLauncher.Data/controller-navigation.log`. It records input state, polling/move timing and displayed panel positions; repeated inactive samples do not overwrite the last active session. Writes happen in the background.
+
+Normal builds omit the diagnostic class and hooks entirely. Published releases must use the normal build without `-NavigationDiagnostics`; verify the release EXE contains no `PadLauncher.ControllerNavigationTrace` type. Diagnostic builds are local troubleshooting builds only.

@@ -26,6 +26,15 @@ public static class ControllerTests {
             var messageArguments=new object[]{IntPtr.Zero,0x00fe,new IntPtr(2),device,false};
             typeof(PlayStationInput).GetMethod("OnMessage",inputFlags).Invoke(reader,messageArguments);
             Check(reader.ReadAll().Count==0,"PlayStation disconnect notification immediately clears held input");
+#if NAVIGATION_DIAGNOSTICS
+            var trace=new ControllerNavigationTrace();
+            trace.Poll(1,true,true,new PadState {LX=32767},"fixture");
+            trace.Frame(260,3,400,500); trace.Poll(270,false,false,new PadState(),null);
+            var history=(System.Collections.ICollection)typeof(ControllerNavigationTrace).GetField("history",inputFlags).GetValue(trace);
+            int traceCount=history.Count;
+            for(int tick=300;tick<10000;tick+=250) trace.Poll(tick,false,false,new PadState(),null);
+            Check(traceCount==3 && history.Count==traceCount,"Reporting a pause from another window preserves input and displayed-panel history");
+#endif
             var repeat=new NavigationRepeat();
             Check(repeat.Update(1,false,0),"First navigation press responds immediately");
             repeat.CompleteMove(450);

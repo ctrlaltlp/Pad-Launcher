@@ -130,11 +130,18 @@ class EmulatorImportTests {
             var playlistSettings=new Settings {EnabledCollectionIds=new List<string>()}; var playlistLibrary=new Library();
             var playlistGames=batch.Games.Concat(oldFormat.Games).ToList();
             EmulatorImport.ImportPlaylists(playlistSettings,playlistLibrary,retro,retroCfg,new[]{snes,favorites},playlistGames,null);
-            Check(playlistSettings.CustomLists.Count==2 && playlistSettings.CustomLists.Any(list => list.Name=="SNES") && playlistSettings.CustomLists.Any(list => list.Name.StartsWith("Favourites")) && EmulatorLibrary.Config(playlistSettings,"retroarch").Games.Count==1,"Per-playlist import creates named lists and shares games appearing in multiple playlists");
-            var namedPlaylist=playlistSettings.CustomLists.First(list => list.Name=="SNES"); string namedId=namedPlaylist.Id;
+            Check(playlistSettings.RetroArchPlaylistLists.Count==2 && playlistSettings.RetroArchPlaylistLists.Any(list => list.Name=="SNES") && playlistSettings.RetroArchPlaylistLists.Any(list => list.Name.StartsWith("Favourites")) && EmulatorLibrary.Config(playlistSettings,"retroarch").Games.Count==1,"Per-playlist import creates named lists and shares games appearing in multiple playlists");
+            var namedPlaylist=playlistSettings.RetroArchPlaylistLists.First(list => list.Name=="SNES"); string namedId=namedPlaylist.Id;
+            EmulatorLibrary.Apply(playlistLibrary,playlistSettings);
+            Check(playlistLibrary.Collections.Any(list => list.Id==namedId && list.Source=="emulator") && !(playlistSettings.CustomLists ?? new List<CustomList>()).Any(),"Playlist lists are automatic emulator collections, not custom lists");
+            bool blocked=false; try {CustomLists.Delete(playlistSettings,namedId);} catch(ArgumentException) {blocked=true;}
+            Check(blocked && EmulatorLibrary.IsAutomaticList(playlistSettings,namedId),"Automatic playlist lists cannot be deleted");
+            EmulatorLibrary.Apply(playlistLibrary,playlistSettings); EmulatorLibrary.Apply(playlistLibrary,playlistSettings);
+            Check(playlistLibrary.Collections.Count(list => list.Id==namedId)==1,"Repeated library rebuilds do not duplicate automatic playlist collections");
+
             namedPlaylist.Name="My SNES"; playlistSettings.EnabledCollectionIds.Remove(namedId);
             EmulatorImport.ImportPlaylists(playlistSettings,playlistLibrary,retro,retroCfg,new[]{snes,favorites},playlistGames,null);
-            Check(playlistSettings.CustomLists.Count==2 && namedPlaylist.Id==namedId && namedPlaylist.Name=="My SNES" && !playlistSettings.EnabledCollectionIds.Contains(namedId) && playlistSettings.EmulatorImports.Count==2,"Repeated playlist import reuses lists and preserves renamed lists and overlay visibility");
+            Check(playlistSettings.RetroArchPlaylistLists.Count==2 && namedPlaylist.Id==namedId && namedPlaylist.Name=="My SNES" && !playlistSettings.EnabledCollectionIds.Contains(namedId) && playlistSettings.EmulatorImports.Count==2,"Repeated playlist import reuses lists and preserves renamed lists and overlay visibility");
             string archivePlaylist=Write(retroRoot,"playlists\\Archived.lpl",Storage.Json().Serialize(new {default_core_path=otherCore,items=new[]{
                 new {path=@"roms\Handheld games.zip#folder\Yoshi.gb",label="Yoshi",core_path="DETECT",db_name="Nintendo - Game Boy.lpl"},
                 new {path=@"roms\Handheld games.zip#Wario.gb",label="Wario",core_path="DETECT",db_name="Nintendo - Game Boy.lpl"},

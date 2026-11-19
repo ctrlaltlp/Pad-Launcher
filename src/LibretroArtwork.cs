@@ -17,7 +17,7 @@ namespace PadLauncher {
         readonly HashSet<string> failedCatalogs=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly object catalogGate=new object();
         static string Hash(string value) {using(var sha=SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(value ?? ""))).Replace("-","");}
-        public static string CachePath(Game game) {return Path.Combine(Storage.Root,"artwork","libretro",Hash(game.Id+"|"+game.Name+"|"+game.ArtworkSystem+"|"+game.ArtworkTitle)+".img");}
+        public static string CachePath(Game game) {return ArtworkService.TrackCachedArtwork(game,Path.Combine(Storage.Root,"artwork","libretro",Hash(game.Id+"|"+game.Name+"|"+game.ArtworkSystem+"|"+game.ArtworkTitle)+".img"));}
         public static void ClearCatalogCaches(IEnumerable<Game> games,Settings settings,CancellationToken token) {
             var systems=games.SelectMany(game => Systems(game,settings)).Distinct().ToList();
             lock(downloadGate) lock(ArtworkService.CacheWriteGate) foreach(string system in systems) {
@@ -211,7 +211,7 @@ namespace PadLauncher {
                 using(var stream=new MemoryStream(bytes)) using(var image=System.Drawing.Image.FromStream(stream)) {
                     if(image.Width<64 || image.Height<64 || image.Width>8192 || image.Height>8192) return false;
                 }
-                Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(ArtworkService.CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllBytes(path,bytes);} game.ArtworkProvider="libretro"; return true;
+                Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(ArtworkService.CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllBytes(path,bytes);} ArtworkService.TrackCachedArtwork(game,path); game.ArtworkProvider="libretro"; return true;
             }
             Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(ArtworkService.CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllText(retry,"");} return false;
         }

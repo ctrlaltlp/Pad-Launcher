@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -60,8 +60,8 @@ namespace PadLauncher {
             var gamesPanel=new StackPanel();
             var tabs=new TabControl {Name="EmulatorTabs",Background=dialog.Background,Foreground=white,Margin=new Thickness(0,12,0,0)};
             StyleSettingsSubtabs(tabs);
-            tabs.Items.Add(new TabItem {Header="Settings",Content=settingsPanel});
             tabs.Items.Add(new TabItem {Header="Games",Content=gamesPanel});
+            tabs.Items.Add(new TabItem {Header="Settings",Content=settingsPanel});
             tabs.SelectedIndex=emulatorTabIndex;
             tabs.SelectionChanged+=(sender,args) => {
                 if(args.Source==tabs && tabs.SelectedIndex>=0) emulatorTabIndex=tabs.SelectedIndex;
@@ -253,6 +253,17 @@ namespace PadLauncher {
                 var saveGame=new Button {Name="EmulatorSaveGame_"+id,Content="Save changes",Padding=new Thickness(12,7,12,7)};
                 var remove=new Button {Name="EmulatorRemoveGame_"+id,Content="Remove game",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; editActions.Children.Add(saveGame); editActions.Children.Add(remove);
                 Grid.SetColumn(remove,1);
+                var removeAll=new Button {Name="EmulatorRemoveAllGames_"+id,Content="Remove all registered games…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(16,0,0,0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center,Foreground=new SolidColorBrush(Color.FromRgb(255,110,110))}; editActions.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(1,GridUnitType.Star)}); Grid.SetColumn(removeAll,2); editActions.Children.Add(removeAll);
+                removeAll.Click+=(s,e) => {
+                    if(!ConfirmEmulatorRemoval(dialog,"Remove emulator games","Remove all "+preset.Name+" games?","All "+games.Count+" registered games for this emulator will be removed from every Pad Launcher list. Game files, emulator files and artwork stay on disk. You can import the games again later.","Remove all registered games")) return;
+                    try {
+                        foreach(var cachedGame in library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==id)) {ArtworkService.ListCachePath(cachedGame,"sgdb"); LibretroArtwork.CachePath(cachedGame);}
+                        var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                        foreach(var entry in games) EmulatorLibrary.RemoveGame(next,id,entry.Id);
+                        CommitEmulators(next,rebuild);
+                    } catch(Exception error) {missing.Text=error.Message;}
+                };
+
                 saveGame.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SaveGame(next,id,(string)gamePicker.SelectedValue,name.Text,target.Text,gameCore==null ? null : gameCore.Text,arguments.Text); CommitEmulators(next,rebuild);} catch(Exception error) {missing.Text=error.Message;}};
                 remove.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.RemoveGame(next,id,(string)gamePicker.SelectedValue); CommitEmulators(next,rebuild);} catch(Exception error) {missing.Text=error.Message;}};
             }

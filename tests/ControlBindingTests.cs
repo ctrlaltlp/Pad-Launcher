@@ -73,7 +73,7 @@ class ControlBindingTests {
             if(restore) Find<Button>(dialog,"RestoreControlBindings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             else {
                 AssignFromDiagram(dialog,"rt","search",false);
-                Check(Find<TextBlock>(dialog,"DiagramLabel_overlay_rt").Text.Contains("Next monitor"),"Cancelling the action picker preserves its mapping");
+                Check(Find<TextBlock>(dialog,"DiagramLabel_overlay_lt").Text.Contains("Next monitor"),"Cancelling the action picker preserves its mapping");
                 AssignFromDiagram(dialog,"rt","favourite",true);
                 var yellow=Color.FromRgb(255,214,102);
                 Check(Find<TextBlock>(dialog,"DiagramLabel_overlay_rt").Text.Contains("Favourite") && Find<TextBlock>(dialog,"DiagramLabel_overlay_rs").Text.Contains("Favourite"),"Same action remains assigned to both buttons");
@@ -105,16 +105,20 @@ class ControlBindingTests {
         try {
             var legacy=new Settings {ControlButtons=new Dictionary<string,string>{{"typing.finish","north"},{"typing.cancel","none"},{"results.keyboard","north"},{"results.cancel","east"}}};
             ControlBindings.UpgradeSearchDefaults(legacy);
-            Check(ControlBindings.Get(legacy,"typing.cancel")=="east" && ControlBindings.Get(legacy,"typing.finish")=="none" && ControlBindings.Get(legacy,"results.cancel")=="east","Saved old search defaults upgrade to Circle exit");
+            Check(ControlBindings.Get(legacy,"typing.cancel")=="east" && ControlBindings.Get(legacy,"typing.finish")=="rt" && ControlBindings.Get(legacy,"results.cancel")=="east","Saved old search defaults upgrade to Circle exit");
             legacy.ControlButtons["typing.finish"]="north"; ControlBindings.UpgradeSearchDefaults(legacy);
             Check(ControlBindings.Get(legacy,"typing.finish")=="north","Later custom search mappings are preserved");
             var previousDefaults=new Settings {ControlBindingVersion=3,ControlButtons=new Dictionary<string,string>{{"overlay.layout","rt"},{"overlay.monitor","west"}}};
             ControlBindings.UpgradeSearchDefaults(previousDefaults);
-            Check(previousDefaults.ControlButtons["overlay.layout"]=="west" && previousDefaults.ControlButtons["overlay.monitor"]=="rt","Saved overlay defaults upgrade to Square layout and R2 monitor");
+            Check(previousDefaults.ControlButtons["overlay.layout"]=="west" && previousDefaults.ControlButtons["overlay.monitor"]=="lt","Saved overlay defaults upgrade to Square layout and R2 monitor");
+            var customTrigger=new Settings {ControlBindingVersion=4,ControlButtons=new Dictionary<string,string>{{"overlay.layout","west"},{"overlay.monitor","rt"},{"overlay.favourite","lt"}}};
+            ControlBindings.UpgradeSearchDefaults(customTrigger);
+            Check(ControlBindings.Get(customTrigger,"overlay.favourite")=="lt" && ControlBindings.Get(customTrigger,"overlay.layout")=="west" && ControlBindings.Conflict(customTrigger)==null,"Upgrading defaults preserves an occupied custom trigger without creating conflicts");
             var settings=new Settings();
             Check(ControlBindings.Conflict(settings)==null,"Default controller and keyboard bindings are conflict-free");
-            Check(ControlBindings.Get(settings,"overlay.layout")=="west" && ControlBindings.Get(settings,"overlay.monitor")=="rt","Overlay defaults swap Square and R2 actions");
-            Check(ControlBindings.Get(settings,"typing.backspace")=="west" && ControlBindings.Get(settings,"typing.layout")=="rt","Search keyboard actions stay unchanged");
+            Check(ControlBindings.Get(settings,"results.monitor")=="lt" && ControlBindings.Get(settings,"results.focus")=="rt","Search results assign Square to monitor and R2 to keyboard");
+            Check(ControlBindings.Get(settings,"overlay.layout")=="west" && ControlBindings.Get(settings,"overlay.monitor")=="lt","Overlay defaults swap Square and R2 actions");
+            Check(ControlBindings.Get(settings,"typing.backspace")=="west" && ControlBindings.Get(settings,"typing.layout")=="lt","Search keyboard actions stay unchanged");
             Check(!Prompts.Help(settings).Contains("(test)"),"Layout toggle hints no longer carry a test label");
             Check(ControlBindings.Get(settings,"overlay.dismiss")=="east" && ControlBindings.Get(settings,"overlay.exit")=="east","Tap and hold exit retain their shared default button");
             Check(ControlBindings.KeyAction(settings,"overlay",Key.PageDown,ModifierKeys.None)=="next" && ControlBindings.KeyAction(settings,"overlay",Key.PageUp,ModifierKeys.None)=="previous","PageUp/PageDown aliases retain navigation shortcuts");

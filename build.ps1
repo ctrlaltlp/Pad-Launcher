@@ -12,6 +12,7 @@ $librarySources += (Join-Path $PSScriptRoot 'src\SteamShortcutIdentity.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\LibretroArtwork.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\LibretroPlaceholderSizing.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\ListArtwork.cs')
+$librarySources += (Join-Path $PSScriptRoot 'src\ArtworkCacheCleanup.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\EmulatorTitleTags.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\RetroArchListDefaults.cs')
 $librarySources += (Join-Path $PSScriptRoot 'src\RetroArchCoreResolver.cs')
@@ -33,6 +34,7 @@ $appSources += (Join-Path $PSScriptRoot 'src\ListArtworkSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\PanelSizingSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\GameSearch.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\ControllerBindings.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\ControllerNavigationTrace.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\ControlSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\SettingsWindowSizing.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\ControlDiagram.cs')
@@ -48,6 +50,7 @@ $firstStartupTest = $args -contains '-FirstStartupTest'
 $emulatorDetectionTest = $args -contains '-EmulatorDetectionTest'
 $executableName = if($emulatorDetectionTest) { 'PadLauncher.EmulatorDetectionTest' } elseif($firstStartupTest) { 'PadLauncher.FirstStartupTest' } elseif($artworkTest) { 'PadLauncher.ArtworkTest' } else { 'PadLauncher' }
 $defines = if($emulatorDetectionTest) { @('/define:EMULATOR_DETECTION_TEST') } elseif($firstStartupTest) { @('/define:FIRST_START_TEST') } elseif($artworkTest) { @('/define:ARTWORK_TEST') } else { @() }
+if ($args -contains '-NavigationDiagnostics') { $defines += '/define:NAVIGATION_DIAGNOSTICS' }
 $stagedExecutable = Join-Path $out ($executableName + '.build.exe')
 $iconPath = Join-Path $PSScriptRoot 'assets\PadLauncher.ico'
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ $defines ('/win32manifest:' + (Join-Path $PSScriptRoot 'src\App.manifest')) ('/win32icon:' + $iconPath) ('/resource:' + $iconPath + ',PadLauncher.ico') ('/out:' + $stagedExecutable) $refs $librarySources $appSources
@@ -153,6 +156,10 @@ if ($args -contains '-Test') {
     if ($LASTEXITCODE -ne 0) { throw 'Libretro panel test build failed.' }
     & (Join-Path $out 'LibretroPanelTests.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Libretro panel tests failed.' }
+    & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'ArtworkCacheCleanupTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\ArtworkCacheCleanupTests.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Artwork cleanup test build failed.' }
+    & (Join-Path $out 'ArtworkCacheCleanupTests.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Artwork cleanup tests failed.' }
     & $compiler /nologo /target:exe /platform:x64 ('/out:' + (Join-Path $out 'ListArtworkTests.exe')) $refs $librarySources (Join-Path $PSScriptRoot 'tests\ListArtworkTests.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Per-list artwork test build failed.' }
     & (Join-Path $out 'ListArtworkTests.exe')

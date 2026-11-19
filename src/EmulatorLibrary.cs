@@ -335,15 +335,26 @@ namespace PadLauncher {
             if(config==null || config.Games==null || config.Games.RemoveAll(g => g.Id==gameId)==0) return;
             foreach(var list in settings.CustomLists ?? new List<CustomList>())
                 if(list.Games!=null) list.Games.Remove(gameId);
+            foreach(var list in settings.RetroArchPlaylistLists ?? new List<CustomList>()) if(list.Games!=null) list.Games.RemoveAll(value => value==gameId);
             foreach(var list in settings.CombinedCollections ?? new List<CombinedCollection>()) {
                 if(list.AddedGames!=null) list.AddedGames.RemoveAll(idValue => idValue==gameId);
                 if(list.ExcludedGames!=null) list.ExcludedGames.RemoveAll(idValue => idValue==gameId);
             }
             foreach(var import in settings.EmulatorImports ?? new List<EmulatorImportDefinition>())
                 if(import.ImportedGames!=null) import.ImportedGames.Remove(gameId);
+            foreach(var additions in (settings.ListGameAdditions ?? new Dictionary<string,List<string>>()).Values) if(additions!=null) additions.RemoveAll(value => value==gameId);
+            if(settings.FavouriteGameIds!=null) settings.FavouriteGameIds.RemoveAll(value => value==gameId);
+            if(settings.HiddenGameIds!=null) settings.HiddenGameIds.RemoveAll(value => value==gameId);
+            if(settings.ArtworkOverrides!=null) settings.ArtworkOverrides.Remove(gameId);
+            if(settings.LaunchHistory!=null) settings.LaunchHistory.Remove(gameId);
+            if(settings.SelectedGamesByList!=null) foreach(string listId in settings.SelectedGamesByList.Where(pair => pair.Value==gameId).Select(pair => pair.Key).ToArray()) settings.SelectedGamesByList.Remove(listId);
+            if(settings.SelectedId==gameId) settings.SelectedId=null;
+        }
+        public static bool IsAutomaticList(Settings settings,string id) {
+            return (id ?? "").StartsWith("source:emulator:",StringComparison.Ordinal) || (settings.RetroArchPlaylistLists ?? new List<CustomList>()).Any(list => list.Id==id);
         }
         public static void Apply(Library library,Settings settings) {
-            library.Games.RemoveAll(g => g.Source=="emulator"); library.Collections.RemoveAll(c => (c.Id ?? "").StartsWith("source:emulator:",StringComparison.Ordinal));
+            library.Games.RemoveAll(g => g.Source=="emulator"); library.Collections.RemoveAll(c => c.Source=="emulator" || (c.Id ?? "").StartsWith("source:emulator:",StringComparison.Ordinal));
             var existingIds=new HashSet<string>(library.Games.Select(g => g.Id));
             foreach(var preset in Presets) {
                 var config=Config(settings,preset.Id); if(config==null) continue;
@@ -352,6 +363,11 @@ namespace PadLauncher {
                     library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="emulator",EmulatorId=preset.Id,LaunchId=entry.Path,Arguments=entry.Arguments,ArtworkSystem=entry.ArtworkSystem,ArtworkTitle=entry.ArtworkTitle});
                 }
                 library.Collections.Add(new Collection {Id="source:emulator:"+preset.Id,Source="emulator",Name=String.IsNullOrWhiteSpace(config.ListName) ? preset.Name : config.ListName,Games=library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==preset.Id).Select(g => g.Id).ToList()});
+            }
+            var registered=new HashSet<string>(library.Games.Where(game => game.Source=="emulator" && game.EmulatorId=="retroarch").Select(game => game.Id));
+            foreach(var playlist in settings.RetroArchPlaylistLists ?? new List<CustomList>()) {
+                library.Collections.RemoveAll(list => list.Id==playlist.Id);
+                library.Collections.Add(new Collection {Id=playlist.Id,Name=playlist.Name,Source="emulator",Games=(playlist.Games ?? new List<string>()).Where(registered.Contains).Distinct().ToList()});
             }
         }
         public static bool Missing(Game game,Settings settings) {

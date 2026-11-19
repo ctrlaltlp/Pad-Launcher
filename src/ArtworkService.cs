@@ -63,7 +63,7 @@ namespace PadLauncher {
         internal static readonly object CacheWriteGate=new object();
         public static Func<string,string,CancellationToken,byte[]> Fetch=ArtworkNetwork.Get;
         static string Cache(Game game) {
-            using(var hash=SHA256.Create()) return Path.Combine(Storage.Root,"artwork",BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(game.Id+"|"+game.ArtworkUrl+((game.Source=="custom" || game.Source=="emulator") ? "|"+game.Name : "")))).Replace("-","")+".img");
+            using(var hash=SHA256.Create()) return TrackCachedArtwork(game,Path.Combine(Storage.Root,"artwork",BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(game.Id+"|"+game.ArtworkUrl+((game.Source=="custom" || game.Source=="emulator") ? "|"+game.Name : "")))).Replace("-","")+".img"));
         }
         public static bool Portrait(string path) {
             try {using(var image=System.Drawing.Image.FromFile(path)) return EpicLibrary.SuitablePortrait(image.Width,image.Height);} catch {return false;}
@@ -283,7 +283,7 @@ namespace PadLauncher {
                         status("Artwork provider paused. Check your connection or SteamGridDB key, then refresh.");
                     }
                 }
-                if(saved) {game.ArtworkProvider="downloaded"; ready(game,path); continue;}
+                if(saved) {TrackCachedArtwork(game,path); game.ArtworkProvider="downloaded"; ready(game,path); continue;}
                 if(settings.LibretroArtworkEnabled && game.Source=="emulator") {
                     try {if(libretro.Download(game,settings,token)) ready(game,LibretroArtwork.CachePath(game));}
                     catch(Exception) {

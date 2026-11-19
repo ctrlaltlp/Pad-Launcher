@@ -74,7 +74,7 @@ class ListArtworkTests {
             Check(preferredPath==raRetro && !settings.LibretroArtworkEnabled,"RetroArch's confirmed preference uses Libretro first without enabling global fallback");
             settings.RetroArchPreferLibretro=false;
             Check(ArtworkService.GameListSource(settings,ra,"mixed")=="sgdb","RetroArch preference can be explicitly declined");
-            settings.RetroArchListArtworkSource="libretro";
+            settings.RetroArchListArtworkSource="libretro"; ArtworkService.UpgradeArtworkPreferences(settings);
             Check(ArtworkService.PreferLibretroForRetroArch(settings) && ArtworkService.GameListSource(settings,ra,"mixed")=="libretro","Shared RetroArch artwork source Libretro always enables the per-game preference despite an older false flag");
             preferredPath=null; ArtworkService.Fill(new[]{ra},settings,CancellationToken.None,(entry,path) => preferredPath=path,message => {throw new Exception(message);});
             Check(preferredPath==raRetro,"Shared Libretro artwork source takes priority in the global download path too");

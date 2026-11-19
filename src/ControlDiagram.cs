@@ -34,14 +34,14 @@ namespace PadLauncher {
             // below the controller rather than weaving through side callouts.
             var placements=new Dictionary<string,Rect> {
                 {"lt",new Rect(8,60,196,60)},{"lb",new Rect(8,140,196,60)},
-                {"select",new Rect(345,65,150,60)},{"start",new Rect(620,65,150,60)},
+                {"select",new Rect(287,65,150,60)},{"start",new Rect(559,65,150,60)},
                 {"up",new Rect(8,240,196,60)},{"left",new Rect(8,320,196,60)},
                 {"down",new Rect(8,400,196,60)},{"right",new Rect(8,480,196,60)},
-                {"ls",new Rect(340,690,180,60)},
+                {"ls",new Rect(340,610,180,60)},
                 {"rt",new Rect(796,60,196,60)},{"rb",new Rect(796,140,196,60)},
                 {"north",new Rect(796,228,196,60)},{"east",new Rect(796,320,196,60)},
                 {"south",new Rect(796,400,196,60)},{"west",new Rect(796,480,196,60)},
-                {"rs",new Rect(540,690,180,60)}
+                {"rs",new Rect(540,610,180,60)}
             };
             var routes=new Dictionary<string,Point[]> {
                 {"lt",new[]{new Point(212,79),new Point(280,79),new Point(320,209)}},
@@ -51,7 +51,7 @@ namespace PadLauncher {
                 {"left",new[]{new Point(212,339),new Point(250,339),new Point(269,309)}},
                 {"down",new[]{new Point(212,419),new Point(265,419),new Point(317,360)}},
                 {"right",new[]{new Point(212,499),new Point(230,499),new Point(368,430),new Point(368,309)}},
-                {"ls",new[]{new Point(404,680),new Point(404,389)}},
+                {"ls",new[]{new Point(404,600),new Point(404,389)}},
                 {"rt",new[]{new Point(788,79),new Point(780,79),new Point(705,125),new Point(678,209)}},
                 {"rb",new[]{new Point(788,159),new Point(720,159),new Point(678,225)}},
                 {"start",new[]{new Point(634,125),new Point(634,235)}},
@@ -59,14 +59,14 @@ namespace PadLauncher {
                 {"east",new[]{new Point(788,339),new Point(750,339),new Point(744,310.1)}},
                 {"south",new[]{new Point(788,419),new Point(735,419),new Point(680.1,373)}},
                 {"west",new[]{new Point(788,499),new Point(770,499),new Point(637.4,440),new Point(637.4,331)}},
-                {"rs",new[]{new Point(593,680),new Point(593,389)}}
+                {"rs",new[]{new Point(593,600),new Point(593,389)}}
             };
             if(style!="PlayStation") ConfigureAsymmetricDiagram(style,placements,routes);
             Action refreshDiagram=null;
             foreach(var placement in placements) {
                 string input=placement.Key; Rect bounds=placement.Value;
                 bool alignRight=bounds.X<300;
-                var text=new TextBlock {Name="DiagramLabel_"+context+"_"+input,FontSize=15,Foreground=mint,TextWrapping=TextWrapping.Wrap,Width=bounds.Width,TextAlignment=style!="PlayStation" && (input=="select" || input=="start") ? TextAlignment.Center : alignRight ? TextAlignment.Right : TextAlignment.Left};
+                var text=new TextBlock {Name="DiagramLabel_"+context+"_"+input,FontSize=15,Foreground=mint,TextWrapping=TextWrapping.Wrap,Width=bounds.Width,TextAlignment=(input=="select" || input=="start") ? TextAlignment.Center : alignRight ? TextAlignment.Right : TextAlignment.Left};
                 var edit=new Button {Name="DiagramAssign_"+context+"_"+input,Content=text,Background=Brushes.Transparent,BorderThickness=new Thickness(0),Padding=new Thickness(0),MinHeight=28,Cursor=Cursors.Hand,ToolTip="Assign action to "+ControlBindings.ButtonLabel(draft,input),HorizontalContentAlignment=HorizontalAlignment.Stretch};
                 Canvas.SetLeft(edit,bounds.X); Canvas.SetTop(edit,bounds.Y); canvas.Children.Add(edit); labels[input]=text;
                 edit.Click+=(s,e) => ShowDiagramAssignment(Window.GetWindow(section),draft,context,input,() => {refreshDiagram(); if(changed!=null) changed();});
@@ -88,7 +88,7 @@ namespace PadLauncher {
                     entry.Value.Text=(shoulder ? ControlBindings.ButtonLabel(draft,entry.Key)+(active ? "\n" : "") : "")+(active ? String.Join(" / ",assigned) : shoulder ? "" : "Unassigned");
                     bool duplicate=ControlBindings.InContext(context).Any(action => ControlBindings.UsesButton(draft,action.FullId,entry.Key) && ControlBindings.Buttons(draft,action.FullId).Length>1);
                     entry.Value.Foreground=duplicate ? actionColour : active && !showJumpHint ? mint : muted;
-                    foreach(var wire in wires[entry.Key]) wire.Visibility=active ? Visibility.Visible : Visibility.Collapsed;
+                    foreach(var wire in wires[entry.Key]) wire.Visibility=Visibility.Visible;
                 }
             };
             update(); return section;
@@ -151,8 +151,9 @@ namespace PadLauncher {
             routes["north"]=new[]{new Point(788,247),new Point(710,247),new Point(648,nintendo ? 258 : 251)};
             routes["east"]=new[]{new Point(788,339),new Point(740,339),new Point(nintendo ? 716 : 706,nintendo ? 320 : 311)};
             routes["south"]=new[]{new Point(788,419),new Point(730,419),new Point(648,nintendo ? 383 : 374)};
-            routes["west"]=new[]{new Point(788,499),new Point(770,499),new Point(620,430),new Point(620,nintendo ? 370 : 379),new Point(606,nintendo ? 343 : 333)};
-            routes["rs"]=new[]{new Point(574,680),new Point(574,399)};
+            routes["west"]=new[]{new Point(788,499),new Point(770,499),new Point(nintendo ? 645 : 637,nintendo ? 443 : 437),new Point(606,nintendo ? 343 : 333)};
+            placements["rs"]=new Rect(520,nintendo ? 650 : 690,180,60);
+            routes["rs"]=new[]{new Point(574,nintendo ? 640 : 680),new Point(574,399)};
         }
         static string DiagramActionName(ControlAction action) {
             switch(action.Id) {

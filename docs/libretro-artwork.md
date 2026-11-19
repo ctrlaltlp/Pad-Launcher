@@ -10,8 +10,8 @@ Emulator defaults are:
 
 | Emulators | Preferred provider | Fallback |
 | --- | --- | --- |
-| DuckStation, mGBA, melonDS | Libretro | SteamGridDB |
-| Other emulators, including RetroArch and xemu | SteamGridDB | Libretro |
+| DuckStation, PCSX2, xemu, mGBA, melonDS | Libretro | SteamGridDB |
+| Other emulators, including RetroArch | SteamGridDB | Libretro |
 
 Existing saved preferences are preserved. **Setup wizard → Choose artwork (3/5)** lets users choose sources per emulator. Configured emulators appear first; **Other emulators** is collapsed initially. Entering or omitting the SGDB key does not reset source choices. If a choice includes SGDB and no key is supplied, continuing offers a missing-key warning. There is no global SGDB or Libretro checkbox in the wizard and no separate RetroArch detection prompt.
 
@@ -21,7 +21,7 @@ Change emulator defaults later under **Settings → Artwork**. There is no globa
 
 **Artwork → Per-list artwork** offers:
 
-- **Use emulator defaults:** Inherit applicable RetroArch list settings or each game's emulator preference. Importing an emulator game into a custom or mixed list does not discard its emulator default. PC/custom games retain their normal artwork chain.
+- **Automatic:** Follow each game's emulator preference. Importing an emulator game into a custom or mixed list does not discard its emulator default. PC/custom games retain their normal artwork chain.
 - **Prefer Libretro with SteamGridDB as fallback.**
 - **Prefer SteamGridDB with Libretro fallback.**
 - **Only SteamGridDB.**
@@ -29,9 +29,9 @@ Change emulator defaults later under **Settings → Artwork**. There is no globa
 
 An explicit list preference wins over inherited preferences; a manual image wins over automatic selection. “Only” choices do not download or display the other provider as fallback. SGDB downloads require an enabled, saved API key.
 
-**Lists → RetroArch lists settings** provides shared artwork and layout defaults for automatic RetroArch lists, imported playlists and RetroArch-only custom/combined lists. An explicit per-list artwork choice takes precedence. In mixed lists without an explicit artwork choice, each game resolves its emulator preference; RetroArch games can inherit the shared RetroArch artwork preference. Mixed lists do not inherit the RetroArch group layout.
+**Lists → RetroArch list settings** provides shared layout defaults for automatic RetroArch lists, imported playlists and RetroArch-only user lists. Artwork sources now live exclusively in the Artwork tab. Automatic source priority is: manual image → explicit per-list choice → emulator preference (or the built-in emulator default). PC/custom games retain the launcher/local/SGDB chain. Existing shared RetroArch source choices are migrated into emulator preferences when no explicit RetroArch emulator preference exists.
 
-Artwork preferences are separate from **Lists → Per-list layout**. The old **Libretro artwork lists** checklist and **Prefer Libretro artwork for RetroArch games** checkbox have been replaced by these source settings. Saved choices are retained.
+Artwork preferences are separate from **Lists → Per-list layout**. Libretro-preferred/Libretro-only lists default to Fit artwork when inheriting sizing; SGDB uses the normal Fixed default. Explicit per-list sizing overrides take precedence.
 
 ## Switching covers and choosing images
 
@@ -41,11 +41,9 @@ Under **Artwork → Game artwork**, choose a SteamGridDB image, Libretro image o
 
 The **Games without artwork** picker follows the game's effective artwork preference. **Reset artwork** removes the manual choice and returns to automatic selection; a Libretro-preferred game can therefore show Libretro again after reset.
 
-## Clear and redownload
+## Cached artwork
 
-**Artwork → Per-list artwork → Clear and redownload list artwork…** clears downloaded provider images and retry records for the selected games, then downloads using the saved policy. The operation requires confirmation. **Keep manually chosen images** is checked by default; unchecking it removes manual assignments without deleting original chosen files.
-
-Native launcher artwork and game files are preserved. Games shared with other lists share provider caches, so refreshing them can affect those lists too. Each list has independent progress: another list can start refreshing while the first is running. Closing Settings does not stop these jobs; exiting the app cancels them.
+The duplicate **Redownload RetroArch artwork** and **Clear and redownload list artwork** buttons have been removed. Changing source reuses that provider's existing cache or downloads a missing cover. Manual artwork can still be reset per game. Switching preferences does not delete cached covers.
 
 ## Libretro matching and layout
 
@@ -58,6 +56,8 @@ Missing Libretro artwork uses console-specific placeholder proportions, with reg
 ## Cache and implementation references
 
 Libretro reads public `Named_Boxarts` catalogues over HTTPS. Catalogues are cached for seven days under `PadLauncher.Data/artwork/libretro/catalogs`; images and six-hour missing-match markers live under `artwork/libretro`. Filename indexes are scoped to an artwork batch. Downloaded disk caches are separate from the [bounded decoded-image RAM cache](artwork-performance.md).
+
+**System → Clear unused cached artwork…** asks for confirmation and deletes only downloaded images with a known owner that is no longer registered. Both provider caches are kept for registered games, including when Only Libretro or Only SteamGridDB is selected. Manual images, shared catalogues and older files whose ownership cannot be established are preserved. Cache ownership is recorded in `artwork/cache-owners.jsonl`. Removing emulator game registrations does not delete artwork or game files.
 
 The measurement tools are `tools/sample-libretro-covers.py` and `tools/build-libretro-placeholder-profiles.py`. Sample downloads remain under ignored `bin/libretro-cover-samples/`; they are not bundled with the app.
 

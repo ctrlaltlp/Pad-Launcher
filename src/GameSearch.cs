@@ -195,7 +195,7 @@ namespace PadLauncher {
             if(!preview) Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(gameSearchWindow).Handle);
         }
         void LaunchSearchSelection() {
-            if(!SearchGamesFocused || visible.Count==0) return;
+            if(visible.Count==0) return;
             string id=visible[selected].Id;
             gameSearchWindow.Close();
             int destination=filters.FindIndex(list => list.Id==settings.CollectionId && (list.Id=="all" || (list.Games ?? new List<string>()).Contains(id)));
@@ -234,12 +234,14 @@ namespace PadLauncher {
                 case "space": spaceSearch(); break;
                 case "backspace": backspaceSearch(); break;
                 case "finish": finishGameSearch(true); break;
+                case "focus": ResumeSearchKeyboard(); break;
                 case "cancel": case "cancel-alt": finishGameSearch(false); break;
-                case "play": LaunchSearchSelection(); break;
+                case "play": case "play-start": LaunchSearchSelection(); break;
                 case "keyboard": ResumeSearchKeyboard(); break;
                 case "favourite": ToggleSearchFavourite(); break;
                 case "jump": finishGameSearch(false); JumpToConfiguredList(); break;
                 case "layout": ToggleTestLayoutFromKeyboard(); break;
+                case "monitor": CycleMonitor(); break;
                 case "settings": OpenSettingsFromSearch(); break;
             }
         }
@@ -257,7 +259,9 @@ namespace PadLauncher {
             }
             if((pressed&0x0080)!=0) {ToggleSearchFavourite(); return;}
             if((pressed&0x0800)!=0) {OpenSettingsFromSearch(); return;}
+            if((pressed&0x0010)!=0) {if(searchGamesFocused) ResumeSearchKeyboard(); else LaunchSearchSelection(); return;}
             if(searchGamesFocused) {
+                if((pressed&0x4000)!=0) {CycleMonitor(); return;}
                 if((pressed&0x8000)!=0) {ResumeSearchKeyboard(); return;}
                 if((pressed&0x2000)!=0) {finishGameSearch(false); return;}
                 if((pressed&0x1000)!=0) {LaunchSearchSelection(); return;}

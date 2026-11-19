@@ -36,6 +36,7 @@ class RetroArchListDefaultsTests {
             var specific=new ListLayout {Layout="rectangular",PanelScale=1.2}; settings.ListLayouts=new Dictionary<string,ListLayout>{{"pure",specific}};
             Check(Object.ReferenceEquals(RetroArchListDefaults.Layout(settings,"pure"),specific),"Individual list layout overrides win over RetroArch defaults");
             settings.RetroArchListArtworkSource="sgdb"; settings.RetroArchPreferLibretro=true;
+            ArtworkService.UpgradeArtworkPreferences(settings);
             var game=new Game {Id="ra",Name="Retro game",Source="emulator",EmulatorId="retroarch",LaunchId="game.gb",ArtworkSystem="Nintendo - Game Boy"};
             Check(ArtworkService.GameListSource(settings,game,"pure")=="sgdb" && ArtworkService.GameListSource(settings,game,"mixed")=="sgdb","Shared artwork source applies to RetroArch games without a stale legacy preference overriding it");
             settings.ListArtworkSources=new Dictionary<string,string>{{"pure","libretro"}};
@@ -51,15 +52,11 @@ class RetroArchListDefaultsTests {
             ((ComboBox)Find(owner,"RetroArchListLayoutSetting")).SelectedValue="grid";
             ((CheckBox)Find(owner,"RetroArchListShowPanelOutlinesSetting")).IsChecked=true;
             ((Slider)Find(owner,"RetroArchListModernPanelSizeSetting")).Value=.8;
-            ((ComboBox)Find(owner,"RetroArchListArtworkSourceSetting")).SelectedValue="sgdb";
+            Check(Find(owner,"RetroArchListArtworkSourceSetting")==null && Find(owner,"RedownloadRetroArchArtwork")==null,"RetroArch layout settings have no duplicate artwork controls");
             ((Button)Find(owner,"SaveRetroArchListDefaults")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); owner.UpdateLayout();
             var saved=Storage.Read<Settings>("settings.json");
-            Check(saved.RetroArchListLayout.Layout=="grid" && saved.RetroArchListLayout.ShowPanelOutlines==true && Math.Abs(saved.RetroArchListLayout.PanelScale-.8)<.01 && saved.RetroArchListArtworkSource=="sgdb" && saved.RetroArchPreferLibretro==null,"Shared layout and artwork settings save without changing the emulator-level artwork preference");
+            Check(saved.RetroArchListLayout.Layout=="grid" && saved.RetroArchListLayout.ShowPanelOutlines==true && Math.Abs(saved.RetroArchListLayout.PanelScale-.8)<.01 && saved.RetroArchListArtworkSource==null && saved.RetroArchPreferLibretro==null,"Shared layout and artwork settings save without changing the emulator-level artwork preference");
             Check(saved.ListLayouts.Count==0 && saved.ListArtworkSources.Count==0 && ((Expander)Find(owner,"RetroArchListsSettingsSection")).IsExpanded,"Saving shared defaults does not manufacture per-list overrides and preserves the expanded section");
-            ((ComboBox)Find(owner,"RetroArchListArtworkSourceSetting")).SelectedValue="libretro";
-            ((Button)Find(owner,"SaveRetroArchListDefaults")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            saved=Storage.Read<Settings>("settings.json");
-            Check(saved.RetroArchPreferLibretro==true && saved.RetroArchListArtworkSource=="libretro","Selecting Libretro in shared list settings persists the RetroArch-wide preference");
             CollectUi();
             int cleanupCount=((List<Action>)owner.Resources["PadLauncher.SettingsContentCleanup"]).Count;
             int handles=GetGuiResources(System.Diagnostics.Process.GetCurrentProcess().Handle,1);

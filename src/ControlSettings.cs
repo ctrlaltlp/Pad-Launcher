@@ -24,14 +24,14 @@ namespace PadLauncher {
             var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
             var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
             header.Children.Add(Label("Change controls",25,white));
-            var note=Label("Click a controller label to assign an action. Yellow labels share an action with another button. Use Keyboard shortcuts to change keys. Save changes applies all edits; Cancel discards them.",12,muted); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,10,0,12); header.Children.Add(note);
+            var note=Label("Click a controller label to assign an action. Yellow labels share an action with another button. Use Keyboard shortcuts to change keys. Save changes applies all edits; Close discards unsaved edits.",12,muted); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,10,0,12); header.Children.Add(note);
             var footer=new StackPanel(); DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
             var status=Label("",12,muted); status.Name="ControlBindingsStatus"; status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,12,0,10); footer.Children.Add(status);
             var actions=new Grid(); actions.ColumnDefinitions.Add(new ColumnDefinition()); actions.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto}); footer.Children.Add(actions);
             var restore=new Button {Name="RestoreControlBindings",Content="Restore defaults",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,8,12,8)}; actions.Children.Add(restore);
             var right=new StackPanel {Orientation=Orientation.Horizontal}; Grid.SetColumn(right,1); actions.Children.Add(right);
-            var cancel=new Button {Content="Cancel",IsCancel=true,Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0)}; cancel.Click+=(s,e) => dialog.Close(); right.Children.Add(cancel);
-            var save=new Button {Name="SaveControlBindings",Content="Save changes",Background=mint,Foreground=Brushes.Black,Padding=new Thickness(12,8,12,8)}; right.Children.Add(save);
+            var cancel=new Button {Content="Close",IsCancel=true,Padding=new Thickness(12,8,12,8),Margin=new Thickness(8,0,0,0)}; cancel.Click+=(s,e) => dialog.Close();
+            var save=new Button {Name="SaveControlBindings",Content="Save changes",Background=mint,Foreground=Brushes.Black,Padding=new Thickness(12,8,12,8)}; right.Children.Add(save); right.Children.Add(cancel);
             var tabs=new TabControl {Name="ControlBindingContexts",Background=dialog.Background}; root.Children.Add(tabs); StyleSettingsSubtabs(tabs);
             var diagramUpdates=new List<Action>();
             Action validate=() => {
@@ -62,7 +62,7 @@ namespace PadLauncher {
                     var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                     next.ControlButtons=new Dictionary<string,string>(draft.ControlButtons); next.ControlKeys=new Dictionary<string,string>(draft.ControlKeys);
                     next.ControlButtonAlternates=draft.ControlButtonAlternates==null ? null : draft.ControlButtonAlternates.ToDictionary(pair => pair.Key,pair => new List<string>(pair.Value));
-                    next.ControlBindingVersion=4; next.JumpListButton=ControlBindings.HasJump(next) ? "left" : "off";
+                    next.ControlBindingVersion=7; next.JumpListButton=ControlBindings.HasJump(next) ? "left" : "off";
                     Storage.Write("settings.json",next); settings=next; RefreshSearchControlHints();
                     exitButton.Reset(); navigation.Reset(); previousButtons=0; searchButtons=UInt16.MaxValue; bindingLeftTriggerDown=bindingRightTriggerDown=false; testLayoutTriggerDown=false; suppressSearchRelease=true;
                     dialog.Close(); rebuild();

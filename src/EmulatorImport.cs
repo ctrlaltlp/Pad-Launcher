@@ -398,16 +398,19 @@ namespace PadLauncher {
             return ids;
         }
         public static void ImportPlaylists(Settings settings,Library library,string executable,string location,IEnumerable<EmulatorImportSource> sources,IEnumerable<EmulatorImportGame> chosen,IEnumerable<string> excluded) {
+            if(settings.RetroArchPlaylistLists==null) settings.RetroArchPlaylistLists=new List<CustomList>();
             var games=chosen.ToList();
             foreach(var source in sources) {
                 var selected=games.Where(game => game.SourceId==source.Id).ToList(); if(selected.Count==0) continue;
-                var lists=settings.CustomLists ?? new List<CustomList>();
+                var lists=settings.RetroArchPlaylistLists;
                 var old=(settings.EmulatorImports ?? new List<EmulatorImportDefinition>()).FirstOrDefault(d => d.EmulatorId=="retroarch" && String.Equals(d.Location,location,StringComparison.OrdinalIgnoreCase) && d.Sources!=null && d.Sources.Count==1 && d.Sources[0]==source.Id && lists.Any(list => list.Id==d.ListId));
                 string name=String.IsNullOrWhiteSpace(source.Name) ? "RetroArch playlist" : source.Name;
                 if(name.Length>72) name=name.Substring(0,72);
                 string proposed=name; int suffix=2;
                 while(CombinedCollections.Options(library,settings).Any(list => String.Equals(list.Name,proposed,StringComparison.CurrentCultureIgnoreCase))) proposed=name+" ("+(suffix++)+")";
-                Import(settings,library,"retroarch",executable,location,new[]{source},selected,(excluded ?? Enumerable.Empty<string>()).Where(key => key.StartsWith(source.Id+"|",StringComparison.Ordinal)),old==null ? null : old.ListId,proposed);
+                var playlist=old==null ? null : lists.FirstOrDefault(list => list.Id==old.ListId);
+                if(playlist==null) {playlist=new CustomList {Id="source:retroarch-playlist:"+Guid.NewGuid().ToString("N"),Name=proposed,Games=new List<string>()}; lists.Add(playlist); if(settings.EnabledCollectionIds!=null) settings.EnabledCollectionIds.Add(playlist.Id);}
+                Import(settings,library,"retroarch",executable,location,new[]{source},selected,(excluded ?? Enumerable.Empty<string>()).Where(key => key.StartsWith(source.Id+"|",StringComparison.Ordinal)),playlist.Id,playlist.Name);
             }
         }
         public static string Import(Settings settings,Library library,string emulator,string executable,string location,IEnumerable<EmulatorImportSource> sources,IEnumerable<EmulatorImportGame> chosen,IEnumerable<string> excluded,string listId,string name) {
@@ -415,7 +418,9 @@ namespace PadLauncher {
             var config=EmulatorLibrary.Config(settings,emulator);
             var working=new Library {Games=library.Games.ToList(),Collections=library.Collections.ToList()}; EmulatorLibrary.Apply(working,settings);
             var previous=(settings.CustomLists ?? new List<CustomList>()).FirstOrDefault(l => l.Id==listId);
-            bool automatic=listId=="source:emulator:"+emulator;
+            var playlist=(settings.RetroArchPlaylistLists ?? new List<CustomList>()).FirstOrDefault(list => list.Id==listId);
+            bool automatic=listId=="source:emulator:"+emulator || (emulator=="retroarch" && playlist!=null);
+            if(playlist!=null) playlist.Games=(playlist.Games ?? new List<string>()).Concat(ids).Distinct().ToList();
             if(listId!=null && previous==null && !automatic) throw new ArgumentException("The destination list no longer exists.");
             bool keepHidden=previous!=null && settings.EnabledCollectionIds!=null && !settings.EnabledCollectionIds.Contains(previous.Id);
             string target=automatic ? listId : CustomLists.Save(settings,working,listId,previous==null ? name : previous.Name,(previous==null ? Enumerable.Empty<string>() : previous.Games ?? new List<string>()).Concat(ids));

@@ -109,6 +109,7 @@ namespace PadLauncher {
             return String.Join(" · ",reasons);
         }
         public static void SetMembership(Settings settings,Library library,string gameId,string listId,bool included) {
+            if(EmulatorLibrary.IsAutomaticList(settings,listId)) throw new ArgumentException("Manage automatic emulator list games under Emulators.");
             if(!library.Games.Any(game => game.Id==gameId)) throw new ArgumentException("This game is no longer available.");
             List<string> savedAdditions;
             if(!included && settings.ListGameAdditions!=null && settings.ListGameAdditions.TryGetValue(listId,out savedAdditions)) savedAdditions.RemoveAll(id => id==gameId);
@@ -142,6 +143,41 @@ namespace PadLauncher {
             }
             throw new ArgumentException("This list follows its launcher or source and cannot be edited here.");
         }
+        public static bool IsEmulatorOnlyList(Settings settings,Library library,string listId) {
+            var options=CombinedCollections.Options(library,settings);
+            var known=new HashSet<string>(library.Games.Where(game => game.Source=="emulator").Select(game => game.Id).Concat((settings.Emulators ?? new List<EmulatorConfig>()).SelectMany(config => config.Games ?? new List<EmulatorGame>()).Select(game => game.Id)));
+            return IsEmulatorOnlyList(settings,options,known,listId,new HashSet<string>());
+        }
+        static bool IsEmulatorOnlyList(Settings settings,List<Collection> options,HashSet<string> known,string id,HashSet<string> visiting) {
+            if(String.IsNullOrEmpty(id) || !visiting.Add(id)) return false;
+            if(id.StartsWith("source:emulator:",StringComparison.Ordinal)) return true;
+            var list=options.FirstOrDefault(item => item.Id==id); if(list==null) return false;
+            var games=list.Games ?? new List<string>();
+            if(games.Count>0) return games.All(game => known.Contains(game) || (game ?? "").StartsWith("emulator:",StringComparison.Ordinal));
+            if((settings.EmulatorImports ?? new List<EmulatorImportDefinition>()).Any(import => import.ListId==id && !String.IsNullOrEmpty(import.EmulatorId))) return true;
+            var combined=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(item => item.Id==id);
+            return combined!=null && combined.Sources!=null && combined.Sources.Count>0 && combined.Sources.All(source => IsEmulatorOnlyList(settings,options,known,source,new HashSet<string>(visiting)));
+        }
+        public static string Merge(Settings settings,Library library,string name,IEnumerable<string> listIds,bool keepLists=true) {
+            var ids=new HashSet<string>(listIds ?? Enumerable.Empty<string>());
+            if(ids.Count<2) throw new ArgumentException("Select at least two lists to merge.");
+            var sources=CombinedCollections.Options(library,settings).Where(list => ids.Contains(list.Id)).ToList();
+            if(sources.Count!=ids.Count) throw new ArgumentException("One of the selected lists is no longer available.");
+            var registered=new HashSet<string>(library.Games.Select(game => game.Id));
+            var deletable=new HashSet<string>((settings.CustomLists ?? new List<CustomList>()).Select(list => list.Id).Concat((settings.CombinedCollections ?? new List<CombinedCollection>()).Select(list => list.Id)));
+            string result=Save(settings,library,null,name,sources.SelectMany(list => list.Games ?? new List<string>()).Where(registered.Contains).Distinct());
+            if(!keepLists) foreach(string id in ids.Where(deletable.Contains)) Delete(settings,id);
+            return result;
+        }
+        public static string Merge(Settings settings,Library library,string name,IEnumerable<string> listIds,IEnumerable<string> deleteListIds) {
+            var sources=new HashSet<string>(listIds ?? Enumerable.Empty<string>());
+            var deleting=new HashSet<string>(deleteListIds ?? Enumerable.Empty<string>());
+            var deletable=new HashSet<string>((settings.CustomLists ?? new List<CustomList>()).Select(list => list.Id).Concat((settings.CombinedCollections ?? new List<CombinedCollection>()).Select(list => list.Id)));
+            if(deleting.Any(id => !sources.Contains(id) || !deletable.Contains(id))) throw new ArgumentException("Only selected user-created source lists can be deleted.");
+            string result=Merge(settings,library,name,sources,true);
+            foreach(string id in deleting) Delete(settings,id);
+            return result;
+        }
         public static string Save(Settings settings,Library library,string id,string name,IEnumerable<string> games) {
             name=(name ?? "").Trim();
             if(name.Length==0 || name.Length>80) throw new ArgumentException("Enter a list name of 1–80 characters.");
@@ -158,7 +194,7 @@ namespace PadLauncher {
                 settings.ListGameAdditions[id]=chosen.Where(game => !customIds.Contains(game)).ToList();
                 return id;
             }
-            if(chosen.Count==0) throw new ArgumentException("Select at least one game.");
+            if(chosen.Count==0 && id==null) throw new ArgumentException("Select at least one game.");
             var combined=(settings.CombinedCollections ?? new List<CombinedCollection>()).FirstOrDefault(list => list.Id==id);
             if(combined!=null) {
                 var options=CombinedCollections.Options(library,settings);
@@ -218,6 +254,7 @@ namespace PadLauncher {
                 if(config.Games!=null) config.Games.RemoveAll(game => ids.Contains(game.Id));
             }
             foreach(var list in settings.CustomLists ?? new List<CustomList>()) if(list.Games!=null) list.Games.RemoveAll(ids.Contains);
+            foreach(var list in settings.RetroArchPlaylistLists ?? new List<CustomList>()) if(list.Games!=null) list.Games.RemoveAll(ids.Contains);
             foreach(var list in settings.CombinedCollections ?? new List<CombinedCollection>()) {
                 if(list.AddedGames!=null) list.AddedGames.RemoveAll(ids.Contains);
                 if(list.ExcludedGames!=null) list.ExcludedGames.RemoveAll(ids.Contains);
@@ -238,6 +275,7 @@ namespace PadLauncher {
             return ids.ToList();
         }
         public static void Delete(Settings settings,string id) {
+            if(EmulatorLibrary.IsAutomaticList(settings,id)) throw new ArgumentException("Automatic emulator lists can be hidden, not deleted.");
             if(settings.ListLayouts!=null) settings.ListLayouts.Remove(id);
             if(settings.ListGameAdditions!=null) settings.ListGameAdditions.Remove(id);
             if(settings.ListArtworkSources!=null) settings.ListArtworkSources.Remove(id);
@@ -289,6 +327,11 @@ namespace PadLauncher {
                 string id="source:"+source[0]; if(options.Any(c => c.Id==id)) continue;
                 string provider=source[0];
                 options.Add(new Collection {Id=id,Name=source[1],Source=provider,Games=library.Games.Where(g => provider=="steam" ? String.IsNullOrEmpty(g.Source) || g.Source=="steam" : g.Source==provider).Select(g => g.Id).ToList()});
+            }
+            var registeredRetro=new HashSet<string>((EmulatorLibrary.Config(settings,"retroarch")==null ? new List<EmulatorGame>() : EmulatorLibrary.Config(settings,"retroarch").Games ?? new List<EmulatorGame>()).Select(game => game.Id));
+            foreach(var playlist in settings.RetroArchPlaylistLists ?? new List<CustomList>()) {
+                options.RemoveAll(list => list.Id==playlist.Id);
+                options.Add(new Collection {Id=playlist.Id,Name=playlist.Name,Source="emulator",Games=(playlist.Games ?? new List<string>()).Where(registeredRetro.Contains).Distinct().ToList()});
             }
             var customSource=options.FirstOrDefault(list => list.Id=="source:custom");
             if(customSource!=null) customSource.Games=CustomGameLibrary.CustomListGameIds(library,settings);
@@ -365,6 +408,7 @@ namespace PadLauncher {
         public bool RememberControlLayoutChanges {get;set;}
         public Dictionary<string,string> PreviousCarouselLayouts {get;set;}
         public Dictionary<string,ListLayout> ListLayouts {get;set;}
+        public int ArtworkPreferenceVersion {get;set;}
         public Dictionary<string,string> EmulatorArtworkSources {get;set;}
         public Dictionary<string,string> ListArtworkSources {get;set;}
         public bool? RetroArchPreferLibretro {get;set;}
@@ -386,6 +430,7 @@ namespace PadLauncher {
         public List<CustomGame> CustomGames {get;set;}
         public List<CombinedCollection> CombinedCollections {get;set;}
         public List<CustomList> CustomLists {get;set;}
+        public List<CustomList> RetroArchPlaylistLists {get;set;}
         public List<EmulatorConfig> Emulators {get;set;}
         public List<EmulatorImportDefinition> EmulatorImports {get;set;}
         public string ButtonPrompts { get; set; }

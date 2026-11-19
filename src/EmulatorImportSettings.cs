@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -11,6 +11,18 @@ using System.Windows.Media;
 
 namespace PadLauncher {
     public partial class Launcher {
+        static string AutomaticEmulatorDestinationLabel(EmulatorPreset preset) {
+            string console=preset.System;
+            switch(preset.Id) {
+                case "duckstation": console="PS1"; break;
+                case "pcsx2": console="PS2"; break;
+                case "rpcs3": console="PS3"; break;
+                case "shadps4": console="PS4"; break;
+                case "ppsspp": console="PSP"; break;
+                case "vita3k": console="PS Vita"; break;
+            }
+            return preset.Name+" · "+console+" (automatic list)";
+        }
         FrameworkElement RetroArchSourceRow(EmulatorImportSource source,CheckBox box,string coreStatus,List<string> installed,Action changed,int index) {
             var row=new StackPanel(); row.Children.Add(box);
             bool unresolved=coreStatus!=null && (coreStatus.Contains("will not be imported") || coreStatus.Contains("choose a core"));
@@ -56,9 +68,10 @@ namespace PadLauncher {
             var root=new DockPanel {Margin=new Thickness(24),Background=owner.Background}; dialog.Content=root;
             var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
             var title=Label("Import "+preset.Name+" library",23,white); title.Margin=new Thickness(0,0,0,12); header.Children.Add(title);
-            var definitions=(settings.EmulatorImports ?? new List<EmulatorImportDefinition>()).Where(d => d.EmulatorId==preset.Id && (settings.CustomLists ?? new List<CustomList>()).Any(l => l.Id==d.ListId)).ToList();
+            var importLists=(settings.CustomLists ?? new List<CustomList>()).Concat(preset.Id=="retroarch" ? settings.RetroArchPlaylistLists ?? new List<CustomList>() : new List<CustomList>()).ToList();
+            var definitions=(settings.EmulatorImports ?? new List<EmulatorImportDefinition>()).Where(d => d.EmulatorId==preset.Id && importLists.Any(l => l.Id==d.ListId)).ToList();
             var savedOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","New import")};
-            foreach(var definition in definitions) savedOptions.Add(new KeyValuePair<string,string>(definition.Id,settings.CustomLists.First(l => l.Id==definition.ListId).Name+(String.IsNullOrEmpty(definition.SourceLabel) ? "" : " · "+definition.SourceLabel)));
+            foreach(var definition in definitions) savedOptions.Add(new KeyValuePair<string,string>(definition.Id,importLists.First(l => l.Id==definition.ListId).Name+(String.IsNullOrEmpty(definition.SourceLabel) ? "" : " · "+definition.SourceLabel)));
             var savedPicker=new SettingsComboBox {Name="SavedEmulatorImport",ItemsSource=savedOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,12)};
             if(definitions.Count>0) {header.Children.Add(Label("Update a saved import",12,mint)); header.Children.Add(savedPicker);}
             var locationCaption=Label("Emulator configuration or data location",12,mint); locationCaption.Margin=new Thickness(0,0,0,6); header.Children.Add(locationCaption);
@@ -82,12 +95,12 @@ namespace PadLauncher {
 
             var footer=new StackPanel {Margin=new Thickness(0,12,0,0)}; DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
             var destinations=new List<KeyValuePair<string,string>> {
-                new KeyValuePair<string,string>("source:emulator:"+preset.Id,preset.Name+" (automatic list)"),
+                new KeyValuePair<string,string>("source:emulator:"+preset.Id,AutomaticEmulatorDestinationLabel(preset)),
                 new KeyValuePair<string,string>("","Create a new list")
             };
-            foreach(var list in settings.CustomLists ?? new List<CustomList>()) destinations.Add(new KeyValuePair<string,string>(list.Id,list.Name));
-            if(preset.Id=="retroarch") destinations.Insert(1,new KeyValuePair<string,string>("per-playlist","One list per playlist"));
-            var destination=new SettingsComboBox {Name="EmulatorImportDestination",ItemsSource=destinations,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=preset.Id=="retroarch" ? 1 : 0,Padding=new Thickness(8)};
+            foreach(var list in importLists) destinations.Add(new KeyValuePair<string,string>(list.Id,list.Name));
+            if(preset.Id=="retroarch") destinations.Insert(1,new KeyValuePair<string,string>("per-playlist","One automatic list per playlist"));
+            var destination=new SettingsComboBox {Name="EmulatorImportDestination",ItemsSource=destinations,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=preset.Id=="retroarch" ? 1 : 0,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
             footer.Children.Add(Label("Destination list",12,mint)); footer.Children.Add(destination);
             var listCaption=Label("New list name",12,mint); listCaption.Margin=new Thickness(0,8,0,0); footer.Children.Add(listCaption);
             var listName=new TextBox {Name="EmulatorImportListName",Text=preset.Name+" games",MaxLength=80,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)}; footer.Children.Add(listName);
@@ -118,10 +131,10 @@ namespace PadLauncher {
             var lifetime=new CancellationTokenSource(); bool closed=false,busy=false;
             dialog.Closed+=(s,e) => {closed=true; lifetime.Cancel(); if(!busy) lifetime.Dispose();};
             Func<EmulatorImportDefinition> saved=() => definitions.FirstOrDefault(d => d.Id==(string)savedPicker.SelectedValue);
-            if(definitions.Count>0) {
+            if(definitions.Any(definition => !EmulatorLibrary.IsAutomaticList(settings,definition.ListId))) {
                 var deleteList=new Button {Content="Delete imported list…",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,12),Padding=new Thickness(12,7,12,7),IsEnabled=false};
                 header.Children.Add(deleteList);
-                savedPicker.SelectionChanged+=(sender,args) => deleteList.IsEnabled=saved()!=null;
+                savedPicker.SelectionChanged+=(sender,args) => deleteList.IsEnabled=saved()!=null && !EmulatorLibrary.IsAutomaticList(settings,saved().ListId);
                 deleteList.Click+=(sender,args) => {
                     var definition=saved();
                     if(definition==null) return;
@@ -394,13 +407,13 @@ namespace PadLauncher {
                 browseFolder.Click+=(s,e) => {using(var folder=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the emulator's data folder",SelectedPath=Directory.Exists(entry.location.Text) ? entry.location.Text : ""}) {if(folder.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) {entry.location.Text=folder.SelectedPath; load.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}}};
                 load.Click+=(s,e) => {loadEntry(entry);};
                 entry.sourceRows=new StackPanel {Margin=new Thickness(8,6,0,0)}; entry.panel.Children.Add(entry.sourceRows);
-                var destinationCaption=Label("Destination list",12,mint); destinationCaption.Margin=new Thickness(0,10,0,6); entry.panel.Children.Add(destinationCaption);
+                var destinationCaption=Label("Destination list",12,mint); destinationCaption.Margin=new Thickness(0,10,0,8); entry.panel.Children.Add(destinationCaption);
                 var destinations=new List<KeyValuePair<string,string>> {
-                    new KeyValuePair<string,string>("source:emulator:"+preset.Id,preset.Name+" (automatic list)"),
+                    new KeyValuePair<string,string>("source:emulator:"+preset.Id,AutomaticEmulatorDestinationLabel(preset)),
                     new KeyValuePair<string,string>("","Create a new list")
                 };
                 foreach(var list in settings.CustomLists ?? new List<CustomList>()) destinations.Add(new KeyValuePair<string,string>(list.Id,list.Name));
-                if(preset.Id=="retroarch") destinations.Insert(1,new KeyValuePair<string,string>("per-playlist","One list per playlist"));
+                if(preset.Id=="retroarch") destinations.Insert(1,new KeyValuePair<string,string>("per-playlist","One automatic list per playlist"));
                 entry.destination=new SettingsComboBox {Name="ImportAllDestination_"+preset.Id,ItemsSource=destinations,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=preset.Id=="retroarch" ? 1 : 0,Padding=new Thickness(8)}; entry.panel.Children.Add(entry.destination);
                 entry.listName=new TextBox {Name="ImportAllListName_"+preset.Id,Text=UniqueImportName(settings,preset.Name+" games"),MaxLength=80,Padding=new Thickness(8),Margin=new Thickness(8,0,0,0),Visibility=Visibility.Collapsed}; entry.panel.Children.Add(entry.listName);
                 entry.statusText=Label("",12,muted); entry.statusText.TextWrapping=TextWrapping.Wrap; entry.statusText.Margin=new Thickness(0,6,0,0); entry.panel.Children.Add(entry.statusText);

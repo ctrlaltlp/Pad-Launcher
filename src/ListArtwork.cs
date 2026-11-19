@@ -9,7 +9,7 @@ using System.Linq;
 namespace PadLauncher {
     public static partial class ArtworkService {
         public static List<KeyValuePair<string,string>> ArtworkSourceChoices(bool automatic=true) {
-            var choices=new List<KeyValuePair<string,string>>(); if(automatic) choices.Add(new KeyValuePair<string,string>("auto","Use emulator defaults"));
+            var choices=new List<KeyValuePair<string,string>>(); if(automatic) choices.Add(new KeyValuePair<string,string>("auto","Automatic"));
             choices.Add(new KeyValuePair<string,string>("libretro","Prefer Libretro with SteamGridDB as fallback"));
             choices.Add(new KeyValuePair<string,string>("sgdb","Prefer SteamGridDB with Libretro fallback"));
             choices.Add(new KeyValuePair<string,string>("sgdb-only","Only SteamGridDB"));
@@ -18,15 +18,15 @@ namespace PadLauncher {
         public static bool ValidArtworkSource(string source) {return source=="sgdb" || source=="libretro" || source=="sgdb-only" || source=="libretro-only";}
         public static string PrimaryArtworkSource(string source) {return (source ?? "auto").Replace("-only","");}
         public static string[] ArtworkProviders(string source) {string primary=PrimaryArtworkSource(source); return !ValidArtworkSource(source) ? new string[0] : source.EndsWith("-only") ? new[]{primary} : new[]{primary,primary=="sgdb" ? "libretro" : "sgdb"};}
-        public static string DefaultEmulatorArtworkSource(string id) {return new[]{"duckstation","mgba","melonds"}.Contains(id) ? "libretro" : "sgdb";}
+        public static string DefaultEmulatorArtworkSource(string id) {return new[]{"duckstation","pcsx2","xemu","mgba","melonds"}.Contains(id) ? "libretro" : "sgdb";}
         public static string EmulatorDefaultSource(Settings settings,string id) {
             string source;
             if(settings.EmulatorArtworkSources!=null && settings.EmulatorArtworkSources.TryGetValue(id ?? "",out source) && ValidArtworkSource(source)) return source;
             if(id=="retroarch" && settings.RetroArchPreferLibretro==true) return "libretro";
             return DefaultEmulatorArtworkSource(id);
         }
-        public static string ArtworkSourceName(string source) {return ArtworkSourceChoices().Where(choice => choice.Key==source).Select(choice => choice.Value).FirstOrDefault() ?? "Use emulator defaults";}
-        public static bool PreferLibretroForRetroArch(Settings settings) {return ValidArtworkSource(settings.RetroArchListArtworkSource) ? PrimaryArtworkSource(settings.RetroArchListArtworkSource)=="libretro" : settings.RetroArchPreferLibretro==true;}
+        public static string ArtworkSourceName(string source) {return ArtworkSourceChoices().Where(choice => choice.Key==source).Select(choice => choice.Value).FirstOrDefault() ?? "Automatic";}
+        public static bool PreferLibretroForRetroArch(Settings settings) {return PrimaryArtworkSource(EmulatorDefaultSource(settings,"retroarch"))=="libretro";}
         public static void ClearDownloadedArtwork(IEnumerable<Game> games) {
             string root=Path.GetFullPath(Path.Combine(Storage.Root,"artwork"))+Path.DirectorySeparatorChar;
             lock(CacheWriteGate) foreach(var game in games) {
@@ -47,20 +47,17 @@ namespace PadLauncher {
             string source;
             return listId!=null && settings.ListArtworkSources!=null && settings.ListArtworkSources.TryGetValue(listId,out source) && ValidArtworkSource(source) ? source : "auto";
         }
-        public static string ListDefaultSource(Settings settings,string listId) {
-            string source=ListSource(settings,listId);
-            if(source=="auto" && ValidArtworkSource(settings.RetroArchListArtworkSource) && RetroArchListDefaults.Applies(settings,listId)) source=settings.RetroArchListArtworkSource;
-            return source;
-        }
+        public static string ListDefaultSource(Settings settings,string listId) {return ListSource(settings,listId);}
         public static string GameListSource(Settings settings,Game game,string listId,string resolvedListSource=null) {
             string source=resolvedListSource ?? ListDefaultSource(settings,listId);
-            if(source=="auto" && game.Source=="emulator") {
-                string emulatorSource;
-                if(settings.EmulatorArtworkSources!=null && settings.EmulatorArtworkSources.TryGetValue(game.EmulatorId ?? "",out emulatorSource) && ValidArtworkSource(emulatorSource)) source=emulatorSource;
-                else if(game.EmulatorId=="retroarch" && ValidArtworkSource(settings.RetroArchListArtworkSource)) source=settings.RetroArchListArtworkSource;
-                else source=EmulatorDefaultSource(settings,game.EmulatorId);
-            }
-            return source;
+            return source=="auto" && game.Source=="emulator" ? EmulatorDefaultSource(settings,game.EmulatorId) : source;
+        }
+        public static void UpgradeArtworkPreferences(Settings settings) {
+            if(settings.ArtworkPreferenceVersion>=1) return;
+            if(settings.EmulatorArtworkSources==null) settings.EmulatorArtworkSources=new Dictionary<string,string>();
+            string current;
+            if((!settings.EmulatorArtworkSources.TryGetValue("retroarch",out current) || !ValidArtworkSource(current)) && ValidArtworkSource(settings.RetroArchListArtworkSource)) settings.EmulatorArtworkSources["retroarch"]=settings.RetroArchListArtworkSource;
+            settings.ArtworkPreferenceVersion=1;
         }
         public static bool HasManualArtwork(Game game,Settings settings) {
             if((game.ArtworkProvider=="chosen" || game.ArtworkProvider=="libretro-chosen") && File.Exists(game.Art)) return true;
@@ -74,7 +71,7 @@ namespace PadLauncher {
             if(source=="libretro") return LibretroArtwork.CachePath(game);
             using(var hash=SHA256.Create()) {
                 string name=BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(game.Id+"|"+game.Name+"|"+game.Source))).Replace("-","");
-                return Path.Combine(Storage.Root,"artwork","providers","sgdb",name+".img");
+                return TrackCachedArtwork(game,Path.Combine(Storage.Root,"artwork","providers","sgdb",name+".img"));
             }
         }
         public static Game ForList(Game game,Settings settings,string listId,string resolvedListSource=null) {
@@ -115,7 +112,7 @@ namespace PadLauncher {
                             found=Download(FindGrid(game,key,token),path,token);
                             if(!found) {Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllText(retry,"");}}
                         }
-                        if(found) {ready(game.Id); break;}
+                        if(found) {TrackCachedArtwork(game,path); ready(game.Id); break;}
                     } catch(Exception) {
                         token.ThrowIfCancellationRequested();
                         if(!warned) {status("Some artwork could not be loaded. Trying the permitted fallback where available."); warned=true;}

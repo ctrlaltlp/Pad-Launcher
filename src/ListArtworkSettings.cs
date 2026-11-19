@@ -17,8 +17,7 @@ namespace PadLauncher {
         readonly Dictionary<string,Action> artworkRefreshViews=new Dictionary<string,Action>();
         string AutomaticArtworkDescription(string listId,bool retroArchDefaults=false) {
             if(retroArchDefaults) return "Currently using: "+ArtworkService.ArtworkSourceName(ArtworkService.EmulatorDefaultSource(settings,"retroarch"))+" (RetroArch emulator default).";
-            if(ArtworkService.ValidArtworkSource(settings.RetroArchListArtworkSource) && RetroArchListDefaults.Applies(settings,listId))
-                return "Currently using: "+ArtworkService.ArtworkSourceName(settings.RetroArchListArtworkSource)+" (RetroArch lists settings).";
+
             var list=CollectionOptions().FirstOrDefault(item => item.Id==listId);
             var ids=new HashSet<string>(list==null ? new List<string>() : list.Games ?? new List<string>());
             var games=library.Games.Where(game => listId=="all" || ids.Contains(game.Id)).ToList();
