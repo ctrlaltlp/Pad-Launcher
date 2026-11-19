@@ -88,8 +88,6 @@ Open **Settings → Lists → List editor** to manage your lists.
 - **Duplicate** copies a list’s current games into a new list you can name and edit independently.
 - **Delete** removes a custom or combined list. Choose **Delete list and unregister its games** to also remove those games from Pad Launcher. Game files stay on disk.
 
-Automatic emulator lists, including imported RetroArch playlists, can be renamed, duplicated, hidden, and configured per list. Manage their games under **Emulators**.
-
 ## Credits
 
 Controller artwork from **PS5 Button Icons and Controls**, **Xbox Series Button Icons and Controls**, and **Switch Button Icons and Controls** by [Zacksly](https://zacksly.itch.io), licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Pad Launcher crops and scales these images and adds interactive control labels and guide lines.
