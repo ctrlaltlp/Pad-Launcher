@@ -33,7 +33,7 @@ Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**.
 
 Use **Controls → Show/Change controls** to remap controller buttons and keyboard shortcuts independently for the overlay, search keyboard and search results. Conflicting assignments are flagged before saving; **Restore defaults** is available. The table below shows the defaults.
 
-Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original Switch Pro Controller through SDL. Switch Pro USB/Bluetooth support is implemented but still awaiting physical-controller testing; Joy-Cons and Switch 2 controllers are not enabled. See [controller support](docs/controller-support.md) for details.
+Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original Switch Pro Controller through SDL. Switch Pro USB/Bluetooth support is implemented but still awaiting physical-controller testing; Joy-Cons and Switch 2 controllers are not enabled.
 
 | Action | Controller | Keyboard / mouse |
 | --- | --- | --- |
