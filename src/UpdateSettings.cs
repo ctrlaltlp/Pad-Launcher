@@ -30,7 +30,7 @@ namespace PadLauncher {
             releaseNotesButton.Click+=(s,e) => ShowReleaseNotes();
             checkUpdateButton.Click+=async (s,e) => await CheckForUpdates(false);
             installUpdateButton.Click+=async (s,e) => await InstallAvailableUpdate();
-            actions.Children.Add(checkUpdateButton); actions.Children.Add(installUpdateButton); actions.Children.Add(releaseNotesButton); panel.Children.Add(actions);
+            actions.Children.Add(checkUpdateButton); actions.Children.Add(releaseNotesButton); actions.Children.Add(installUpdateButton); panel.Children.Add(actions);
             updateStatus=Label(lastUpdateStatus,12,muted); updateStatus.TextWrapping=TextWrapping.Wrap; panel.Children.Add(updateStatus);
             UpdateControls(lastUpdateStatus);
         }
