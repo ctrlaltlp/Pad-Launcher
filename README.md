@@ -79,12 +79,14 @@ Preconfigured lists:
 - **Favourites:** Your hand-picked games. Press R3 / right stick click or F by default to add or remove the selected game.
 - **Recently played:** Games ordered by their latest launch in Pad Launcher or available launcher play history, newest first.
 
-User lists:
-Open **Settings → Lists → List editor** to create or edit a list by picking individual games. In **Edit**, turn on **Show added games** to see current members. **Uncheck added** clears those selections in the draft, and **Restore added** puts them back before you save.
+Open **Settings → Lists → List editor** to manage your lists.
 
-- **Combine** links source lists and updates as their games change.
-- **Merge** makes a snapshot and lets you choose which source lists to keep.
-- **Duplicate** makes an independent copy. **Delete** lets you remove a custom list while keeping its games registered, or unregister those games too.
+- **Create** starts a list from individual games. Filter by name or use **Select all** to pick games in bulk.
+- **Edit** renames a list or changes its games. **Show added games** filters to current members. **Uncheck added** clears their selections in the draft, and **Restore added** puts them back before you save.
+- **Combine** creates or edits a live list that updates as its source lists change.
+- **Merge** makes a snapshot of the selected lists. Keep the sources, delete all eligible sources, or choose which eligible sources to delete.
+- **Duplicate** copies a list’s current games into a new list you can name and edit independently.
+- **Delete** removes a custom or combined list. Choose **Delete list and unregister its games** to also remove those games from Pad Launcher. Game files stay on disk.
 
 Automatic emulator lists, including imported RetroArch playlists, can be renamed, duplicated, hidden, and configured per list. Manage their games under **Emulators**.
 
