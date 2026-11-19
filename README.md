@@ -6,16 +6,7 @@ A transparent, controller-friendly Windows game launcher with angled, rectangula
 
 Launchers supported: **Steam**, **GOG Galaxy**, **Epic Games Store**, **EA App**, **Ubisoft Connect**, **Battle.net**, **Rockstar Games Launcher**, **Xbox app** (installed Xbox / Game Pass titles), and custom games. Optional **SteamGridDB** artwork uses your API key and is cached locally.
 
-Choose **SteamGridDB** or **Libretro** artwork per emulator during setup and per list in Artwork settings, with fallback or single-source choices. Libretro needs no account or API key. [Details](docs/libretro-artwork.md).
-
-## Emulators
-
-Supports **DuckStation, PCSX2, RPCS3, xemu, Xenia, Dolphin, Eden, melonDS, Vita3K, RetroArch, PPSSPP, mGBA, Cemu, Azahar and shadPS4**. Configure emulator paths, import libraries (including RetroArch playlists), scan ROM folders or add games manually. Core selection and launch arguments are configurable; imported games can be organised into lists.
-
-There are 2 ways to import emulator games to the app:
-- Import library from emulator: Reads the emulator’s configured game folders, playlists, registered games or installed titles, depending on the emulator. Folder-based libraries may involve scanning those folders.
-- Scan ROM folders: Separately scans a folder you choose in Pad Launcher, including its subfolders. It does not require a library configured inside the emulator.
-Both let you review detected games, rename new entries and choose a destination list before adding them. Repeating an import or scan reuses existing game entries without creating duplicates.
+Choose **SteamGridDB** or **Libretro** artwork per emulator during setup and per list in Artwork settings, with fallback or single-source choices. Libretro needs no account or API key.
 
 ## Usage
 
@@ -27,11 +18,20 @@ With a fresh data folder, an optional setup wizard helps configure launchers, em
 
 Launchers are detected automatically. If detection fails, set the installation folder in **Settings → Launchers**. Use **Emulators → Settings → Detect installed emulators** to review emulator paths found through Windows registrations, Start-menu shortcuts and standard installation folders, or browse manually. Emulator games can then be imported from libraries, scanned from ROM folders or added manually.
 
+## Emulators
+
+Supports **DuckStation, PCSX2, RPCS3, xemu, Xenia, Dolphin, Eden, melonDS, Vita3K, RetroArch, PPSSPP, mGBA, Cemu, Azahar and shadPS4**. Configure emulator paths, import libraries (including RetroArch playlists), scan ROM folders or add games manually. Core selection and launch arguments are configurable; imported games can be organised into lists.
+
+There are 2 ways to import emulator games to the app:
+- Import library from emulator: Reads the emulator’s configured game folders, playlists, registered games or installed titles, depending on the emulator. Folder-based libraries may involve scanning those folders.
+- Scan ROM folders: Separately scans a folder you choose in Pad Launcher, including its subfolders. It does not require a library configured inside the emulator.
+Both let you review detected games, rename new entries and choose a destination list before adding them. Repeating an import or scan reuses existing game entries without creating duplicates.
+
 ## Controls
 
 Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**. Options / Start (or F1) briefly shows control hints and the game title.
 
-Use **Controls → Show/Change controls** to remap controller buttons and keyboard shortcuts independently for the overlay, search keyboard and search results. Conflicting assignments are flagged before saving; **Restore defaults** is available. The table below shows the defaults. [Remapping details](docs/control-bindings.md).
+Use **Controls → Show/Change controls** to remap controller buttons and keyboard shortcuts independently for the overlay, search keyboard and search results. Conflicting assignments are flagged before saving; **Restore defaults** is available. The table below shows the defaults.
 
 Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original Switch Pro Controller through SDL. Switch Pro USB/Bluetooth support is implemented but still awaiting physical-controller testing; Joy-Cons and Switch 2 controllers are not enabled. See [controller support](docs/controller-support.md) for details.
 
