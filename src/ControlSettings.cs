@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Windows;
@@ -100,7 +100,7 @@ namespace PadLauncher {
                     next.ControlButtonAlternates=draft.ControlButtonAlternates==null ? null : draft.ControlButtonAlternates.ToDictionary(pair => pair.Key,pair => new List<string>(pair.Value));
                     next.ControlBindingVersion=8; next.JumpListButton=ControlBindings.HasJump(next) ? "left" : "off";
                     Storage.Write("settings.json",next); settings=next; RefreshSearchControlHints();
-                    exitButton.Reset(); navigation.Reset(); previousButtons=0; searchButtons=UInt16.MaxValue; bindingLeftTriggerDown=bindingRightTriggerDown=false; testLayoutTriggerDown=false; suppressSearchRelease=true;
+                    exitButton.Reset(); navigation.Reset(); previousButtons=0; searchButtons=UInt16.MaxValue; bindingLeftTriggerDown=bindingRightTriggerDown=false; layoutToggleDown=false; suppressSearchRelease=true;
                     dialog.Close(); rebuild();
                 } catch(Exception error) {status.Text="Could not save controls: "+error.Message;}
             };

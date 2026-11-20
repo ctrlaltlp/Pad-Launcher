@@ -403,6 +403,20 @@ namespace PadLauncher {
             var after=options.SkipWhile(list => list.Source!="emulator").Where(list => list.Source!="emulator" && !customIds.Contains(list.Id));
             return before.Concat(custom).Concat(ordered).Concat(after).ToList();
         }
+        internal static string DefaultAutomaticListName(EmulatorPreset preset) {
+            string console=preset.System;
+            switch(preset.Id) {
+                case "melonds": console="DS / DSi"; break;
+                case "eden": console="Switch"; break;
+                case "duckstation": console="PS1"; break;
+                case "pcsx2": console="PS2"; break;
+                case "rpcs3": console="PS3"; break;
+                case "shadps4": console="PS4"; break;
+                case "ppsspp": console="PSP"; break;
+                case "vita3k": console="PS Vita"; break;
+            }
+            return console+" · "+preset.Name;
+        }
         public static bool IsAutomaticList(Settings settings,string id) {
             return (id ?? "").StartsWith("source:emulator:",StringComparison.Ordinal) || (settings.RetroArchPlaylistLists ?? new List<CustomList>()).Any(list => list.Id==id);
         }
@@ -415,7 +429,7 @@ namespace PadLauncher {
                     if(entry==null || String.IsNullOrEmpty(entry.Id) || !existingIds.Add(entry.Id)) continue;
                     library.Games.Add(new Game {Id=entry.Id,Name=entry.Name,Source="emulator",EmulatorId=preset.Id,LaunchId=entry.Path,Arguments=entry.Arguments,ArtworkSystem=entry.ArtworkSystem,ArtworkTitle=entry.ArtworkTitle});
                 }
-                library.Collections.Add(new Collection {Id="source:emulator:"+preset.Id,Source="emulator",Name=String.IsNullOrWhiteSpace(config.ListName) ? preset.Name : config.ListName,Games=library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==preset.Id).Select(g => g.Id).ToList()});
+                library.Collections.Add(new Collection {Id="source:emulator:"+preset.Id,Source="emulator",Name=String.IsNullOrWhiteSpace(config.ListName) ? DefaultAutomaticListName(preset) : config.ListName,Games=library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==preset.Id).Select(g => g.Id).ToList()});
             }
             var registered=new HashSet<string>(library.Games.Where(game => game.Source=="emulator" && game.EmulatorId=="retroarch").Select(game => game.Id));
             foreach(var playlist in settings.RetroArchPlaylistLists ?? new List<CustomList>()) {

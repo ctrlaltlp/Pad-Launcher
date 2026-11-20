@@ -9,9 +9,16 @@ namespace PadLauncher {
             string gamesHint=ControlBindings.Buttons(settings,"typing.finish").Length==0 ? "" : " · "+ControlBindings.Label(settings,"typing.finish")+": games";
             searchControlHints.Text=ControlBindings.Label(settings,"typing.type")+": type · "+ControlBindings.Label(settings,"typing.space")+": space · "+ControlBindings.Label(settings,"typing.backspace")+": backspace · "+ControlBindings.Label(settings,"typing.cancel")+": exit"+gamesHint+" · "+ControlBindings.Label(settings,"typing.play")+": play";
         }
-        PadState RemapController(PadState raw,string context) {
+        void UpdateBindingTriggers(PadState raw) {
             if(raw.LT<80) bindingLeftTriggerDown=false; else if(raw.LT>=160) bindingLeftTriggerDown=true;
             if(raw.RT<80) bindingRightTriggerDown=false; else if(raw.RT>=160) bindingRightTriggerDown=true;
+        }
+        bool ArcBindingDown(PadState raw) {
+            UpdateBindingTriggers(raw);
+            return BindingActionDown(raw,"overlay.arc");
+        }
+        PadState RemapController(PadState raw,string context) {
+            UpdateBindingTriggers(raw);
             var mapped=raw; mapped.Buttons=0; mapped.LT=0; mapped.RT=0;
             foreach(var action in ControlBindings.InContext(context)) if(BindingActionDown(raw,action.FullId)) {
                 if(action.Id=="layout") mapped.RT=255; else mapped.Buttons|=(ushort)action.Mask;
@@ -38,7 +45,7 @@ namespace PadLauncher {
                     default: return false;
             }
         }
-        void ToggleTestLayoutFromKeyboard() {HandleTestLayoutTrigger(new PadState()); HandleTestLayoutTrigger(new PadState {RT=255}); HandleTestLayoutTrigger(new PadState());}
+        void ToggleLayoutFromKeyboard() {HandleLayoutToggle(new PadState()); HandleLayoutToggle(new PadState {RT=255}); HandleLayoutToggle(new PadState());}
         void OpenSettingsFromSearch() {if(GameSearchOpen) gameSearchWindow.Close(); ShowHelpWindow();}
         void ToggleSearchFavourite() {
             if(visible.Count<=selected) return;

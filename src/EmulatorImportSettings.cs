@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -12,16 +12,7 @@ using System.Windows.Media;
 namespace PadLauncher {
     public partial class Launcher {
         static string AutomaticEmulatorDestinationLabel(EmulatorPreset preset) {
-            string console=preset.System;
-            switch(preset.Id) {
-                case "duckstation": console="PS1"; break;
-                case "pcsx2": console="PS2"; break;
-                case "rpcs3": console="PS3"; break;
-                case "shadps4": console="PS4"; break;
-                case "ppsspp": console="PSP"; break;
-                case "vita3k": console="PS Vita"; break;
-            }
-            return preset.Name+" · "+console+" (automatic list)";
+            return EmulatorLibrary.DefaultAutomaticListName(preset)+" (automatic list)";
         }
         FrameworkElement RetroArchSourceRow(EmulatorImportSource source,CheckBox box,string coreStatus,List<string> installed,Action changed,int index) {
             var row=new StackPanel(); row.Children.Add(box);

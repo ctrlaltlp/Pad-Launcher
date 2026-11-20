@@ -29,6 +29,7 @@ namespace PadLauncher {
                 list.Add(new ControlAction {Context=context,Id="settings",Name="Open Settings",Button="none",Key="none",Mask=0x800});
             }
             Action<string,string,string,string,string,int> add=(context,id,name,button,key,mask) => list.Add(new ControlAction {Context=context,Id=id,Name=name,Button=button,Key=key,Mask=mask});
+            add("overlay","arc","Arc menu (hold)","rt","none",0);
             add("overlay","play","Launch selected game","south","Return",0x1000);
             add("overlay","dismiss","Dismiss overlay (tap)","east","Escape",0x2000);
             add("overlay","exit","Exit app (hold controller button 1 sec)","east","none",0x400);
@@ -58,6 +59,9 @@ namespace PadLauncher {
             var action=byId[id]; string value;
             var saved=keyboard ? settings.ControlKeys : settings.ControlButtons;
             if(saved!=null && saved.TryGetValue(id,out value) && (keyboard ? ValidKey(value) : Inputs.Contains(value))) return value;
+            // Older control profiles may already have assigned RT to something else.
+            if(!keyboard && id=="overlay.arc" && (saved!=null || settings.ControlButtonAlternates!=null) &&
+                InContext("overlay").Any(other => other.Id!="arc" && UsesButton(settings,other.FullId,"rt"))) return "none";
             return keyboard ? action.Key : action.Id=="jump" && settings.JumpListButton!="left" ? "none" : action.Button;
         }
         public static string ButtonLabel(Settings settings,string input) {

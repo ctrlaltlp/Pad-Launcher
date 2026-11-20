@@ -89,7 +89,7 @@ class RetroArchListDefaultsTests {
             var timer=System.Diagnostics.Stopwatch.StartNew();
             for(int cycle=0;cycle<20;cycle++) {
                 for(int step=0;step<10;step++) move.Invoke(launcher,new object[]{1});
-                change.Invoke(launcher,new object[]{1,false}); launcher.UpdateLayout();
+                change.Invoke(launcher,new object[]{1,false,true}); launcher.UpdateLayout();
             }
             timer.Stop(); CollectUi();
             Check(timer.ElapsedMilliseconds<30000,"Large-library navigation must complete without stalling the UI");

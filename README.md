@@ -29,6 +29,8 @@ There are 2 ways to import emulator games to the app:
 - Scan ROM folders: Separately scans a folder you choose in Pad Launcher, including its subfolders. It does not require a library configured inside the emulator.
 Both let you review detected games, rename new entries and choose a destination list before adding them. Repeating an import or scan reuses existing game entries without creating duplicates.
 
+Automatic emulator lists use **Console · Emulator** names, such as **PS2 · PCSX2**. New RetroArch playlist lists use names such as **SNES · RetroArch**.
+
 ## Controls
 
 Choose PlayStation, Xbox or Nintendo button labels in **Settings → Controls**. Options / Start (or F1) briefly shows control hints and the game title.
@@ -93,15 +95,13 @@ Open **Settings → Lists → List editor** to manage your lists.
 - **Duplicate** copies a list’s current games into a new list you can name and edit independently.
 - **Delete** removes a custom or combined list. Choose **Delete list and unregister its games** to also remove those games from Pad Launcher. Game files stay on disk.
 
-Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Hold **R2 / RT / ZR** on the overlay to open the **Arc menu**. Use D-pad Up/Down to step through items or the left stick to scroll faster. Under **Settings → Arc**, choose a screen side, use your overlay lists or eight custom slots for games, lists, and tags, and optionally activate the highlighted item on release.
+Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Hold the assigned **Arc menu** button (default **R2 / RT / ZR**) on the overlay. Use D-pad Up/Down to step through items or the left stick to scroll faster. Under **Settings → Arc**, choose a screen side, use your overlay lists or eight custom slots for games, lists, and tags, and optionally activate the highlighted item on release. Remap **Arc menu (hold)** under **Settings → Controls → Show/Change controls**. To open Arc while the overlay is hidden, enable **Open Arc from the tray with the assigned button** under **Settings → Arc**.
 
 ## Command-line shortcuts
 
-Pass these arguments to `PadLauncher.exe` from Controller Companion or another mapper:
+Pass this argument to `PadLauncher.exe` from Controller Companion or another mapper:
 
 - `--toggle-overlay` — Open the overlay, request focus if it is already open behind another window, or hide it if it already has focus.
-- `--toggle-arc` — Toggle the Arc menu with the overlay visible, without holding a trigger.
-- `--toggle-arc-only` — Toggle the Arc menu on its own. Selecting a list or tag shows it in the overlay; selecting a game launches it directly.
 
 ## Credits
 

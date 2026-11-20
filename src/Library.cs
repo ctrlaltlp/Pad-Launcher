@@ -408,15 +408,17 @@ namespace PadLauncher {
         string angledSizing;
         public string AngledSizing {get {return angledSizing;} set {angledSizing=value=="mixed" ? "fit" : value;}}
     }
-    public class RadialSlot {
+    public class ArcSlot {
         public string Kind {get;set;}
         public string Target {get;set;}
     }
     public class Settings {
+        // Keep these JSON property names so existing Arc preferences and slot assignments still load.
+        public bool OpenArcFromTrayWithTrigger {get;set;}
         public string QuickSelectSide {get;set;}
         public bool QuickSelectActivateOnRelease {get;set;}
         public string QuickSelectMode {get;set;}
-        public List<RadialSlot> RadialSlots {get;set;}
+        public List<ArcSlot> RadialSlots {get;set;}
         public bool SteamEnabled {get;set;}
         public bool IncludeSteamShortcuts {get;set;}
         public string SteamShortcutLaunchMode {get;set;}

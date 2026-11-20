@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -130,8 +130,8 @@ class EmulatorImportTests {
             var playlistSettings=new Settings {EnabledCollectionIds=new List<string>()}; var playlistLibrary=new Library();
             var playlistGames=batch.Games.Concat(oldFormat.Games).ToList();
             EmulatorImport.ImportPlaylists(playlistSettings,playlistLibrary,retro,retroCfg,new[]{snes,favorites},playlistGames,null);
-            Check(playlistSettings.RetroArchPlaylistLists.Count==2 && playlistSettings.RetroArchPlaylistLists.Any(list => list.Name=="SNES") && playlistSettings.RetroArchPlaylistLists.Any(list => list.Name.StartsWith("Favourites")) && EmulatorLibrary.Config(playlistSettings,"retroarch").Games.Count==1,"Per-playlist import creates named lists and shares games appearing in multiple playlists");
-            var namedPlaylist=playlistSettings.RetroArchPlaylistLists.First(list => list.Name=="SNES"); string namedId=namedPlaylist.Id;
+            Check(playlistSettings.RetroArchPlaylistLists.Count==2 && playlistSettings.RetroArchPlaylistLists.Any(list => list.Name=="SNES · RetroArch") && playlistSettings.RetroArchPlaylistLists.Any(list => list.Name.StartsWith("Favourites")) && EmulatorLibrary.Config(playlistSettings,"retroarch").Games.Count==1,"Per-playlist import creates named lists and shares games appearing in multiple playlists");
+            var namedPlaylist=playlistSettings.RetroArchPlaylistLists.First(list => list.Name=="SNES · RetroArch"); string namedId=namedPlaylist.Id;
             EmulatorLibrary.Apply(playlistLibrary,playlistSettings);
             Check(playlistLibrary.Collections.Any(list => list.Id==namedId && list.Source=="emulator") && !(playlistSettings.CustomLists ?? new List<CustomList>()).Any(),"Playlist lists are automatic emulator collections, not custom lists");
             bool blocked=false; try {CustomLists.Delete(playlistSettings,namedId);} catch(ArgumentException) {blocked=true;}

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -122,26 +122,26 @@ class ListTransitionTests {
                 savedSettings.CarouselLayout="rectangular";
                 savedSettings.GridColumns=4; savedSettings.GridRows=2;
                 var active=typeof(Launcher).GetProperty("ActiveLayout",binding);
-                persisted.HandleTestLayoutTrigger(new PadState {RT=255});
+                persisted.HandleLayoutToggle(new PadState {RT=255});
                 Check((string)active.GetValue(persisted,null)=="grid","R2 temporarily changes Rectangular to Grid");
                 Check((int)typeof(Launcher).GetProperty("GridColumns",binding).GetValue(persisted,null)==4 && (int)typeof(Launcher).GetProperty("GridRows",binding).GetValue(persisted,null)==2,"The layout shortcut uses configured grid dimensions");
-                persisted.HandleTestLayoutTrigger(new PadState {RT=255});
+                persisted.HandleLayoutToggle(new PadState {RT=255});
                 Check((string)active.GetValue(persisted,null)=="grid","Holding R2 does not repeatedly switch layouts");
-                persisted.HandleTestLayoutTrigger(new PadState()); persisted.HandleTestLayoutTrigger(new PadState {RT=255});
+                persisted.HandleLayoutToggle(new PadState()); persisted.HandleLayoutToggle(new PadState {RT=255});
                 Check((string)active.GetValue(persisted,null)=="rectangular" && savedSettings.CarouselLayout=="rectangular" && savedSettings.ListLayouts["first"].Layout=="grid","R2 restores the previous carousel without modifying saved global or per-list layouts");
-                persisted.HandleTestLayoutTrigger(new PadState());
+                persisted.HandleLayoutToggle(new PadState());
                 Check(!savedSettings.RememberControlLayoutChanges,"Control layout persistence defaults to disabled");
                 savedSettings.RememberControlLayoutChanges=true;
-                persisted.HandleTestLayoutTrigger(new PadState {RT=255});
+                persisted.HandleLayoutToggle(new PadState {RT=255});
                 Check(savedSettings.ListLayouts["recently-added"].Layout=="grid" && savedSettings.PreviousCarouselLayouts["recently-added"]=="rectangular","Enabled persistence saves the active list layout and previous carousel independently");
-                persisted.HandleTestLayoutTrigger(new PadState());
+                persisted.HandleLayoutToggle(new PadState());
                 Key(persisted,System.Windows.Input.Key.PageUp); persisted.ExitApp();
                 Check(Storage.Read<Settings>("settings.json").CollectionId=="first","Exiting flushes the final navigation selection");
                 var restarted=new Launcher(false,true);
                 try {
                     restarted.ShowOverlay(); Key(restarted,System.Windows.Input.Key.PageDown);
                     Check((string)active.GetValue(restarted,null)=="grid","Saved control layout survives app restart");
-                    restarted.HandleTestLayoutTrigger(new PadState {RT=255});
+                    restarted.HandleLayoutToggle(new PadState {RT=255});
                     Check((string)active.GetValue(restarted,null)=="rectangular","After restart the toggle restores the saved previous rectangular layout");
                 } finally {restarted.ExitApp();}
             } finally {persisted.ExitApp();}

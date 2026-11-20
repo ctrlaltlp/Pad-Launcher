@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -249,7 +249,7 @@ namespace PadLauncher {
                 case "keyboard": ResumeSearchKeyboard(); break;
                 case "favourite": ToggleSearchFavourite(); break;
                 case "jump": finishGameSearch(false); JumpToConfiguredList(); break;
-                case "layout": ToggleTestLayoutFromKeyboard(); break;
+                case "layout": ToggleLayoutFromKeyboard(); break;
                 case "monitor": CycleMonitor(); break;
                 case "settings": OpenSettingsFromSearch(); break;
             }
@@ -261,7 +261,7 @@ namespace PadLauncher {
                 suppressSearchRelease=false; searchButtons=0;
             }
             pad=RemapController(pad,searchGamesFocused ? "results" : "typing");
-            if(HandleTestLayoutTrigger(pad)) return;
+            if(HandleLayoutToggle(pad)) return;
             ushort pressed=(ushort)(pad.Buttons & ~searchButtons); searchButtons=pad.Buttons;
             if((pressed&0x0040)!=0) {
                 finishGameSearch(false); JumpToConfiguredList(); return;

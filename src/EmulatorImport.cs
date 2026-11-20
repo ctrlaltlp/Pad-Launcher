@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -397,6 +397,22 @@ namespace PadLauncher {
             }
             return ids;
         }
+        static string RetroArchPlaylistConsoleName(string name) {
+            // RetroArch database names use "Maker - Console"; retain just the console.
+            int separator=name.IndexOf(" - ",StringComparison.Ordinal);
+            if(separator<0 || separator+3>=name.Length) return name;
+            var console=name.Substring(separator+3).Trim();
+            if(console.Length==0) return name;
+            switch(console.ToLowerInvariant()) {
+                case "nintendo entertainment system": return "NES";
+                case "super nintendo entertainment system": return "SNES";
+                case "nintendo ds": return "DS";
+                case "nintendo dsi": return "DSi";
+                case "nintendo 3ds": return "3DS";
+                case "nintendo switch": return "Switch";
+                default: return console;
+            }
+        }
         public static void ImportPlaylists(Settings settings,Library library,string executable,string location,IEnumerable<EmulatorImportSource> sources,IEnumerable<EmulatorImportGame> chosen,IEnumerable<string> excluded) {
             if(settings.RetroArchPlaylistLists==null) settings.RetroArchPlaylistLists=new List<CustomList>();
             var games=chosen.ToList();
@@ -404,8 +420,9 @@ namespace PadLauncher {
                 var selected=games.Where(game => game.SourceId==source.Id).ToList(); if(selected.Count==0) continue;
                 var lists=settings.RetroArchPlaylistLists;
                 var old=(settings.EmulatorImports ?? new List<EmulatorImportDefinition>()).FirstOrDefault(d => d.EmulatorId=="retroarch" && String.Equals(d.Location,location,StringComparison.OrdinalIgnoreCase) && d.Sources!=null && d.Sources.Count==1 && d.Sources[0]==source.Id && lists.Any(list => list.Id==d.ListId));
-                string name=String.IsNullOrWhiteSpace(source.Name) ? "RetroArch playlist" : source.Name;
-                if(name.Length>72) name=name.Substring(0,72);
+                string name=String.IsNullOrWhiteSpace(source.Name) ? "Playlist" : RetroArchPlaylistConsoleName(source.Name.Trim());
+                if(name.Length>65) name=name.Substring(0,65).TrimEnd();
+                name+=" · RetroArch";
                 string proposed=name; int suffix=2;
                 while(CombinedCollections.Options(library,settings).Any(list => String.Equals(list.Name,proposed,StringComparison.CurrentCultureIgnoreCase))) proposed=name+" ("+(suffix++)+")";
                 var playlist=old==null ? null : lists.FirstOrDefault(list => list.Id==old.ListId);
