@@ -74,8 +74,6 @@ Change emulator defaults or override individual lists under **Settings → Artwo
 
 ## Lists
 
-Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Press **L2 / LT / ZL** on the overlay to open **Quick select**. Configure its eight slots under **Settings → Overlay → Quick select menu** to launch a game, jump to a list, or browse games from lists that share a tag.
-
 Choose which lists appear and arrange their order under **Settings → Lists → Overlay lists**. Each list can have its own layout, panel sizes and outlines under **Per-list layout**, plus its own artwork preference under **Artwork → Per-list artwork**. Create lists from individual games or merge existing lists into an independent new list. Existing combined lists still update with their source lists. You can show or hide any list you want on the overlay including the preconfigured ones.
 
 Preconfigured lists:
@@ -94,6 +92,8 @@ Open **Settings → Lists → List editor** to manage your lists.
 - **Merge** makes a snapshot of the selected lists. Keep the sources, delete all eligible sources, or choose which eligible sources to delete.
 - **Duplicate** copies a list’s current games into a new list you can name and edit independently.
 - **Delete** removes a custom or combined list. Choose **Delete list and unregister its games** to also remove those games from Pad Launcher. Game files stay on disk.
+
+Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Press **L2 / LT / ZL** on the overlay to open **Quick select**. Configure its eight slots under **Settings → Overlay → Quick select menu** to launch a game, jump to a list, or browse games from lists that share a tag.
 
 ## Credits
 
