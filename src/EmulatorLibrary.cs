@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -53,21 +53,21 @@ namespace PadLauncher {
             }
         }
         public static readonly EmulatorPreset[] Presets={
-            new EmulatorPreset {Id="duckstation",Name="DuckStation",System="PlayStation",Extensions=".cue;.chd;.iso;.bin;.img;.pbp;.m3u;.ccd;.mds",Hint="For multi-track discs, choose the CUE file; for multi-disc games, choose an M3U playlist."},
             new EmulatorPreset {Id="xemu",Name="xemu",System="Xbox",Extensions=".iso;.xiso",Hint="Choose an Xbox XISO disc image. Configure the required system files in xemu first."},
             new EmulatorPreset {Id="xenia",Name="Xenia",System="Xbox 360",Extensions=".iso;.xex;.zar;.live;.con;.pirs;",Hint="Choose an ISO, extracted game's default.xex, or an extensionless Xbox 360 content file. Xenia Canary executables are supported."},
-            new EmulatorPreset {Id="rpcs3",Name="RPCS3",System="PlayStation 3",Extensions=".bin;.elf;.self;.iso",Hint="Choose a game folder or PS3_GAME/USRDIR/EBOOT.BIN. Install PKG games in RPCS3 first, then select their installed game folder."},
-            new EmulatorPreset {Id="pcsx2",Name="PCSX2",System="PlayStation 2",Extensions=".iso;.chd;.cso;.bin;.gz;.elf",Hint="Choose a PS2 disc image or ELF file."},
             new EmulatorPreset {Id="dolphin",Name="Dolphin",System="GameCube / Wii",Extensions=".iso;.gcm;.rvz;.wbfs;.wia;.ciso;.gcz;.dol;.elf;.wad;.json",Hint="Choose a GameCube/Wii image, homebrew executable, or Dolphin mod preset. Display preferences follow Dolphin's settings."},
-            new EmulatorPreset {Id="eden",Name="Eden",System="Nintendo Switch",Extensions=".xci;.nsp;.nro;.nso;.nca",Hint="Choose a base game file. Updates and DLC are managed inside Eden."},
-            new EmulatorPreset {Id="azahar",Name="Azahar",System="Nintendo 3DS",Extensions=".cci;.3ds;.cxi;.3dsx;.elf;.axf;.zcci;.zcxi;.z3dsx;.bcci;.bcxi;.app",Hint="Choose a compatible decrypted 3DS game. Install CIA packages in Azahar first, then import its library. Updates and DLC are not separate games."},
-            new EmulatorPreset {Id="melonds",Name="melonDS",System="Nintendo DS / DSi",Extensions=".nds;.srl;.zip;.7z",Hint="Choose a DS ROM or a supported archive containing a DS ROM."},
-            new EmulatorPreset {Id="vita3k",Name="Vita3K",System="PlayStation Vita",Extensions=".bin",Hint="Select an installed title folder inside Vita3K's ux0/app folder, or its eboot.bin. Install games in Vita3K first."},
-            new EmulatorPreset {Id="retroarch",Name="RetroArch",System="Multiple systems",Extensions=".nes;.fds;.sfc;.smc;.snes;.gb;.gbc;.gba;.sgb;.n64;.z64;.v64;.nds;.md;.gen;.smd;.32x;.sms;.gg;.pce;.sgx;.ngp;.ngc;.ws;.wsc;.a26;.a52;.a78;.lnx;.j64;.jag;.cue;.chd;.iso;.pbp;.m3u;.ccd;.cso;.zip;.7z;.bin;.rom;.col;.int;.vec;.vb;.uze;.bs;.st;.msa;.adf;.hdf;.d64;.d81;.prg;.tap;.crt;.dsk;.mx1;.mx2;.cas;.tzx;.z80;.sna;.nib",Hint="Select a core before adding games. Scan a folder for that core's system; core metadata filters compatible extensions when available. Existing games keep their assigned core."},
-            new EmulatorPreset {Id="ppsspp",Name="PPSSPP",System="PlayStation Portable",Extensions=".iso;.cso;.chd;.pbp;.elf;.prx",Hint="Choose a PSP disc image or EBOOT.PBP. For extracted games, select EBOOT.PBP."},
-            new EmulatorPreset {Id="mgba",Name="mGBA",System="Game Boy / Color / Advance",Extensions=".gba;.gb;.gbc;.sgb;.zip;.7z",Hint="Choose a Game Boy, Game Boy Color or Game Boy Advance ROM, or a supported archive."},
             new EmulatorPreset {Id="cemu",Name="Cemu",System="Wii U",Extensions=".wua;.wud;.wux;.rpx",Hint="Choose a disc image or the RPX in an extracted game's code folder."},
-            new EmulatorPreset {Id="shadps4",Name="shadPS4",System="PlayStation 4",Extensions=".bin",Hint="Choose the emulator executable and an installed game's eboot.bin. Install PKG files in shadPS4 first."}
+            new EmulatorPreset {Id="eden",Name="Eden",System="Nintendo Switch",Extensions=".xci;.nsp;.nro;.nso;.nca",Hint="Choose a base game file. Updates and DLC are managed inside Eden."},
+            new EmulatorPreset {Id="mgba",Name="mGBA",System="Game Boy / Color / Advance",Extensions=".gba;.gb;.gbc;.sgb;.zip;.7z",Hint="Choose a Game Boy, Game Boy Color or Game Boy Advance ROM, or a supported archive."},
+            new EmulatorPreset {Id="melonds",Name="melonDS",System="Nintendo DS / DSi",Extensions=".nds;.srl;.zip;.7z",Hint="Choose a DS ROM or a supported archive containing a DS ROM."},
+            new EmulatorPreset {Id="azahar",Name="Azahar",System="Nintendo 3DS",Extensions=".cci;.3ds;.cxi;.3dsx;.elf;.axf;.zcci;.zcxi;.z3dsx;.bcci;.bcxi;.app",Hint="Choose a compatible decrypted 3DS game. Install CIA packages in Azahar first, then import its library. Updates and DLC are not separate games."},
+            new EmulatorPreset {Id="duckstation",Name="DuckStation",System="PlayStation",Extensions=".cue;.chd;.iso;.bin;.img;.pbp;.m3u;.ccd;.mds",Hint="For multi-track discs, choose the CUE file; for multi-disc games, choose an M3U playlist."},
+            new EmulatorPreset {Id="pcsx2",Name="PCSX2",System="PlayStation 2",Extensions=".iso;.chd;.cso;.bin;.gz;.elf",Hint="Choose a PS2 disc image or ELF file."},
+            new EmulatorPreset {Id="rpcs3",Name="RPCS3",System="PlayStation 3",Extensions=".bin;.elf;.self;.iso",Hint="Choose a game folder or PS3_GAME/USRDIR/EBOOT.BIN. Install PKG games in RPCS3 first, then select their installed game folder."},
+            new EmulatorPreset {Id="shadps4",Name="shadPS4",System="PlayStation 4",Extensions=".bin",Hint="Choose the emulator executable and an installed game's eboot.bin. Install PKG files in shadPS4 first."},
+            new EmulatorPreset {Id="ppsspp",Name="PPSSPP",System="PlayStation Portable",Extensions=".iso;.cso;.chd;.pbp;.elf;.prx",Hint="Choose a PSP disc image or EBOOT.PBP. For extracted games, select EBOOT.PBP."},
+            new EmulatorPreset {Id="vita3k",Name="Vita3K",System="PlayStation Vita",Extensions=".bin",Hint="Select an installed title folder inside Vita3K's ux0/app folder, or its eboot.bin. Install games in Vita3K first."},
+            new EmulatorPreset {Id="retroarch",Name="RetroArch",System="Multiple systems",Extensions=".nes;.fds;.sfc;.smc;.snes;.gb;.gbc;.gba;.sgb;.n64;.z64;.v64;.nds;.md;.gen;.smd;.32x;.sms;.gg;.pce;.sgx;.ngp;.ngc;.ws;.wsc;.a26;.a52;.a78;.lnx;.j64;.jag;.cue;.chd;.iso;.pbp;.m3u;.ccd;.cso;.zip;.7z;.bin;.rom;.col;.int;.vec;.vb;.uze;.bs;.st;.msa;.adf;.hdf;.d64;.d81;.prg;.tap;.crt;.dsk;.mx1;.mx2;.cas;.tzx;.z80;.sna;.nib",Hint="Select a core before adding games. Scan a folder for that core's system; core metadata filters compatible extensions when available. Existing games keep their assigned core."}
         };
         public static EmulatorPreset Preset(string id) {
             var result=Presets.FirstOrDefault(p => p.Id==id);
@@ -350,6 +350,58 @@ namespace PadLauncher {
             if(settings.LaunchCounts!=null) settings.LaunchCounts.Remove(gameId);
             if(settings.SelectedGamesByList!=null) foreach(string listId in settings.SelectedGamesByList.Where(pair => pair.Value==gameId).Select(pair => pair.Key).ToArray()) settings.SelectedGamesByList.Remove(listId);
             if(settings.SelectedId==gameId) settings.SelectedId=null;
+        }
+        // Order by the first console supported by a multi-console preset.
+        static readonly string[][] ConsoleOrder={
+            new[]{"Atari","2600","5200","7800","lynx","jaguar"},
+            new[]{"Microsoft","xbox","xbox360","xboxone","xboxseries"},
+            new[]{"NEC","pcengine","turbografx16","supergrafx","pcfx"},
+            new[]{"Nintendo","nes","nintendoentertainmentsystem","famicom","familycomputerdisksystem","gameboy","snes","supernintendoentertainmentsystem","superfamicom","virtualboy","nintendo64","n64","gameboycolor","gameboyadvance","gamecube","nds","nintendods","wii","nintendodsi","nintendo3ds","3ds","wiiu","switch","nintendoswitch"},
+            new[]{"Sega","sg1000","mastersystem","megadrive","genesis","gamegear","segacd","megacd","32x","saturn","dreamcast"},
+            new[]{"SNK","neogeo","neogeopocket","neogeopocketcolor"},
+            new[]{"Sony","playstation","ps1","playstation2","ps2","playstationportable","psp","playstation3","ps3","playstationvita","psvita","playstation4","ps4","playstation5","ps5"}
+        };
+        static readonly Dictionary<string,string> PresetConsole=new Dictionary<string,string> {
+            {"xemu","Microsoft - Xbox"},{"xenia","Microsoft - Xbox 360"},
+            {"mgba","Nintendo - Game Boy"},{"dolphin","Nintendo - GameCube"},{"melonds","Nintendo - Nintendo DS"},
+            {"azahar","Nintendo - Nintendo 3DS"},{"cemu","Nintendo - Wii U"},{"eden","Nintendo - Switch"},
+            {"duckstation","Sony - PlayStation"},{"pcsx2","Sony - PlayStation 2"},{"ppsspp","Sony - PlayStation Portable"},
+            {"rpcs3","Sony - PlayStation 3"},{"vita3k","Sony - PlayStation Vita"},{"shadps4","Sony - PlayStation 4"}
+        };
+        static readonly HashSet<string> HandheldSystems=new HashSet<string> {
+            "lynx","gameboy","virtualboy","gameboycolor","gameboyadvance","nds","nintendods","nintendodsi",
+            "nintendo3ds","3ds","gamegear","neogeopocket","neogeopocketcolor","playstationportable","psp",
+            "playstationvita","psvita"
+        };
+        static string ConsoleOrderKey(string value) {
+            var parts=(value ?? "").Split(new[]{" - "},2,StringSplitOptions.None);
+            if(parts.Length!=2) return null;
+            var system=new string(System.Text.RegularExpressions.Regex.Replace(parts[1],@"\s*\([^)]*\)","").Where(Char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+            var group=ConsoleOrder.FirstOrDefault(row => String.Equals(row[0],parts[0],StringComparison.OrdinalIgnoreCase));
+            if(group==null) return null;
+            int rank=Array.IndexOf(group,system);
+            return group[0]+":"+(rank<0 ? "2" : HandheldSystems.Contains(system) ? "1" : "0")+":"+(rank>0 ? rank : 999).ToString("D3");
+        }
+        internal static List<Collection> DefaultListOrder(List<Collection> options,Library library,Settings settings) {
+            var emulatorLists=options.Where(list => list.Source=="emulator").ToList();
+            if(emulatorLists.Count==0) return options;
+            var systems=library.Games.Where(game => game.EmulatorId=="retroarch" && !String.IsNullOrWhiteSpace(game.ArtworkSystem))
+                .GroupBy(game => game.Id).ToDictionary(group => group.Key,group => group.First().ArtworkSystem);
+            var customIds=new HashSet<string>((settings.CustomLists ?? new List<CustomList>()).Select(list => list.Id)
+                .Concat((settings.CombinedCollections ?? new List<CombinedCollection>()).Select(list => list.Id)));
+            customIds.Add("source:custom");
+            var ordered=emulatorLists.OrderBy(list => {
+                const string prefix="source:emulator:";
+                string system;
+                if((list.Id ?? "").StartsWith(prefix,StringComparison.Ordinal) && PresetConsole.TryGetValue(list.Id.Substring(prefix.Length),out system))
+                    return ConsoleOrderKey(system);
+                return (list.Games ?? new List<string>()).Where(systems.ContainsKey).Select(id => ConsoleOrderKey(systems[id]))
+                    .FirstOrDefault(key => key!=null) ?? ConsoleOrderKey(list.Name) ?? "~";
+            },StringComparer.OrdinalIgnoreCase).ThenBy(list => list.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+            var before=options.TakeWhile(list => list.Source!="emulator").Where(list => !customIds.Contains(list.Id));
+            var custom=options.Where(list => customIds.Contains(list.Id));
+            var after=options.SkipWhile(list => list.Source!="emulator").Where(list => list.Source!="emulator" && !customIds.Contains(list.Id));
+            return before.Concat(custom).Concat(ordered).Concat(after).ToList();
         }
         public static bool IsAutomaticList(Settings settings,string id) {
             return (id ?? "").StartsWith("source:emulator:",StringComparison.Ordinal) || (settings.RetroArchPlaylistLists ?? new List<CustomList>()).Any(list => list.Id==id);

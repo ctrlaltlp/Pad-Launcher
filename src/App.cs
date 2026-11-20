@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.1")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.1")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.1")]
+[assembly: System.Reflection.AssemblyVersion("0.6.2")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.2")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.2")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -454,7 +454,7 @@ namespace PadLauncher {
             catch { settings.DefaultCollectionId=previous; throw; }
         }
         List<Collection> CollectionOptions() {
-            var options=CombinedCollections.Options(library,settings);
+            var options=EmulatorLibrary.DefaultListOrder(CombinedCollections.Options(library,settings),library,settings);
             if(settings.OverlayListOrder==null) return options;
             var ranks=settings.OverlayListOrder.Distinct().Select((id,index) => new {id,index}).ToDictionary(item => item.id,item => item.index);
             return options.OrderBy(list => ranks.ContainsKey(list.Id) ? ranks[list.Id] : Int32.MaxValue).ToList();
