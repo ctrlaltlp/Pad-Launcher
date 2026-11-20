@@ -12,6 +12,7 @@ namespace PadLauncher {
         Window arcOnlyWindow;
         TextBlock arcOnlyNotice;
         readonly System.Windows.Media.Effects.BlurEffect arcOverlayBlur=new System.Windows.Media.Effects.BlurEffect {Radius=14,RenderingBias=System.Windows.Media.Effects.RenderingBias.Performance};
+        System.Windows.Threading.DispatcherTimer arcBlurTimer;
         bool arcTriggerWaitRelease,arcOnly;
 
         int arcSelectedIndex;
@@ -173,6 +174,7 @@ namespace PadLauncher {
                 if(!IsVisible && !exiting) UpdateTrayHomeListener();
             }
             if(arcPopup!=null) {arcPopup.IsOpen=false; arcPopup=null;}
+            if(arcBlurTimer!=null) arcBlurTimer.Stop();
             if(scene.Effect==arcOverlayBlur) scene.Effect=null;
             arcCards.Clear(); arcOnlyNotice=null;
         }
@@ -241,6 +243,18 @@ namespace PadLauncher {
         }
         static double ArcX(double offset) {return 135-5.9*offset*offset;}
         void LayoutArc(int direction) {
+            if(direction!=0 && IsVisible) {
+                if(arcBlurTimer==null) {
+                    arcBlurTimer=new System.Windows.Threading.DispatcherTimer {Interval=TimeSpan.FromMilliseconds(150)};
+                    arcBlurTimer.Tick+=(sender,args) => {
+                        arcBlurTimer.Stop();
+                        if(scene.Effect==arcOverlayBlur) scene.Effect=null;
+                    };
+                }
+                scene.Effect=arcOverlayBlur;
+                arcBlurTimer.Stop();
+                arcBlurTimer.Start();
+            }
             int count=arcCards.Count;
             for(int i=0;i<count;i++) {
                 int offset=(i-arcSelectedIndex+count)%count;
@@ -306,7 +320,6 @@ namespace PadLauncher {
             // Keeping the existing overlay active avoids a second composition
             // pass as the standalone window takes foreground focus.
             if(arcOnly && !IsVisible) {ShowArcOnlyWindow(canvas,isLeft); return;}
-            scene.Effect=arcOverlayBlur;
             double scale=Math.Min(1.5,Math.Min(ActualWidth/canvas.Width,ActualHeight/canvas.Height));
             if(scale<=0) scale=1;
             var scaledArc=new Viewbox {Width=canvas.Width*scale,Height=canvas.Height*scale,Child=canvas};
