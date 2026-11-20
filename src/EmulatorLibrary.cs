@@ -406,6 +406,7 @@ namespace PadLauncher {
         internal static string DefaultAutomaticListName(EmulatorPreset preset) {
             string console=preset.System;
             switch(preset.Id) {
+                case "dolphin": return "Wii / GameCube * Dolphin";
                 case "melonds": console="DS / DSi"; break;
                 case "eden": console="Switch"; break;
                 case "duckstation": console="PS1"; break;

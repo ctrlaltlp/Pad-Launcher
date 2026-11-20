@@ -22,6 +22,7 @@ namespace PadLauncher {
         long arcButtonsNeutralSince=-1;
         bool arcButtonsArmed;
         List<ArcSlot> arcSlots;
+        ArcSlot arcConfirmedSlot;
         readonly List<Border> arcCards=new List<Border>();
         readonly Brush arcSelected=new SolidColorBrush(Color.FromRgb(163,240,205));
         readonly Brush arcSelectedText=new SolidColorBrush(Color.FromRgb(13,25,34));
@@ -41,8 +42,9 @@ namespace PadLauncher {
             if(arcPopup!=null || arcOnlyWindow!=null) {
                 if(!arcOnly && !ArcBindingDown(pad)) {
                     var slot=arcSlots[arcSelectedIndex];
+                    bool activate=settings.QuickSelectActivateOnRelease && slot!=arcConfirmedSlot;
                     CloseArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true;
-                    if(settings.QuickSelectActivateOnRelease) ActivateArcSlot(slot);
+                    if(activate) ActivateArcSlot(slot);
                     return true;
                 }
                 ushort pressed=(ushort)(pad.Buttons & ~arcButtons);
@@ -66,7 +68,9 @@ namespace PadLauncher {
                 if((pressed&ArcConfirmMask())!=0) {
                     TraceArc("controller Confirm: "+Gamepad.Source);
                     var slot=arcSlots[arcSelectedIndex];
-                    if(!arcOnly && settings.QuickSelectActivateOnRelease) {
+                    bool showsList=slot!=null && (slot.Kind=="list" || slot.Kind=="tag");
+                    if(!arcOnly && showsList) arcConfirmedSlot=slot;
+                    if(!arcOnly && !showsList && settings.QuickSelectActivateOnRelease) {
                         CloseArc(); suppressSearchRelease=true;
                     }
                     suppressSearchRelease=true; ActivateArcSlot(slot);
@@ -163,6 +167,7 @@ namespace PadLauncher {
         void CloseArc([System.Runtime.CompilerServices.CallerMemberName] string caller=null) {
             if(arcPopup!=null || arcOnlyWindow!=null || arcOnly) TraceArc("close requested by "+caller);
             arcOnly=false;
+            arcConfirmedSlot=null;
             if(arcOnlyWindow!=null) {
                 var window=arcOnlyWindow; arcOnlyWindow=null; window.Close();
                 if(!IsVisible && !exiting) UpdateTrayHomeListener();
