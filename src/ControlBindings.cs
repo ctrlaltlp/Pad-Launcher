@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Windows.Input;
@@ -11,7 +11,7 @@ namespace PadLauncher {
     }
     public static class ControlBindings {
         public static readonly string[] Contexts={"overlay","typing","results"};
-        public static readonly string[] Inputs={"none","south","east","west","north","lb","rb","lt","rt","ls","rs","select","start","up","down","left","right"};
+        public static readonly string[] Inputs={"none","south","east","west","north","lb","rb","lt","rt","ls","rs","select","start","up","down","left","right","capture"};
         public static readonly List<ControlAction> Actions=Build();
         static readonly Dictionary<string,ControlAction> byId=Actions.ToDictionary(action => action.FullId);
         static readonly Dictionary<string,ControlAction[]> byContext=Contexts.ToDictionary(context => context,context => Actions.Where(action => action.Context==context).ToArray());
@@ -25,7 +25,7 @@ namespace PadLauncher {
                 list.Add(new ControlAction {Context=context,Id="down",Name="Browse / navigate down",Button="down",Key="Down",Mask=2});
                 list.Add(new ControlAction {Context=context,Id="favourite",Name="Toggle favourite",Button="rs",Key=context=="overlay" ? "F" : "none",Mask=0x80});
                 list.Add(new ControlAction {Context=context,Id="jump",Name="Jump to configured list",Button="ls",Key="none",Mask=0x40});
-                list.Add(new ControlAction {Context=context,Id="layout",Name="Toggle Grid / carousel",Button=context=="typing" ? "rt" : "west",Key="none"});
+                list.Add(new ControlAction {Context=context,Id="layout",Name="Toggle Grid / carousel",Button=context=="typing" ? "lt" : "west",Key="none"});
                 list.Add(new ControlAction {Context=context,Id="settings",Name="Open Settings",Button="none",Key="none",Mask=0x800});
             }
             Action<string,string,string,string,string,int> add=(context,id,name,button,key,mask) => list.Add(new ControlAction {Context=context,Id=id,Name=name,Button=button,Key=key,Mask=mask});
@@ -35,12 +35,12 @@ namespace PadLauncher {
             add("overlay","previous","Previous list","lb","PageUp",0x100);
             add("overlay","next","Next list","rb","PageDown",0x200);
             add("overlay","search","Search games","north","Ctrl+F",0x8000);
-            add("overlay","monitor","Next monitor","rt","M",0x4000);
+            add("overlay","monitor","Next monitor","lt","M",0x4000);
             add("overlay","refresh","Refresh library","select","F5",0x20);
             add("overlay","hints","Show control hints","start","F1",0x10);
             add("typing","play","Launch selected result","start","none",0x10);
-            add("results","focus","Return to keyboard","lt","none",0x10);
-            add("results","monitor","Next monitor","rt","M",0x4000);
+            add("results","focus","Return to keyboard","rt","none",0x10);
+            add("results","monitor","Next monitor","lt","M",0x4000);
             add("results","play-start","Launch selected result (Start)","start","none",0x1000);
             add("typing","type","Type selected key","south","none",0x1000);
             add("typing","space","Insert space","north","none",0x2000);
@@ -69,7 +69,7 @@ namespace PadLauncher {
                 case "rb": return Prompts.Style(settings)=="Xbox" ? "RB" : Prompts.Style(settings)=="Nintendo" ? "R" : "R1";
                 case "lt": return Prompts.Style(settings)=="Xbox" ? "LT" : Prompts.Style(settings)=="Nintendo" ? "ZL" : "L2";
                 case "rt": return Prompts.RightTrigger(settings);
-                case "ls": return "L3"; case "rs": return "R3";
+                case "capture": return "Capture"; case "ls": return "L3"; case "rs": return "R3";
                 case "up": return "D-pad ↑"; case "down": return "D-pad ↓"; case "left": return "D-pad ←"; case "right": return "D-pad →";
                 default: return "Unassigned";
             }
@@ -118,7 +118,7 @@ namespace PadLauncher {
         }
         public static bool HasJump(Settings settings) {return Contexts.Any(context => Buttons(settings,context+".jump").Length>0 || Get(settings,context+".jump",true)!="none");}
         public static void UpgradeSearchDefaults(Settings settings) {
-            if(settings.ControlBindingVersion>=8) return;
+            if(settings.ControlBindingVersion>=9) return;
             var buttons=settings.ControlButtons; string a,b;
             if(buttons!=null) {
                 if(settings.ControlBindingVersion<1) {
@@ -160,13 +160,20 @@ namespace PadLauncher {
                 List<string> extras;
                 if(settings.ControlButtonAlternates!=null && settings.ControlButtonAlternates.TryGetValue("results.keyboard",out extras) && extras!=null) extras.RemoveAll(input => input=="north");
             }
-            if(buttons!=null) {
+            if(settings.ControlBindingVersion<8 && buttons!=null) {
                 foreach(var binding in new[]{new[]{"overlay.monitor","lt","rt"},new[]{"results.monitor","lt","rt"},
                     new[]{"results.focus","rt","lt"},new[]{"typing.layout","lt","rt"},new[]{"typing.finish","rt","none"}}) {
                     if(buttons.TryGetValue(binding[0],out a) && a==binding[1]) buttons[binding[0]]=binding[2];
                 }
             }
-            settings.ControlBindingVersion=8;
+            if(settings.ControlBindingVersion<9) {
+                Func<string,string> swap=input => input=="lt" ? "rt" : input=="rt" ? "lt" : input;
+                if(buttons!=null) foreach(var id in buttons.Keys.ToList()) buttons[id]=swap(buttons[id]);
+                if(settings.ControlButtonAlternates!=null)
+                    foreach(var inputs in settings.ControlButtonAlternates.Values.Where(items => items!=null))
+                        for(int i=0;i<inputs.Count;i++) inputs[i]=swap(inputs[i]);
+            }
+            settings.ControlBindingVersion=9;
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
@@ -62,11 +62,15 @@ namespace PadLauncher {
                 {"rs",new[]{new Point(593,600),new Point(593,389)}}
             };
             if(style!="PlayStation") ConfigureAsymmetricDiagram(style,placements,routes);
+            if(style=="Nintendo") {
+                placements["capture"]=new Rect(336,670,119,48);
+                routes["capture"]=new[]{new Point(463,681),new Point(491,681),new Point(491,362),new Point(459,362),new Point(459,334)};
+            }
             Action refreshDiagram=null;
             foreach(var placement in placements) {
                 string input=placement.Key; Rect bounds=placement.Value;
                 bool alignRight=bounds.X<300;
-                var text=new TextBlock {Name="DiagramLabel_"+context+"_"+input,FontSize=15,Foreground=mint,TextWrapping=TextWrapping.Wrap,Width=bounds.Width,TextAlignment=(input=="select" || input=="start") ? TextAlignment.Center : alignRight ? TextAlignment.Right : TextAlignment.Left};
+                var text=new TextBlock {Name="DiagramLabel_"+context+"_"+input,FontSize=15,Foreground=mint,TextWrapping=TextWrapping.Wrap,Width=bounds.Width,TextAlignment=(input=="select" || input=="start" || (style=="Nintendo" && input=="rs")) ? TextAlignment.Center : (alignRight || input=="capture") ? TextAlignment.Right : TextAlignment.Left};
                 var edit=new Button {Name="DiagramAssign_"+context+"_"+input,Content=text,Background=Brushes.Transparent,BorderThickness=new Thickness(0),Padding=new Thickness(0),MinHeight=28,Cursor=Cursors.Hand,ToolTip="Assign action to "+ControlBindings.ButtonLabel(draft,input),HorizontalContentAlignment=HorizontalAlignment.Stretch};
                 Canvas.SetLeft(edit,bounds.X); Canvas.SetTop(edit,bounds.Y); canvas.Children.Add(edit); labels[input]=text;
                 edit.Click+=(s,e) => ShowDiagramAssignment(Window.GetWindow(section),draft,context,input,() => {refreshDiagram(); if(changed!=null) changed();});
@@ -75,10 +79,26 @@ namespace PadLauncher {
                 var dot=new System.Windows.Shapes.Ellipse {Width=6,Height=6,Fill=mint,IsHitTestVisible=false}; Canvas.SetLeft(dot,anchor.X-3); Canvas.SetTop(dot,anchor.Y-3);
                 canvas.Children.Add(line); canvas.Children.Add(dot); wires[input]=new FrameworkElement[]{line,dot};
             }
+            double homeX=style=="Nintendo" ? 540 : 500;
+            double homeY=style=="Xbox" ? 252 : style=="Nintendo" ? 323 : 389;
+            double homeLabelY=style=="Xbox" ? 23 : style=="Nintendo" ? 670 : 677;
+            var homeLabel=new TextBlock {Name="DiagramLabel_"+context+"_home",Width=180,FontSize=15,
+                TextAlignment=style=="Nintendo" ? TextAlignment.Left : TextAlignment.Center,TextWrapping=TextWrapping.Wrap,IsHitTestVisible=false};
+            Canvas.SetLeft(homeLabel,style=="Nintendo" ? homeX+8 : homeX-homeLabel.Width/2); Canvas.SetTop(homeLabel,homeLabelY); canvas.Children.Add(homeLabel);
+            var homeRoute=style=="Nintendo"
+                ? new[]{new Point(homeX,homeY),new Point(homeX,362),new Point(513,362),new Point(513,681),new Point(homeX,681)}
+                : new[]{new Point(homeX,homeY),new Point(homeX,style=="Xbox" ? 55 : 669)};
+            var homeLine=new System.Windows.Shapes.Polyline {Name="DiagramLine_"+context+"_home",
+                Points=new PointCollection(homeRoute),Stroke=mint,StrokeThickness=3,IsHitTestVisible=false};
+            canvas.Children.Add(homeLine);
+            var homeDot=new System.Windows.Shapes.Ellipse {Width=6,Height=6,Fill=mint,IsHitTestVisible=false};
+            Canvas.SetLeft(homeDot,homeX-3); Canvas.SetTop(homeDot,homeY-3); canvas.Children.Add(homeDot);
             var sticks=Label("Left stick: navigate games, lists and keys\nRight stick: cycle games",15,muted); sticks.TextAlignment=TextAlignment.Center;
             sticks.Width=520; Canvas.SetLeft(sticks,240); Canvas.SetTop(sticks,780); canvas.Children.Add(sticks);
             section.Children.Add(new Viewbox {Stretch=Stretch.Uniform,StretchDirection=StretchDirection.DownOnly,Child=canvas,HorizontalAlignment=HorizontalAlignment.Center});
             update=refreshDiagram=() => {
+                homeLabel.Text=draft.OpenOverlayWithHome ? "Open overlay from tray" : "Unassigned";
+                homeLabel.Foreground=draft.OpenOverlayWithHome ? mint : muted;
                 foreach(var entry in labels) {
                     var assigned=ControlBindings.InContext(context).Where(action => ControlBindings.UsesButton(draft,action.FullId,entry.Key)).Select(action => DiagramActionName(action)).ToArray();
                     bool showJumpHint=entry.Key=="ls" && assigned.Length==0 && ControlBindings.Get(draft,context+".jump")=="none";
@@ -152,8 +172,8 @@ namespace PadLauncher {
             routes["east"]=new[]{new Point(788,339),new Point(740,339),new Point(nintendo ? 716 : 706,nintendo ? 320 : 311)};
             routes["south"]=new[]{new Point(788,419),new Point(730,419),new Point(648,nintendo ? 383 : 374)};
             routes["west"]=new[]{new Point(788,499),new Point(770,499),new Point(nintendo ? 645 : 637,nintendo ? 443 : 437),new Point(606,nintendo ? 343 : 333)};
-            placements["rs"]=new Rect(520,nintendo ? 650 : 690,180,60);
-            routes["rs"]=new[]{new Point(574,nintendo ? 640 : 680),new Point(574,399)};
+            placements["rs"]=new Rect(nintendo ? 484 : 520,nintendo ? 628 : 690,180,60);
+            routes["rs"]=new[]{new Point(574,nintendo ? 618 : 680),new Point(574,399)};
         }
         static string DiagramActionName(ControlAction action) {
             switch(action.Id) {

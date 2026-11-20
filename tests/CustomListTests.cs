@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using PadLauncher;
@@ -73,7 +73,7 @@ class CustomListTests {
         addedLibrary.Games.Add(new Game {Id="new2",Name="New two"}); CombinedCollections.TrackAddedGames(addedLibrary,addedSettings,500);
         Check(addedSettings.GameAddedAt["new2"]==300,"Rediscovering a known ID retains its original registration time");
         addedSettings.HiddenGameIds=new List<string>{"new2"};
-        Check(CombinedCollections.Label(CombinedCollections.Options(addedLibrary,addedSettings).Single(list => list.Id=="recently-added"),addedLibrary,addedSettings.HiddenGameIds).Contains("1 game"),"Recently added counts respect hidden games");
+        Check(CombinedCollections.Label(CombinedCollections.Options(addedLibrary,addedSettings).Single(list => list.Id=="recently-added"),addedLibrary,addedSettings.HiddenGameIds).EndsWith(" (1 game)"),"Recently added counts respect hidden games");
         var mergeSettings=new Settings {CustomLists=new List<CustomList> {new CustomList {Id="left",Name="Left",Games=new List<string>{"a","b"}},new CustomList {Id="right",Name="Right",Games=new List<string>{"b","c"}}}};
         var mergeLibrary=new Library {Games=new List<Game> {new Game {Id="a"},new Game {Id="b"},new Game {Id="c"}}};
         string merged=CustomLists.Merge(mergeSettings,mergeLibrary,"Merged",new[]{"left","right"});

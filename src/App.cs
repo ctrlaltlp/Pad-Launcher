@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.8")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.8")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.8")]
+[assembly: System.Reflection.AssemblyVersion("0.5.9")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.9")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.9")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -79,6 +79,9 @@ namespace PadLauncher {
 #elif FIRST_START_TEST
         const string InstanceName=@"Local\PadLauncher.FirstStartupTest";
         public const string AppName="Pad Launcher - First startup test";
+#elif XBOX_GUIDE_TEST
+        const string InstanceName=@"Local\PadLauncher.XboxGuideTest";
+        public const string AppName="Pad Launcher - Xbox Guide test";
 #elif ARTWORK_TEST
         const string InstanceName=@"Local\PadLauncher.ArtworkTest";
         public const string AppName="Pad Launcher - Artwork test";
@@ -87,8 +90,17 @@ namespace PadLauncher {
         public const string AppName="Pad Launcher";
 #endif
         [STAThread] public static void Main(string[] args) {
+#if XBOX_GUIDE_TEST
+            if(args.Contains("--probe-guide")) {
+                using(var guide=new XboxGuideInput()) guide.Probe();
+                return;
+            }
+#endif
             if(AppUpdates.RunInstaller(args,message => ThemedMessage.Show(message,"Pad Launcher update"))) return;
             string dataPath = Argument(args,"--data");
+#if XBOX_GUIDE_TEST
+            if(String.IsNullOrEmpty(dataPath)) dataPath=System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"PadLauncher.XboxGuideTest.Data");
+#endif
             if (!String.IsNullOrEmpty(dataPath)) Storage.Root = System.IO.Path.GetFullPath(dataPath);
             else {
 #if EMULATOR_DETECTION_TEST
@@ -154,7 +166,7 @@ namespace PadLauncher {
             RegisteredWaitHandle showWait=null,exitWait=null;
             System.Windows.Forms.NotifyIcon tray=null;
             if (!args.Contains("--render-preview")) {
-                showWait=ThreadPool.RegisterWaitForSingleObject(showSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ToggleOverlay)),null,Timeout.Infinite,false);
+                showWait=ThreadPool.RegisterWaitForSingleObject(showSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ToggleOverlayFromShortcut)),null,Timeout.Infinite,false);
                 exitWait=ThreadPool.RegisterWaitForSingleObject(exitSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ExitApp)),null,Timeout.Infinite,false);
                 tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text=AppName,Visible=true };
                 var menu=new System.Windows.Forms.ContextMenuStrip {
@@ -184,7 +196,7 @@ namespace PadLauncher {
                 string resume=Argument(args,"--resume-update");
                 if(!String.IsNullOrEmpty(resume)) window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(() => window.ResumeAfterUpdate(resume)));
                 else window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(window.StartInitialSetup));
-#if ARTWORK_TEST
+#if ARTWORK_TEST || XBOX_GUIDE_TEST
                 window.ShowOverlay();
 #endif
                 app.Run();
@@ -271,6 +283,11 @@ namespace PadLauncher {
             demo = demoMode; preview = renderPreview;
             freshProfile=!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json")) && !File.Exists(System.IO.Path.Combine(Storage.Root,"library.json"));
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
+#if XBOX_GUIDE_TEST
+            settings.SetupWizardDeclined=true;
+            settings.OpenOverlayWithHome=true;
+            settings.AutoUpdate=false;
+#endif
             if(settings.StickSpeedsLocked) settings.RightStickSpeed=settings.LeftStickSpeed;
             if(IsSpecialJumpList(settings.DefaultCollectionId)) settings.DefaultCollectionId="remember";
             ControlBindings.UpgradeSearchDefaults(settings);
@@ -280,6 +297,9 @@ namespace PadLauncher {
                 Storage.Write("settings.before-shortcut-unification.json",beforeShortcutCleanup);
                 Storage.Write("settings.json",settings);
             }
+#if FOCUS_DIAGNOSTICS
+            InitializeFocusDiagnostics();
+#endif
             Title = Entry.AppName; Foreground = white;
             using(var iconStream=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PadLauncher.ico")) {
                 if(iconStream!=null) { var decoder=new IconBitmapDecoder(iconStream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad); Icon=decoder.Frames[decoder.Frames.Count-1]; }
@@ -297,6 +317,7 @@ namespace PadLauncher {
             BuildScene();
             ApplyCarouselScale();
             SizeChanged+=(s,e) => { if(ActiveLayout=="grid") Render(false); };
+            Closed+=(sender,args) => xboxGuideInput.Dispose();
             PreviewKeyDown += OnKey;
             PreviewTextInput+=(s,e) => HandleSearchText(e);
             Closed += (s,e) => { updateCancellation.Cancel(); controllerTimer.Stop(); noticeTimer.Stop(); navigationSaveTimer.Stop(); Gamepad.StopNative(); Save(); };
@@ -306,7 +327,7 @@ namespace PadLauncher {
                 if (!exiting) {
                     e.Cancel=true; controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
                     notice.Visibility=Visibility.Collapsed; exitButton.Reset(); previousButtons=0; navigation.Reset();
-                    StopListTransition(); launching=false; Hide(); RestoreTemporaryLabels(); Gamepad.StopNative();
+                    StopListTransition(); launching=false; Hide(); RestoreTemporaryLabels(); UpdateTrayHomeListener();
                     QueueSave();
                 }
             };
@@ -337,11 +358,25 @@ namespace PadLauncher {
         public void PrepareTray() {
             Task.Run(() => AppUpdates.CleanOldDownloads());
             controllerTimer.Stop();
-            Gamepad.StopNative();
+            UpdateTrayHomeListener();
             var content=Content as FrameworkElement;
             if(content!=null) { content.Measure(new Size(1600,900)); content.Arrange(new Rect(0,0,1600,900)); content.UpdateLayout(); }
             if(!preview && !TestEnvironment.EmulatorDetection && !NeedsInitialSetup) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
             Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(StartAutomaticUpdates));
+        }
+        internal void ToggleOverlayFromShortcut() {
+            if(exiting) return;
+            if(!IsVisible || OverlayHasForeground()) {ToggleOverlay(); return;}
+            FocusVisibleOverlayFromShortcut();
+        }
+        void FocusVisibleOverlayFromShortcut() {
+            if(gameSearchWindow!=null && gameSearchWindow.IsVisible) {
+                var search=gameSearchWindow;
+                search.Activate();
+                SetForegroundWindow(new System.Windows.Interop.WindowInteropHelper(search).Handle);
+                return;
+            }
+            FocusOverlayInput();
         }
         public void ToggleOverlay() {
             if(exiting) return;
@@ -350,14 +385,14 @@ namespace PadLauncher {
         public void ShowOverlay() {
             if (exiting) return;
             if (IsVisible) { FocusOverlayInput(); return; }
-            launching=false; exitButton.Reset(); previousButtons=0; navigation.Reset();
+            launching=false; controllerWaitForForegroundRelease=false; exitButton.Reset(); previousButtons=0; navigation.Reset();
             suppressSearchRelease=false; bindingLeftTriggerDown=bindingRightTriggerDown=false; testLayoutTriggerDown=false;
             ApplyLibrary(true);
             var monitor=preview ? null : ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
             if(monitor!=null) PlaceOnMonitor(monitor);
             Show();
             if(monitor!=null) PlaceOnMonitor(monitor);
-            if (!preview) { Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle()); controllerTimer.Start(); }
+            if (!preview) { Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle()); controllerTimer.Interval=TimeSpan.FromMilliseconds(16); controllerTimer.Start(); }
             FocusOverlayInput();
             // Paint retained artwork first, then reread Steam's saved changes.
             if (!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
@@ -374,7 +409,7 @@ namespace PadLauncher {
                 if(exiting || !IsVisible || GameSearchOpen || OwnedWindows.Cast<Window>().Any(window => window.IsVisible)) return;
                 IntPtr foreground=GetForegroundWindow();
                 if(foreground!=handle && foreground!=previousForeground) return;
-                if(!IsActive) {Activate(); SetForegroundWindow(handle);}
+                if(foreground!=handle) {Activate(); SetForegroundWindow(handle);}
                 Focus();
             }));
         }
@@ -712,7 +747,19 @@ namespace PadLauncher {
             var names=Prompts.Buttons(settings);
             var heading=Label("Overlay",26,white); heading.FontWeight=FontWeights.SemiBold; layout.Children.Add(heading);
             var helpHeading=Label("Controls",26,white); helpHeading.FontWeight=FontWeights.SemiBold; helpHeading.Margin=new Thickness(0,0,0,22); helpLayout.Children.Add(helpHeading);
-            var changeControls=new Button {Name="ChangeControls",Content="Show/Change controls",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,8,0,18)};
+            var openWithHome=new CheckBox {Content="Open overlay with PS / Home / Guide while Pad Launcher is running",IsChecked=settings.OpenOverlayWithHome,Margin=new Thickness(0,8,0,4)};
+            openWithHome.Click+=(sender,args) => {
+                bool previous=settings.OpenOverlayWithHome;
+                try {settings.OpenOverlayWithHome=openWithHome.IsChecked==true; Storage.Write("settings.json",settings); UpdateTrayHomeListener();}
+                catch(Exception error) {settings.OpenOverlayWithHome=previous; openWithHome.IsChecked=previous; ThemedMessage.Show(dialog,error.Message,"Controls");}
+            };
+            helpLayout.Children.Add(openWithHome);
+            var homeNote=Label("While Pad Launcher is in the tray, press PS on a natively connected DualShock 4 or DualSense, Home on a Switch Pro Controller, or Guide on an Xbox controller. Xbox Guide requires Microsoft GameInput v4; regular Xbox controls work without it.",12,muted);
+                        homeNote.TextWrapping=TextWrapping.Wrap; helpLayout.Children.Add(homeNote);
+#if XBOX_GUIDE_TEST
+            helpLayout.Children.Add(Label("Xbox Guide test: the same checkbox enables GameInput Guide detection from the tray.",12,muted));
+#endif
+            var changeControls=new Button {Name="ChangeControls",Content="Show/Change controls",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,17,0,1)};
             changeControls.Click+=(s,e) => ShowControlSettings(dialog,rebuild); helpLayout.Children.Add(changeControls);
             var lockStickSpeeds=new CheckBox {
                 Name="LockStickSpeedsSetting",Content="Lock stick speeds together",IsChecked=settings.StickSpeedsLocked,
@@ -2505,6 +2552,7 @@ namespace PadLauncher {
             Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => { saveQueued=false; Save(); }));
         }
         void OnKey(object sender, System.Windows.Input.KeyEventArgs e) {
+            if(!preview && !OverlayHasForeground()) return;
             if(GameSearchOpen) {HandleSearchKey(e); return;}
             string action=ControlBindings.KeyAction(settings,"overlay",e.Key==System.Windows.Input.Key.System ? e.SystemKey : e.Key,System.Windows.Input.Keyboard.Modifiers);
             if(action==null) return;
@@ -2539,8 +2587,57 @@ namespace PadLauncher {
             if(cards.TryGetValue(visible[selected].Id,out panel)) controllerTrace.Frame(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency,selected,Canvas.GetLeft(panel),(double)panel.GetAnimationBaseValue(Canvas.LeftProperty));
         }
 #endif
+        bool OverlayHasForeground() {
+            var foreground=GetForegroundWindow();
+            if(foreground==IntPtr.Zero) return false;
+            return foreground==new System.Windows.Interop.WindowInteropHelper(this).Handle ||
+                (gameSearchWindow!=null && foreground==new System.Windows.Interop.WindowInteropHelper(gameSearchWindow).Handle);
+        }
+        bool controllerWaitForForegroundRelease;
+        readonly XboxGuideInput xboxGuideInput=new XboxGuideInput();
+        bool switchHomeWasDown;
+        long switchHomeDownAt=-1;
+        void UpdateTrayHomeListener() {
+            if(IsVisible || preview || exiting) return;
+            controllerTimer.Stop(); switchHomeDownAt=-1;
+            Gamepad.TakePlayStationHomePress();
+            xboxGuideInput.TakePress();
+            if(settings.OpenOverlayWithHome) xboxGuideInput.Start(); else xboxGuideInput.Dispose();
+            if(!settings.OpenOverlayWithHome) {Gamepad.StopNative(); return;}
+            Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle());
+            switchHomeWasDown=Gamepad.SwitchHomeDown();
+            controllerTimer.Interval=TimeSpan.FromMilliseconds(32);
+            controllerTimer.Start();
+        }
+        bool TakeOverlayHomePress() {
+            bool pressed=Gamepad.TakePlayStationHomePress();
+            pressed=xboxGuideInput.TakePress() || pressed;
+            if(!settings.OpenOverlayWithHome || preview || exiting) return false;
+            bool down=Gamepad.SwitchHomeDown();
+            bool switchTapped=false;
+            if(down!=switchHomeWasDown) {
+                long now=Stopwatch.GetTimestamp();
+                if(down) switchHomeDownAt=now;
+                else {
+                    switchTapped=Gamepad.IsHomeTap(switchHomeDownAt,now);
+                    switchHomeDownAt=-1;
+                }
+                switchHomeWasDown=down;
+            }
+            return pressed || switchTapped;
+        }
+        void PollTrayHome() {
+            if(!TakeOverlayHomePress() || NeedsInitialSetup ||
+                (helpWindow!=null && helpWindow.IsVisible) || OwnedWindows.Cast<Window>().Any(window => window.IsVisible)) return;
+            ShowOverlay();
+            controllerWaitForForegroundRelease=true;
+        }
         void PollController(object sender,EventArgs e) {
-            if (!IsActive || preview) {
+            if(!IsVisible) {PollTrayHome(); return;}
+            TakeOverlayHomePress();
+            if (preview || !OverlayHasForeground()) {
+                controllerWaitForForegroundRelease=true;
+                if(radial!=null) {CloseRadial(); radialWaitRelease=false;}
 #if NAVIGATION_DIAGNOSTICS
                 if(!preview) controllerTrace.Poll(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency,false,false,new PadState(),null);
 #endif
@@ -2551,6 +2648,11 @@ namespace PadLauncher {
             controllerTrace.Poll(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency,true,found,pad,Gamepad.Source);
 #endif
             if (!found) { CloseRadial(); radialWaitRelease=false; exitButton.Reset(); previousButtons=0; navigation.Reset(); return; }
+            if(controllerWaitForForegroundRelease) {
+                if(pad.Buttons!=0 || pad.LT>=80 || pad.RT>=80) return;
+                controllerWaitForForegroundRelease=false;
+            }
+            if(!OverlayHasForeground()) {controllerWaitForForegroundRelease=true; return;}
             ApplyControllerState(pad,Gamepad.Source,(long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency));
         }
         internal void ApplyControllerState(PadState pad,string source,long milliseconds) {
@@ -2761,6 +2863,7 @@ namespace PadLauncher {
         public void Reset() { owner=null; }
     }
     public static class Gamepad {
+        internal static bool IsHomeTap(long downAt,long upAt) {return downAt>=0 && (upAt-downAt)*1000.0/Stopwatch.Frequency<350;}
         [DllImport("xinput1_4.dll",EntryPoint="XInputGetState")] static extern uint Read14(uint index,out PadState state);
         [DllImport("xinput1_3.dll",EntryPoint="XInputGetState")] static extern uint Read13(uint index,out PadState state);
         [DllImport("xinput9_1_0.dll",EntryPoint="XInputGetState")] static extern uint Read91(uint index,out PadState state);
@@ -2769,8 +2872,15 @@ namespace PadLauncher {
         static readonly SwitchProInput nintendo=new SwitchProInput();
         static readonly ControllerRouter router=new ControllerRouter();
         public static string Source { get; private set; }
-        public static void StartNative(IntPtr window) { sony.Start(window); nintendo.Start(); }
+        public static void StartNative(IntPtr window) {
+#if !XBOX_GUIDE_TEST
+            sony.Start(window);
+#endif
+            nintendo.Start();
+        }
         public static void StopNative() { sony.Stop(); nintendo.Stop(); router.Reset(); Source=null; }
+        public static bool TakePlayStationHomePress() {return sony.TakeHomePress();}
+        public static bool SwitchHomeDown() {return nintendo.ReadAll().Any(pair => (pair.Value.Buttons&0x0400)!=0);}
         public static bool Read(out PadState state) {
             var pads=sony.ReadAll();
             pads.AddRange(nintendo.ReadAll());

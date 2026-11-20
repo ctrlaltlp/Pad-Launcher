@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 
 namespace PadLauncher {
@@ -29,6 +29,7 @@ namespace PadLauncher {
                     case "south": return (raw.Buttons&0x1000)!=0; case "east": return (raw.Buttons&0x2000)!=0;
                     case "west": return (raw.Buttons&0x4000)!=0; case "north": return (raw.Buttons&0x8000)!=0;
                     case "lb": return (raw.Buttons&0x100)!=0; case "rb": return (raw.Buttons&0x200)!=0;
+                    case "capture": return (raw.Buttons&0x0800)!=0;
                     case "ls": return (raw.Buttons&0x40)!=0; case "rs": return (raw.Buttons&0x80)!=0;
                     case "select": return (raw.Buttons&0x20)!=0; case "start": return (raw.Buttons&0x10)!=0;
                     case "up": return (raw.Buttons&1)!=0; case "down": return (raw.Buttons&2)!=0;

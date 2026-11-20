@@ -52,6 +52,16 @@ $emulatorDetectionTest = $args -contains '-EmulatorDetectionTest'
 $executableName = if($emulatorDetectionTest) { 'PadLauncher.EmulatorDetectionTest' } elseif($firstStartupTest) { 'PadLauncher.FirstStartupTest' } elseif($artworkTest) { 'PadLauncher.ArtworkTest' } else { 'PadLauncher' }
 $defines = if($emulatorDetectionTest) { @('/define:EMULATOR_DETECTION_TEST') } elseif($firstStartupTest) { @('/define:FIRST_START_TEST') } elseif($artworkTest) { @('/define:ARTWORK_TEST') } else { @() }
 if ($args -contains '-NavigationDiagnostics') { $defines += '/define:NAVIGATION_DIAGNOSTICS' }
+if ($args -contains '-FocusDiagnostics') {
+    $executableName = 'PadLauncher.FocusDiagnostics'
+    $defines += '/define:FOCUS_DIAGNOSTICS'
+    $appSources += (Join-Path $PSScriptRoot 'src\FocusDiagnostics.cs')
+}
+if ($args -contains '-XboxGuideTest') {
+    $executableName = 'PadLauncher.XboxGuideTest'
+    $defines += '/define:XBOX_GUIDE_TEST'
+}
+$appSources += (Join-Path $PSScriptRoot 'src\XboxGuideInput.cs')
 $stagedExecutable = Join-Path $out ($executableName + '.build.exe')
 $iconPath = Join-Path $PSScriptRoot 'assets\PadLauncher.ico'
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ $defines ('/win32manifest:' + (Join-Path $PSScriptRoot 'src\App.manifest')) ('/win32icon:' + $iconPath) ('/resource:' + $iconPath + ',PadLauncher.ico') ('/out:' + $stagedExecutable) $refs $librarySources $appSources

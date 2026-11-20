@@ -459,6 +459,7 @@ namespace PadLauncher {
         public bool ShowPanelOutlines {get;set;}
         public bool ShowCollectionName { get; set; }
         public bool ShowListGameCount {get;set;}
+        public bool OpenOverlayWithHome { get; set; }
         public string OpenMonitor { get; set; }
         public string SteamPath { get; set; }
         public string UserId { get; set; }

@@ -20,6 +20,7 @@ namespace PadLauncher {
 
         bool HandleRadial(PadState pad) {
             if(radial!=null) {
+                if(pad.RT<80) { CloseRadial(); radialWaitRelease=false; suppressSearchRelease=true; return true; }
                 int x=pad.LX,y=pad.LY;
                 if(x*x+(double)y*y>14000.0*14000) {
                     var angle=Math.Atan2(x,y);
@@ -28,15 +29,11 @@ namespace PadLauncher {
                 ushort pressed=(ushort)(pad.Buttons & ~radialButtons);
                 radialButtons=pad.Buttons;
                 for(int i=0;i<radialCards.Count;i++) { radialCards[i].BorderBrush=i==radialIndex ? mint : muted; radialCards[i].Background=i==radialIndex ? radialSelected : radialDark; }
-                if((pressed&0x2000)!=0) {CloseRadial(); suppressSearchRelease=true;}
-                else if((pressed&0x1000)!=0 && radialIndex>=0) {
-                    var slot=radialSlots[radialIndex];
-                    CloseRadial(); suppressSearchRelease=true; ActivateRadialSlot(slot);
-                }
+                if((pressed&0x1000)!=0 && radialIndex>=0) ActivateRadialSlot(radialSlots[radialIndex]);
                 return true;
             }
-            if(radialWaitRelease) {if(pad.LT<80) radialWaitRelease=false; return true;}
-            if(pad.LT<160) return false;
+            if(radialWaitRelease) {if(pad.RT<80) radialWaitRelease=false; return true;}
+            if(pad.RT<160) return false;
             radialWaitRelease=true;
             OpenRadial(pad.Buttons);
             return true;
@@ -88,8 +85,8 @@ namespace PadLauncher {
             var section=new Expander {Header="Quick select menu",Foreground=white,Margin=new Thickness(0,16,0,12)};
             var panel=new StackPanel {Margin=new Thickness(0,8,0,0)};
             section.Content=panel;
-            string button=String.Equals(settings.ButtonPrompts,"Xbox",StringComparison.OrdinalIgnoreCase) ? "LT" : String.Equals(settings.ButtonPrompts,"Nintendo",StringComparison.OrdinalIgnoreCase) ? "ZL" : "L2";
-            var note=Label("Press "+button+" to open the wheel. Slot 1 is at the top; the rest go clockwise.",12,muted);
+            string button=Prompts.RightTrigger(settings);
+            var note=Label("Hold "+button+" to open the wheel. Slot 1 is at the top; the rest go clockwise.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
             bool initialized=false;
             section.Expanded+=(sender,args) => {

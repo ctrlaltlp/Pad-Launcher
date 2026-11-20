@@ -29,6 +29,7 @@ class SwitchProTests {
             Check(neutral.Buttons==0 && neutral.LX==0 && neutral.LY==0 && neutral.LT==0,"Neutral input does not cause actions");
             ushort[] masks={0x1000,0x2000,0x4000,0x8000,0x20,0x400,0x10,0x40,0x80,0x100,0x200,1,2,4,8};
             for(int i=0;i<masks.Length;i++) Check(SwitchProInput.Translate(1u<<i,0,0,0,0,0,0).Buttons==masks[i],"Physical Switch button mapping "+i);
+            Check(SwitchProInput.Translate(1u<<15,0,0,0,0,0,0).Buttons==0x0800,"Capture maps as a separate button");
             var extremes=SwitchProInput.Translate(0,Int16.MinValue,Int16.MinValue,Int16.MaxValue,Int16.MaxValue,Int16.MinValue,Int16.MaxValue);
             Check(extremes.LX==Int16.MinValue && extremes.LY==Int16.MaxValue && extremes.RX==Int16.MaxValue && extremes.RY==-Int16.MaxValue && extremes.LT==0 && extremes.RT==255,"Sticks and triggers use the existing input ranges without overflow");
             long time=0; bool attached=false; var fake=new Backend();

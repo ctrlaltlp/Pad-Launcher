@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
@@ -83,7 +83,9 @@ namespace PadLauncher {
         static extern uint GetRawInputDeviceInfo(IntPtr device,uint command,ref DeviceInfo info,ref uint size);
         readonly Dictionary<IntPtr,SonyPadModel> models=new Dictionary<IntPtr,SonyPadModel>();
         HwndSource source;
-        sealed class Sample { public PadState State; }
+        bool homePressPending;
+        public bool TakeHomePress() {bool pressed=homePressPending; homePressPending=false; return pressed;}
+        sealed class Sample { public PadState State; public long HomeDownAt=-1; }
         readonly Dictionary<IntPtr,Sample> pads=new Dictionary<IntPtr,Sample>();
         public bool Start(IntPtr window) {
             if(source!=null && !source.IsDisposed && source.Handle==window) return true;
@@ -103,7 +105,7 @@ namespace PadLauncher {
                 if(!source.IsDisposed) source.RemoveHook(OnMessage);
                 source=null;
             }
-            models.Clear(); pads.Clear();
+            models.Clear(); pads.Clear(); homePressPending=false;
         }
         public bool Read(out PadState state,out string identity) {
             var states=ReadAll();
@@ -144,7 +146,19 @@ namespace PadLauncher {
                 PadState decoded;
                 if(!SonyReports.Decode(model,report,out decoded)) continue;
                 Sample previous; decoded.Packet=pads.TryGetValue(inputDevice,out previous) ? previous.State.Packet+1 : 1;
-                pads[inputDevice]=new Sample {State=decoded};
+                long downAt=previous==null ? -1 : previous.HomeDownAt;
+                bool down=(decoded.Buttons&0x0400)!=0;
+                bool wasDown=previous!=null && (previous.State.Buttons&0x0400)!=0;
+                if(down!=wasDown) {
+                    long now=System.Diagnostics.Stopwatch.GetTimestamp();
+                    if(down) downAt=now;
+                    else {
+                        if(Gamepad.IsHomeTap(downAt,now))
+                            homePressPending=true;
+                        downAt=-1;
+                    }
+                }
+                pads[inputDevice]=new Sample {State=decoded,HomeDownAt=downAt};
             }
             return IntPtr.Zero;
         }

@@ -20,7 +20,7 @@ namespace PadLauncher {
         bool active,started;
         long nextAttempt;
         public string LastError {get;private set;}
-        static readonly ushort[] buttonMasks={0x1000,0x2000,0x4000,0x8000,0x0020,0x0400,0x0010,0x0040,0x0080,0x0100,0x0200,0x0001,0x0002,0x0004,0x0008};
+        static readonly ushort[] buttonMasks={0x1000,0x2000,0x4000,0x8000,0x0020,0x0400,0x0010,0x0040,0x0080,0x0100,0x0200,0x0001,0x0002,0x0004,0x0008,0x0800};
         public SwitchProInput():this(new SdlSwitchProBackend(),SwitchProDevices.Connected,() => (long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency)) {}
         public SwitchProInput(ISwitchProBackend backend,Func<bool> connected,Func<long> clock) {this.backend=backend; this.connected=connected; this.clock=clock;}
         public void Start() {active=true; nextAttempt=0;}
@@ -128,7 +128,7 @@ namespace PadLauncher {
                 } finally {if(ids!=IntPtr.Zero) Native.Free(ids);}
             }
             foreach(var pair in pads) {
-                uint buttons=0; for(int i=0;i<15;i++) if(Native.GetGamepadButton(pair.Value,i)) buttons|=1u<<i;
+                const int buttonCount=16; uint buttons=0; for(int i=0;i<buttonCount;i++) if(Native.GetGamepadButton(pair.Value,i)) buttons|=1u<<i;
                 var state=SwitchProInput.Translate(buttons,Native.GetGamepadAxis(pair.Value,0),Native.GetGamepadAxis(pair.Value,1),Native.GetGamepadAxis(pair.Value,2),Native.GetGamepadAxis(pair.Value,3),Native.GetGamepadAxis(pair.Value,4),Native.GetGamepadAxis(pair.Value,5));
                 state.Packet=++packet; result.Add(new KeyValuePair<string,PadState>("switch:"+pair.Key,state));
             }

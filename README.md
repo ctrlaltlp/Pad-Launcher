@@ -46,7 +46,7 @@ Controller input supports Xbox/XInput, DualShock 4, DualSense, and the original 
 | Exit app completely | Hold Circle / Xbox B / Nintendo A for 1 second | Tray → Exit app |
 | Change list | L1 / R1, Xbox LB / RB, Nintendo L / R | Page Up / Page Down |
 | Toggle Grid ↔ previous Angled/Rectangular layout | Square / Xbox X / Nintendo Y | — |
-| Move to next monitor | R2 / Xbox RT / Nintendo ZR | M |
+| Move to next monitor | L2 / Xbox LT / Nintendo ZL | M |
 | Search games with the gamepad keyboard | Triangle / Xbox Y / Nintendo X | Ctrl+F |
 | Refresh games, artwork and lists | Select/Create / Xbox Back/View / Nintendo − | F5 |
 | Toggle favourite | R3 / right stick click | F |
@@ -93,7 +93,7 @@ Open **Settings → Lists → List editor** to manage your lists.
 - **Duplicate** copies a list’s current games into a new list you can name and edit independently.
 - **Delete** removes a custom or combined list. Choose **Delete list and unregister its games** to also remove those games from Pad Launcher. Game files stay on disk.
 
-Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Press **L2 / LT / ZL** on the overlay to open **Quick select**. Configure its eight slots under **Settings → Overlay → Quick select menu** to launch a game, jump to a list, or browse games from lists that share a tag.
+Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Hold **R2 / RT / ZR** on the overlay to open **Quick select**. Configure its eight slots under **Settings → Overlay → Quick select menu** to launch a game, jump to a list, or browse games from lists that share a tag.
 
 ## Credits
 
