@@ -9,27 +9,46 @@ using System.Windows.Media;
 namespace PadLauncher {
     public partial class Launcher {
         Popup radial;
+        readonly System.Windows.Media.Effects.BlurEffect arcOverlayBlur=new System.Windows.Media.Effects.BlurEffect {Radius=14,RenderingBias=System.Windows.Media.Effects.RenderingBias.Performance};
         bool radialWaitRelease;
-        int radialIndex=-1;
+        int radialIndex;
+        int arcDirection,arcInput;
+        long arcNextStep;
         ushort radialButtons;
         List<RadialSlot> radialSlots;
         readonly List<Border> radialCards=new List<Border>();
-        readonly Brush radialDark=new SolidColorBrush(Color.FromRgb(21,36,46));
+        readonly Brush arcSelected=new SolidColorBrush(Color.FromRgb(163,240,205));
+        readonly Brush arcSelectedText=new SolidColorBrush(Color.FromRgb(13,25,34));
+        readonly Brush arcTextBackdrop=new SolidColorBrush(Color.FromArgb(218,21,36,46));
+        const double ArcCenterY=270,ArcStep=63;
 
-        readonly Brush radialSelected=new SolidColorBrush(Color.FromRgb(42,72,73));
-
-        bool HandleRadial(PadState pad) {
+        bool HandleRadial(PadState pad,long milliseconds) {
             if(radial!=null) {
-                if(pad.RT<80) { CloseRadial(); radialWaitRelease=false; suppressSearchRelease=true; return true; }
-                int x=pad.LX,y=pad.LY;
-                if(x*x+(double)y*y>14000.0*14000) {
-                    var angle=Math.Atan2(x,y);
-                    radialIndex=((int)Math.Round(angle*radialSlots.Count/(2*Math.PI))+radialSlots.Count)%radialSlots.Count;
+                if(pad.RT<80) {
+                    var slot=radialSlots[radialIndex];
+                    CloseRadial(); radialWaitRelease=false; suppressSearchRelease=true;
+                    if(settings.QuickSelectActivateOnRelease) ActivateRadialSlot(slot);
+                    return true;
                 }
                 ushort pressed=(ushort)(pad.Buttons & ~radialButtons);
                 radialButtons=pad.Buttons;
-                for(int i=0;i<radialCards.Count;i++) { radialCards[i].BorderBrush=i==radialIndex ? mint : muted; radialCards[i].Background=i==radialIndex ? radialSelected : radialDark; }
-                if((pressed&0x1000)!=0 && radialIndex>=0) ActivateRadialSlot(radialSlots[radialIndex]);
+                int direction=(pad.Buttons&1)!=0 ? -1 : (pad.Buttons&2)!=0 ? 1 : 0;
+                int input=direction==0 ? 0 : 1;
+                if(input==0 && Math.Abs((int)pad.LY)>15000) {direction=pad.LY>0 ? -1 : 1; input=2;}
+                if(direction!=0 && (direction!=arcDirection || input!=arcInput || milliseconds>=arcNextStep)) {
+                    bool first=direction!=arcDirection || input!=arcInput;
+                    radialIndex=(radialIndex+direction+radialSlots.Count)%radialSlots.Count;
+                    LayoutArc(direction);
+                    arcNextStep=milliseconds+(input==2 ? 105 : first ? 310 : 225);
+                }
+                arcDirection=direction; arcInput=input;
+                if((pressed&0x1000)!=0) {
+                    var slot=radialSlots[radialIndex];
+                    if(settings.QuickSelectActivateOnRelease) {
+                        CloseRadial(); suppressSearchRelease=true;
+                    }
+                    ActivateRadialSlot(slot);
+                }
                 return true;
             }
             if(radialWaitRelease) {if(pad.RT<80) radialWaitRelease=false; return true;}
@@ -39,28 +58,63 @@ namespace PadLauncher {
             return true;
         }
         void CloseRadial() {
-            if(radial!=null) {radial.IsOpen=false; radial=null;}
+            if(radial!=null) {radial.IsOpen=false; radial=null; scene.Effect=null;}
             radialCards.Clear();
         }
+        static double ArcX(double offset) {return 135-5.9*offset*offset;}
+        void LayoutArc(int direction) {
+            int count=radialCards.Count;
+            for(int i=0;i<count;i++) {
+                int offset=(i-radialIndex+count)%count;
+                if(offset>count/2) offset-=count;
+                var card=radialCards[i];
+                var text=(TextBlock)card.Child;
+                card.Background=offset==0 ? arcSelected : arcTextBackdrop;
+                text.Foreground=offset==0 ? arcSelectedText : white;
+                text.FontWeight=offset==0 ? FontWeights.SemiBold : FontWeights.Normal;
+                card.Opacity=Math.Abs(offset)>3 ? 0 : 1-Math.Abs(offset)*.19;
+                Panel.SetZIndex(card,4-Math.Abs(offset));
+                double x=ArcX(offset)+12,y=ArcCenterY+offset*ArcStep-22;
+                bool isLeft=settings.QuickSelectSide=="left";
+                if(isLeft) Canvas.SetLeft(card,x); else Canvas.SetRight(card,x);
+                Canvas.SetTop(card,y);
+                var transform=(TranslateTransform)card.RenderTransform;
+                var duration=TimeSpan.FromMilliseconds(95);
+                double previous=offset+direction;
+                bool animate=direction!=0 && Math.Abs(previous)<=4 && Math.Abs(offset)<=3;
+                transform.BeginAnimation(TranslateTransform.XProperty,animate ? new System.Windows.Media.Animation.DoubleAnimation((ArcX(offset)-ArcX(previous))*(isLeft ? -1 : 1),0,duration) : null);
+                transform.BeginAnimation(TranslateTransform.YProperty,animate ? new System.Windows.Media.Animation.DoubleAnimation(direction*ArcStep,0,duration) : null);
+            }
+        }
         void OpenRadial(ushort buttons) {
-            radialSlots=(settings.RadialSlots ?? PreviewRadialSlots()).Take(8).ToList();
+            bool useLists=settings.QuickSelectMode=="lists";
+            var arcLists=useLists ? filters.Where(list => CollectionEnabled(list.Id) && !list.UnsupportedDynamic &&
+                list.Id!="unavailable-collections" && !list.Id.StartsWith("radial-tag:",StringComparison.Ordinal)).ToList() : null;
+            radialSlots=useLists ? arcLists.Select(list => new RadialSlot {Kind="list",Target=list.Id}).ToList()
+                : (settings.RadialSlots ?? PreviewRadialSlots()).Take(8).ToList();
             if(radialSlots.Count==0) radialSlots.Add(new RadialSlot());
-            radialButtons=buttons; radialIndex=-1; navigation.Reset();
-            var canvas=new Canvas {Width=760,Height=590};
+            radialButtons=buttons; radialIndex=0; arcDirection=arcInput=0; navigation.Reset();
+            var canvas=new Canvas {Width=520,Height=540,ClipToBounds=true,IsHitTestVisible=false};
+            bool isLeft=settings.QuickSelectSide=="left";
+            var rail=new System.Windows.Shapes.Path {Data=Geometry.Parse(isLeft ? "M 0,18 Q 270,270 0,522" : "M 520,18 Q 250,270 520,522"),
+                Stroke=mint,StrokeThickness=2,Opacity=.65,IsHitTestVisible=false};
+            canvas.Children.Add(rail);
             for(int i=0;i<radialSlots.Count;i++) {
-                double angle=i*2*Math.PI/radialSlots.Count;
-                var text=Label(RadialSlotLabel(radialSlots[i]),14,white);
-                text.TextAlignment=TextAlignment.Center; text.TextTrimming=TextTrimming.CharacterEllipsis;
-                var card=new Border {Width=172,Height=58,Background=radialDark,BorderBrush=muted,
-                    BorderThickness=new Thickness(1.5),CornerRadius=new CornerRadius(10),Padding=new Thickness(7),Child=text};
-                text.VerticalAlignment=VerticalAlignment.Center;
-                Canvas.SetLeft(card,294+Math.Sin(angle)*262); Canvas.SetTop(card,266-Math.Cos(angle)*231);
+                var text=Label(useLists && arcLists.Count==0 ? "No available lists" : useLists ? arcLists[i].Name : RadialSlotLabel(radialSlots[i]),23,white);
+                text.MaxWidth=324; text.TextAlignment=isLeft ? TextAlignment.Left : TextAlignment.Right; text.TextTrimming=TextTrimming.CharacterEllipsis; text.VerticalAlignment=VerticalAlignment.Center;
+                var card=new Border {Height=44,CornerRadius=new CornerRadius(8),Padding=new Thickness(12,0,12,0),
+                    RenderTransform=new TranslateTransform(),Child=text};
                 canvas.Children.Add(card); radialCards.Add(card);
             }
-            var hub=new Border {Width=126,Height=126,CornerRadius=new CornerRadius(63),Background=radialDark,BorderBrush=mint,BorderThickness=new Thickness(1),Child=new TextBlock {Text="Quick\nselect",Foreground=mint,TextAlignment=TextAlignment.Center,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center}};
-            Canvas.SetLeft(hub,317); Canvas.SetTop(hub,232); canvas.Children.Add(hub);
-            radial=new Popup {AllowsTransparency=true,Placement=PlacementMode.Center,PlacementTarget=carousel,Child=canvas,StaysOpen=true,IsHitTestVisible=false};
+            LayoutArc(0);
+            double scale=Math.Min(1.5,Math.Min(ActualWidth/canvas.Width,ActualHeight/canvas.Height));
+            if(scale<=0) scale=1;
+            var scaledArc=new Viewbox {Width=canvas.Width*scale,Height=canvas.Height*scale,Child=canvas};
+            radial=new Popup {AllowsTransparency=true,Placement=PlacementMode.Relative,PlacementTarget=this,
+                HorizontalOffset=isLeft ? 0 : Math.Max(0,ActualWidth-scaledArc.Width),VerticalOffset=Math.Max(0,(ActualHeight-scaledArc.Height)/2),
+                Child=scaledArc,StaysOpen=true,IsHitTestVisible=false};
             radial.IsOpen=true;
+            scene.Effect=arcOverlayBlur;
         }
         List<RadialSlot> radialStarterSlots;
         List<RadialSlot> PreviewRadialSlots() {
@@ -81,16 +135,58 @@ namespace PadLauncher {
             while(slots.Count<8) slots.Add(new RadialSlot());
             return radialStarterSlots=slots;
         }
+        FrameworkElement CreateArcSideSettings(Window owner) {
+            var panel=new StackPanel();
+            var sideLabel=Label("Screen side",14,mint); sideLabel.Margin=new Thickness(0,12,0,6); panel.Children.Add(sideLabel);
+            var side=new SettingsComboBox {Name="QuickSelectSide",ItemsSource=new[]{"Left","Right"},
+                SelectedIndex=settings.QuickSelectSide=="left" ? 0 : 1,Padding=new Thickness(8)};
+            bool restoringSide=false;
+            side.SelectionChanged+=(sender,args) => {
+                if(restoringSide) return;
+                string previous=settings.QuickSelectSide;
+                try {settings.QuickSelectSide=side.SelectedIndex==0 ? "left" : "right"; Storage.Write("settings.json",settings);}
+                catch(Exception error) {
+                    settings.QuickSelectSide=previous;
+                    restoringSide=true; side.SelectedIndex=previous=="left" ? 0 : 1; restoringSide=false;
+                    ThemedMessage.Show(owner,error.Message,"Quick select");
+                }
+            };
+            panel.Children.Add(side);
+            var activateOnRelease=new CheckBox {Name="QuickSelectActivateOnRelease",Content="Activate on release",
+                IsChecked=settings.QuickSelectActivateOnRelease,Margin=new Thickness(0,12,0,0)};
+            activateOnRelease.Click+=(sender,args) => {
+                bool previous=settings.QuickSelectActivateOnRelease;
+                try {
+                    settings.QuickSelectActivateOnRelease=activateOnRelease.IsChecked==true;
+                    Storage.Write("settings.json",settings);
+                } catch(Exception error) {
+                    settings.QuickSelectActivateOnRelease=previous;
+                    activateOnRelease.IsChecked=previous;
+                    ThemedMessage.Show(owner,error.Message,"Quick select");
+                }
+            };
+            panel.Children.Add(activateOnRelease);
+            return panel;
+        }
         FrameworkElement CreateRadialSettings(Window owner) {
-            var section=new Expander {Header="Quick select menu",Foreground=white,Margin=new Thickness(0,16,0,12)};
+            var section=new Expander {Header="Menu setting",Foreground=white,Margin=new Thickness(0,16,0,12)};
             var panel=new StackPanel {Margin=new Thickness(0,8,0,0)};
             section.Content=panel;
             string button=Prompts.RightTrigger(settings);
-            var note=Label("Hold "+button+" to open the wheel. Slot 1 is at the top; the rest go clockwise.",12,muted);
+            var note=Label("Hold "+button+" to open Quick select. Use D-pad Up/Down to step or the left stick to scroll faster. The menu starts at slot 1.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
-            bool initialized=false;
-            section.Expanded+=(sender,args) => {
-                if(initialized || args.Source!=section) return;
+            var mode=new SettingsComboBox {Name="QuickSelectMode",ItemsSource=new[]{"Use lists for the arc menu","Custom"},
+                SelectedIndex=settings.QuickSelectMode=="lists" ? 0 : 1,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
+            panel.Children.Add(mode);
+            var customPanel=new StackPanel();
+            panel.Children.Add(customPanel);
+            bool initialized=false, restoringMode=false;
+            Action refreshMode=() => {
+                bool custom=settings.QuickSelectMode!="lists";
+                customPanel.Visibility=custom ? Visibility.Visible : Visibility.Collapsed;
+                note.Text="Hold "+button+" to open Quick select. Use D-pad Up/Down to step or the left stick to scroll faster."+
+                    (custom ? " The menu starts at slot 1." : " The menu follows the order of your overlay lists.");
+                if(!custom || !section.IsExpanded || initialized) return;
                 initialized=true;
                 var options=new Dictionary<string,List<KeyValuePair<string,string>>> {
                     {"game",library.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).Select(g => new KeyValuePair<string,string>(g.Id,g.Name)).ToList()},
@@ -119,11 +215,11 @@ namespace PadLauncher {
                     };
                     kind.SelectedItem=String.IsNullOrEmpty(slot.Target) ? "Unassigned" : slot.Kind=="game" ? "Game" : slot.Kind=="list" ? "List" : slot.Kind=="tag" ? "Tag" : "Unassigned";
                     if(!String.IsNullOrEmpty(slot.Target)) target.SelectedValue=slot.Target;
-                    panel.Children.Add(row);
+                    customPanel.Children.Add(row);
                 }
                 var save=new Button {Content="Save quick select",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0)};
-                panel.Children.Add(save);
-                var status=Label("",12,muted); panel.Children.Add(status);
+                customPanel.Children.Add(save);
+                var status=Label("",12,muted); customPanel.Children.Add(status);
                 save.Click+=(s,e) => {
                     var next=new List<RadialSlot>();
                     for(int i=0;i<kinds.Count;i++) {
@@ -138,6 +234,21 @@ namespace PadLauncher {
                     catch(Exception error) {settings.RadialSlots=previous; ThemedMessage.Show(owner,error.Message,"Quick select");}
                 };
             };
+            section.Expanded+=(sender,args) => {if(args.Source==section) refreshMode();};
+            mode.SelectionChanged+=(sender,args) => {
+                if(restoringMode) return;
+                string previous=settings.QuickSelectMode;
+                try {
+                    settings.QuickSelectMode=mode.SelectedIndex==0 ? "lists" : "custom";
+                    Storage.Write("settings.json",settings);
+                    refreshMode();
+                } catch(Exception error) {
+                    settings.QuickSelectMode=previous;
+                    restoringMode=true; mode.SelectedIndex=previous=="lists" ? 0 : 1; restoringMode=false;
+                    ThemedMessage.Show(owner,error.Message,"Quick select");
+                }
+            };
+            refreshMode();
             return section;
         }
         string RadialSlotLabel(RadialSlot slot) {

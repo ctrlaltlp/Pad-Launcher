@@ -413,6 +413,9 @@ namespace PadLauncher {
         public string Target {get;set;}
     }
     public class Settings {
+        public string QuickSelectSide {get;set;}
+        public bool QuickSelectActivateOnRelease {get;set;}
+        public string QuickSelectMode {get;set;}
         public List<RadialSlot> RadialSlots {get;set;}
         public bool SteamEnabled {get;set;}
         public bool IncludeSteamShortcuts {get;set;}

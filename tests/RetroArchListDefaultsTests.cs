@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -44,7 +44,7 @@ class RetroArchListDefaultsTests {
             settings.ListLayouts.Clear(); settings.ListArtworkSources.Clear(); settings.RetroArchListLayout=null; settings.RetroArchListArtworkSource=null; settings.RetroArchPreferLibretro=null;
             Storage.Write("settings.json",settings); Storage.Write("library.json",new Library {Games=new List<Game>{game,new Game {Id="pc",Name="PC game",Source="steam"}}});
             launcher=new Launcher(false,true); owner=launcher.CreateHelpWindow(); owner.Left=-20000; owner.Show();
-            ((TabControl)Find(owner,"HelpSettingsTabs")).SelectedIndex=1; owner.UpdateLayout();
+            ((TabControl)Find(owner,"HelpSettingsTabs")).SelectedIndex=2; owner.UpdateLayout();
             var section=(Expander)Find(owner,"RetroArchListsSettingsSection"); section.IsExpanded=true; owner.UpdateLayout();
             var inherit=(CheckBox)Find(owner,"RetroArchListUseGlobalSettings");
             Check(inherit.IsChecked==true && Find(owner,"RetroArchListsPreferLibretro")==null,"RetroArch list settings offer layout inheritance and no duplicate artwork preference checkbox");

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -184,8 +184,8 @@ class EmulatorUiTests {
             File.Move(exe+".moved",exe);
             typeof(Launcher).GetMethod("ApplyLibrary",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(launcher,new object[]{false});
             Check(!overlayTitle.Text.Contains("executable missing"),"Refreshing clears the emulator diagnostic after its executable is restored");
-            var tabs=(TabControl)Find(content,"HelpSettingsTabs"); tabs.SelectedIndex=4; Layout(content);
-            Check((string)((TabItem)tabs.Items[4]).Header=="Emulators" && (string)((TabItem)tabs.Items[6]).Header=="Artwork" && (string)((TabItem)tabs.Items[7]).Header=="System","Artwork tab follows Emulators and System remains last");
+            var tabs=(TabControl)Find(content,"HelpSettingsTabs"); tabs.SelectedIndex=5; Layout(content);
+            Check((string)((TabItem)tabs.Items[5]).Header=="Emulators" && (string)((TabItem)tabs.Items[7]).Header=="Artwork" && (string)((TabItem)tabs.Items[8]).Header=="System","Artwork tab follows Emulators and System remains last");
             var emulatorTabs=(TabControl)Find(content,"EmulatorTabs");
             emulatorTabs.SelectedIndex=1; Layout(content);
             var sections=((StackPanel)((TabItem)emulatorTabs.Items[1]).Content).Children.OfType<Expander>().ToList();

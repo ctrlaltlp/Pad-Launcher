@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.9.2")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.9.2")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.9.2")]
+[assembly: System.Reflection.AssemblyVersion("0.6.0")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.0")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -727,6 +727,12 @@ namespace PadLauncher {
                 </ControlTemplate></Setter.Value></Setter>
             </Style>");
             tabs.Items.Add(new TabItem {Header="Overlay",Content=settingsScroll});
+            var arcLayout=new StackPanel {Margin=new Thickness(28)};
+            var arcHeading=Label("Arc",26,white); arcHeading.FontWeight=FontWeights.SemiBold; arcLayout.Children.Add(arcHeading);
+            arcLayout.Children.Add(CreateArcSideSettings(dialog));
+            arcLayout.Children.Add(CreateRadialSettings(dialog));
+            tabs.Items.Add(new TabItem {Header="Arc",Content=new ScrollViewer {Content=arcLayout,
+                VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}});
             tabs.Items.Add(new TabItem {Header="Lists",Content=listsScroll});
             tabs.Items.Add(new TabItem {Header="Launchers",Content=integrationsScroll});
             tabs.Items.Add(new TabItem {Header="Custom games",Content=customScroll});
@@ -1294,7 +1300,7 @@ namespace PadLauncher {
                 catch(Exception error) { restoringSizing=true; sizingPicker.SelectedValue=previous; restoringSizing=false; ThemedMessage.Show(dialog,error.Message,"Settings"); }
             };
             sizingControls.Children.Add(sizingPicker); layout.Children.Add(sizingControls);
-            layout.Children.Add(CreateRadialSettings(dialog));
+
             var gridHeading=Label("Grid settings",16,white); gridHeading.FontWeight=FontWeights.SemiBold; gridHeading.Margin=new Thickness(0,12,0,0); columnsControls.Children.Add(gridHeading);
             var columnsCaption=Label("Grid columns",14,mint); columnsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(columnsCaption);
             var columnsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToArray(),SelectedItem=settings.GridColumns >= 2 && settings.GridColumns <= 10 ? settings.GridColumns : 5,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
@@ -2407,7 +2413,7 @@ namespace PadLauncher {
             }
             carousel.Children.Add(guideActions);
         }
-        internal static int SettingsTabIndex(int oldIndex) {return oldIndex==0 ? 5 : oldIndex>=1 && oldIndex<=5 ? oldIndex-1 : oldIndex;}
+        internal static int SettingsTabIndex(int oldIndex) {return oldIndex==0 ? 6 : oldIndex==1 ? 0 : oldIndex>=2 && oldIndex<=5 ? oldIndex : oldIndex+1;}
         public void OpenSettingsTab(int tab) {
             bool created=false;
             if(helpWindow==null) { helpWindow=CreateHelpWindow(); helpWindow.Closed+=(s,e) => { helpWindow=null; helpTabs=null; missingArtworkList=null; missingArtworkCount=null; }; created=true; }
@@ -2684,7 +2690,7 @@ namespace PadLauncher {
         }
         internal void ApplyControllerState(PadState pad,string source,long milliseconds) {
             if(gameSearchWindow!=null) {HandleGameSearchController(pad,milliseconds); return;}
-            if(HandleRadial(pad)) return;
+            if(HandleRadial(pad,milliseconds)) return;
             pad=RemapController(pad,"overlay");
             if(suppressSearchRelease) {
                 previousButtons=pad.Buttons; previousInputSource=source;

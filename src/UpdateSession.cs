@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -98,7 +98,7 @@ namespace PadLauncher {
                 ShowHelpWindow();
                 var namedTab=helpTabs.Items.Cast<TabItem>().FirstOrDefault(tab => Convert.ToString(tab.Header)==state.SettingsTabName);
                 if(namedTab!=null) helpTabs.SelectedItem=namedTab;
-                else helpTabs.SelectedIndex=Math.Max(0,Math.Min(helpTabs.Items.Count-1,String.IsNullOrEmpty(state.SettingsTabName) ? (state.SettingsTab==6 ? 7 : SettingsTabIndex(state.SettingsTab)) : state.SettingsTab));
+                else helpTabs.SelectedIndex=Math.Max(0,Math.Min(helpTabs.Items.Count-1,String.IsNullOrEmpty(state.SettingsTabName) ? (state.SettingsTab==6 ? 8 : SettingsTabIndex(state.SettingsTab)) : state.SettingsTab));
                 if(state.Width>0 && state.Height>0 && !Double.IsInfinity(state.Width) && !Double.IsInfinity(state.Height)) {
                     var area=new Rect(SystemParameters.VirtualScreenLeft,SystemParameters.VirtualScreenTop,SystemParameters.VirtualScreenWidth,SystemParameters.VirtualScreenHeight);
                     var bounds=new Rect(state.Left,state.Top,state.Width,state.Height);

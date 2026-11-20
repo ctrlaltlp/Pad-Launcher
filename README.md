@@ -93,7 +93,7 @@ Open **Settings → Lists → List editor** to manage your lists.
 - **Duplicate** copies a list’s current games into a new list you can name and edit independently.
 - **Delete** removes a custom or combined list. Choose **Delete list and unregister its games** to also remove those games from Pad Launcher. Game files stay on disk.
 
-Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Hold **R2 / RT / ZR** on the overlay to open **Quick select**. Configure its eight slots under **Settings → Overlay → Quick select menu** to launch a game, jump to a list, or browse games from lists that share a tag.
+Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Hold **R2 / RT / ZR** on the overlay to open the **Arc menu**. Use D-pad Up/Down to step through items or the left stick to scroll faster. Under **Settings → Arc**, choose a screen side, use your overlay lists or eight custom slots for games, lists, and tags, and optionally activate the highlighted item on release.
 
 ## Credits
 
