@@ -95,6 +95,14 @@ Open **Settings → Lists → List editor** to manage your lists.
 
 Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Hold **R2 / RT / ZR** on the overlay to open the **Arc menu**. Use D-pad Up/Down to step through items or the left stick to scroll faster. Under **Settings → Arc**, choose a screen side, use your overlay lists or eight custom slots for games, lists, and tags, and optionally activate the highlighted item on release.
 
+## Command-line shortcuts
+
+Pass these arguments to `PadLauncher.exe` from Controller Companion or another mapper:
+
+- `--toggle-overlay` — Open the overlay, request focus if it is already open behind another window, or hide it if it already has focus.
+- `--toggle-arc` — Toggle the Arc menu with the overlay visible, without holding a trigger.
+- `--toggle-arc-only` — Toggle the Arc menu on its own. Selecting a list or tag shows it in the overlay; selecting a game launches it directly.
+
 ## Credits
 
 Controller artwork from **PS5 Button Icons and Controls**, **Xbox Series Button Icons and Controls**, and **Switch Button Icons and Controls** by [Zacksly](https://zacksly.itch.io), licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Pad Launcher crops and scales these images and adds interactive control labels and guide lines.

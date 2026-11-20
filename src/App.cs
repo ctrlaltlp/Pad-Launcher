@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.0")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.0")]
+[assembly: System.Reflection.AssemblyVersion("0.6.1")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.1")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.1")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -144,11 +144,13 @@ namespace PadLauncher {
 #endif
             bool first;
             var showSignal=new EventWaitHandle(false,EventResetMode.AutoReset,InstanceName+".Show");
+            var arcOnlySignal=new EventWaitHandle(false,EventResetMode.AutoReset,InstanceName+".ArcOnly");
+            var arcSignal=new EventWaitHandle(false,EventResetMode.AutoReset,InstanceName+".Arc");
             var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,InstanceName+".Exit");
             instance = new Mutex(true, InstanceName, out first);
             if (!first) {
                 foreach (var process in new[]{Process.GetCurrentProcess().ProcessName,"PadLauncher","SteamPadLauncher"}.Distinct().SelectMany(name => Process.GetProcessesByName(name)).GroupBy(p => p.Id).Select(group => group.First())) if (process.Id!=Process.GetCurrentProcess().Id) AllowSetForegroundWindow(process.Id);
-                if (args.Contains("--quit")) exitSignal.Set(); else showSignal.Set();
+                if (args.Contains("--quit")) exitSignal.Set(); else if(args.Contains("--toggle-arc-only")) arcOnlySignal.Set(); else if(args.Contains("--toggle-arc")) arcSignal.Set(); else showSignal.Set();
                 return;
             }
             if (args.Contains("--quit")) { instance.ReleaseMutex(); return; }
@@ -163,10 +165,12 @@ namespace PadLauncher {
                 finally {reportingError=false;}
             };
             var window = new Launcher(args.Contains("--demo") || (args.Contains("--render-preview") && !args.Contains("--live-preview")), args.Contains("--render-preview"));
-            RegisteredWaitHandle showWait=null,exitWait=null;
+            RegisteredWaitHandle showWait=null,arcWait=null,arcOnlyWait=null,exitWait=null;
             System.Windows.Forms.NotifyIcon tray=null;
             if (!args.Contains("--render-preview")) {
                 showWait=ThreadPool.RegisterWaitForSingleObject(showSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ToggleOverlayFromShortcut)),null,Timeout.Infinite,false);
+                arcOnlyWait=ThreadPool.RegisterWaitForSingleObject(arcOnlySignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ToggleArcOnlyFromShortcut)),null,Timeout.Infinite,false);
+                arcWait=ThreadPool.RegisterWaitForSingleObject(arcSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ToggleArcFromShortcut)),null,Timeout.Infinite,false);
                 exitWait=ThreadPool.RegisterWaitForSingleObject(exitSignal,(s,t) => app.Dispatcher.BeginInvoke(new Action(window.ExitApp)),null,Timeout.Infinite,false);
                 tray=new System.Windows.Forms.NotifyIcon { Icon=System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetExecutingAssembly().Location),Text=AppName,Visible=true };
                 var menu=new System.Windows.Forms.ContextMenuStrip {
@@ -195,16 +199,25 @@ namespace PadLauncher {
                 window.PrepareTray();
                 string resume=Argument(args,"--resume-update");
                 if(!String.IsNullOrEmpty(resume)) window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(() => window.ResumeAfterUpdate(resume)));
-                else window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(window.StartInitialSetup));
+                else window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(() => {
+                    if(!args.Contains("--toggle-arc-only")) window.StartInitialSetup();
+                    if(args.Contains("--toggle-arc-only")) window.ToggleArcOnlyFromShortcut();
+                    else if(args.Contains("--toggle-arc")) window.ToggleArcFromShortcut();
+                    else if(args.Contains("--toggle-overlay")) window.ShowOverlay();
+                }));
 #if ARTWORK_TEST || XBOX_GUIDE_TEST
                 window.ShowOverlay();
 #endif
                 app.Run();
             }
             if (showWait!=null) showWait.Unregister(null);
+            if (arcOnlyWait!=null) arcOnlyWait.Unregister(null);
+            if (arcWait!=null) arcWait.Unregister(null);
             if (exitWait!=null) exitWait.Unregister(null);
             if (tray!=null) { tray.Visible=false; tray.ContextMenuStrip.Dispose(); var icon=tray.Icon; tray.Dispose(); if(icon!=null) icon.Dispose(); }
             if (showSignal!=null) showSignal.Dispose();
+            if (arcOnlySignal!=null) arcOnlySignal.Dispose();
+            if (arcSignal!=null) arcSignal.Dispose();
             if (exitSignal!=null) exitSignal.Dispose();
             instance.ReleaseMutex();
         }
@@ -325,6 +338,7 @@ namespace PadLauncher {
             Closed += (s,e) => { updateCancellation.Cancel(); controllerTimer.Stop(); noticeTimer.Stop(); navigationSaveTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
                 CloseRadial();
+                CancelArcReveal();
                 if(gameSearchWindow!=null) gameSearchWindow.Close();
                 if (!exiting) {
                     e.Cancel=true; controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
@@ -342,7 +356,7 @@ namespace PadLauncher {
             noticeTimer.Interval = TimeSpan.FromSeconds(5);
             navigationSaveTimer.Interval=TimeSpan.FromMilliseconds(350);
             navigationSaveTimer.Tick+=(s,e) => {navigationSaveTimer.Stop(); Save();};
-            noticeTimer.Tick += (s,e) => { notice.Visibility = Visibility.Collapsed; noticeTimer.Stop(); RestoreTemporaryLabels(); };
+            noticeTimer.Tick += (s,e) => { notice.Visibility = Visibility.Collapsed; if(arcOnlyNotice!=null) arcOnlyNotice.Text=""; noticeTimer.Stop(); RestoreTemporaryLabels(); };
             if (demo) { library = Demo(); settings.SelectedId="4"; ApplyLibrary(true); }
             else {
                 var cached = Storage.Read<Library>("library.json");
@@ -367,6 +381,7 @@ namespace PadLauncher {
             Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(StartAutomaticUpdates));
         }
         internal void ToggleOverlayFromShortcut() {
+            if(arcOnly) {CloseRadial(); ShowOverlay(); return;}
             if(exiting) return;
             if(!IsVisible || OverlayHasForeground()) {ToggleOverlay(); return;}
             FocusVisibleOverlayFromShortcut();
@@ -384,12 +399,13 @@ namespace PadLauncher {
             if(exiting) return;
             if(IsVisible) Close(); else ShowOverlay();
         }
-        public void ShowOverlay() {
+        public void ShowOverlay() {ShowOverlay(false);}
+        void ShowOverlay(bool keepPreparedList) {
             if (exiting) return;
             if (IsVisible) { FocusOverlayInput(); return; }
             launching=false; controllerWaitForForegroundRelease=false; exitButton.Reset(); previousButtons=0; navigation.Reset();
             suppressSearchRelease=false; bindingLeftTriggerDown=bindingRightTriggerDown=false; testLayoutTriggerDown=false;
-            ApplyLibrary(true);
+            if(!keepPreparedList) ApplyLibrary(true);
             var monitor=preview ? null : ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
             if(monitor!=null) PlaceOnMonitor(monitor);
             Show();
@@ -397,7 +413,7 @@ namespace PadLauncher {
             if (!preview) { Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle()); controllerTimer.Interval=TimeSpan.FromMilliseconds(16); controllerTimer.Start(); }
             FocusOverlayInput();
             // Paint retained artwork first, then reread Steam's saved changes.
-            if (!preview) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
+            if (!preview && !keepPreparedList) Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(() => RefreshLibrary()));
         }
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
@@ -2055,7 +2071,7 @@ namespace PadLauncher {
             if(ActiveLayout=="grid") Render(false);
             ShowNotice(Prompts.Help(settings));
         }
-        void ShowNotice(string text,double seconds=5) { noticeText.Text = text; notice.Visibility = Visibility.Visible; noticeTimer.Stop(); noticeTimer.Interval=TimeSpan.FromSeconds(seconds); noticeTimer.Start(); }
+        void ShowNotice(string text,double seconds=5) { if(arcOnlyNotice!=null) arcOnlyNotice.Text=text; else {noticeText.Text = text; notice.Visibility = Visibility.Visible;} noticeTimer.Stop(); noticeTimer.Interval=TimeSpan.FromSeconds(seconds); noticeTimer.Start(); }
         void FinishLibraryScan() {
             scanning=false;
             if(!pendingLibraryRefresh) return;
@@ -2222,11 +2238,12 @@ namespace PadLauncher {
             cards.Clear(); carousel.Children.Clear(); ApplyCarouselScale(); Render(false);
             DownloadListArtwork();
         }
-        void ChangeCollection(int delta,bool vertical=false) {
+        void ChangeCollection(int delta,bool vertical=false,bool animate=true) {
             if (launching || filters.Count < 2) return;
             int next=(collectionIndex+delta+filters.Count)%filters.Count;
             if(next==collectionIndex) return;
-            var oldList=DetachOutgoingList();
+            if(!animate) StopListTransition();
+            var oldList=animate ? DetachOutgoingList() : null;
             if(filters[collectionIndex].Id.StartsWith("radial-tag:",StringComparison.Ordinal) || !CollectionEnabled(filters[collectionIndex].Id)) {
                 filters.RemoveAt(collectionIndex);
                 if(next>collectionIndex) next--;
@@ -2235,7 +2252,7 @@ namespace PadLauncher {
             try {
                 settings.CollectionId = filters[collectionIndex].Id; FilterGames(false);
                 navigationSaveTimer.Stop(); if(!demo) navigationSaveTimer.Start();
-                AnimateListSwitch(oldList,delta,vertical);
+                if(animate) AnimateListSwitch(oldList,delta,vertical);
             }
             catch {StopListTransition(); throw;}
             if (filters[collectionIndex].UnsupportedDynamic) ShowNotice(filters[collectionIndex].UnsupportedReason ?? "This dynamic list uses a rule that is not supported yet.");
@@ -2575,6 +2592,7 @@ namespace PadLauncher {
         }
         void OnKey(object sender, System.Windows.Input.KeyEventArgs e) {
             if(!preview && (controllerWaitForForegroundRelease || !OverlayHasForeground())) return;
+            if(HandleArcShortcutKey(e)) return;
             if(GameSearchOpen) {HandleSearchKey(e); return;}
             string action=ControlBindings.KeyAction(settings,"overlay",e.Key==System.Windows.Input.Key.System ? e.SystemKey : e.Key,System.Windows.Input.Keyboard.Modifiers);
             if(action==null) return;
@@ -2655,11 +2673,12 @@ namespace PadLauncher {
             controllerWaitForForegroundRelease=true;
         }
         void PollController(object sender,EventArgs e) {
+            if(arcOpenedByShortcut && (arcOnlyWindow!=null || radial!=null)) {PollShortcutArc(); return;}
             if(!IsVisible) {PollTrayHome(); return;}
             bool homePressed=TakeOverlayHomePress();
             if (preview || !OverlayHasForeground()) {
                 controllerWaitForForegroundRelease=true;
-                if(radial!=null) {CloseRadial(); radialWaitRelease=false;}
+                if(radial!=null && !arcOpenedByShortcut) {CloseRadial(); radialWaitRelease=false;}
                 if(homePressed && !launching &&
                     (helpWindow==null || !helpWindow.IsVisible || helpWindow.WindowState==WindowState.Minimized) &&
                     !OwnedWindows.Cast<Window>().Any(window => window!=gameSearchWindow && window.IsVisible && window.WindowState!=WindowState.Minimized)) {
@@ -2680,7 +2699,7 @@ namespace PadLauncher {
 #if NAVIGATION_DIAGNOSTICS
             controllerTrace.Poll(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency,true,found,pad,Gamepad.Source);
 #endif
-            if (!found) { CloseRadial(); radialWaitRelease=false; exitButton.Reset(); previousButtons=0; navigation.Reset(); return; }
+            if (!found) { if(!arcOpenedByShortcut) CloseRadial(); controllerWaitForForegroundRelease=false; radialWaitRelease=false; exitButton.Reset(); previousButtons=0; navigation.Reset(); return; }
             if(controllerWaitForForegroundRelease) {
                 if(pad.Buttons!=0 || pad.LT>=80 || pad.RT>=80) return;
                 controllerWaitForForegroundRelease=false;

@@ -9,12 +9,16 @@ using System.Windows.Media;
 namespace PadLauncher {
     public partial class Launcher {
         Popup radial;
+        Window arcOnlyWindow;
+        TextBlock arcOnlyNotice;
         readonly System.Windows.Media.Effects.BlurEffect arcOverlayBlur=new System.Windows.Media.Effects.BlurEffect {Radius=14,RenderingBias=System.Windows.Media.Effects.RenderingBias.Performance};
-        bool radialWaitRelease;
+        bool radialWaitRelease,arcOpenedByShortcut,arcOnly,arcOnlyWasHidden;
+
         int radialIndex;
         int arcDirection,arcInput;
         long arcNextStep;
         ushort radialButtons;
+        bool arcConfirmNeedsRelease;
         List<RadialSlot> radialSlots;
         readonly List<Border> radialCards=new List<Border>();
         readonly Brush arcSelected=new SolidColorBrush(Color.FromRgb(163,240,205));
@@ -23,8 +27,9 @@ namespace PadLauncher {
         const double ArcCenterY=270,ArcStep=63;
 
         bool HandleRadial(PadState pad,long milliseconds) {
-            if(radial!=null) {
-                if(pad.RT<80) {
+
+            if(radial!=null || arcOnlyWindow!=null) {
+                if(!arcOpenedByShortcut && pad.RT<80) {
                     var slot=radialSlots[radialIndex];
                     CloseRadial(); radialWaitRelease=false; suppressSearchRelease=true;
                     if(settings.QuickSelectActivateOnRelease) ActivateRadialSlot(slot);
@@ -32,6 +37,7 @@ namespace PadLauncher {
                 }
                 ushort pressed=(ushort)(pad.Buttons & ~radialButtons);
                 radialButtons=pad.Buttons;
+                if(arcOpenedByShortcut && (pressed&0x2000)!=0) {DismissArcShortcut(); suppressSearchRelease=true; return true;}
                 int direction=(pad.Buttons&1)!=0 ? -1 : (pad.Buttons&2)!=0 ? 1 : 0;
                 int input=direction==0 ? 0 : 1;
                 if(input==0 && Math.Abs((int)pad.LY)>15000) {direction=pad.LY>0 ? -1 : 1; input=2;}
@@ -44,10 +50,10 @@ namespace PadLauncher {
                 arcDirection=direction; arcInput=input;
                 if((pressed&0x1000)!=0) {
                     var slot=radialSlots[radialIndex];
-                    if(settings.QuickSelectActivateOnRelease) {
+                    if(!arcOnly && (arcOpenedByShortcut || settings.QuickSelectActivateOnRelease)) {
                         CloseRadial(); suppressSearchRelease=true;
                     }
-                    ActivateRadialSlot(slot);
+                    suppressSearchRelease=true; ActivateRadialSlot(slot);
                 }
                 return true;
             }
@@ -57,9 +63,122 @@ namespace PadLauncher {
             OpenRadial(pad.Buttons);
             return true;
         }
+        internal void ToggleArcFromShortcut() {ToggleArcShortcut(false);}
+        internal void ToggleArcOnlyFromShortcut() {ToggleArcShortcut(true);}
+        void ToggleArcShortcut(bool only) {
+            if(exiting || launching) return;
+            if(radial!=null || arcOnly) {DismissArcShortcut(); suppressSearchRelease=true; return;}
+            if(GameSearchOpen) gameSearchWindow.Close();
+            arcOnly=only; arcOnlyWasHidden=only && !IsVisible;
+            if(arcOnly) {
+                if(IsVisible) Hide();
+                CancelArcReveal();
+                StopListTransition();
+            } else {
+                if(!IsVisible) ShowOverlay(); else if(!OverlayHasForeground()) FocusVisibleOverlayFromShortcut();
+                if(!IsVisible) {CloseRadial(); return;}
+            }
+            PadState pad;
+            if(arcOnly && !preview) {
+                Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle());
+                controllerTimer.Interval=TimeSpan.FromMilliseconds(16); controllerTimer.Start();
+            }
+            ushort buttons=!preview && Gamepad.Read(out pad) ? pad.Buttons : (ushort)0;
+            arcOpenedByShortcut=true;
+            OpenRadial(buttons);
+        }
+        void PollShortcutArc() {
+            PadState pad;
+            if(preview || !Gamepad.Read(out pad)) return;
+            var target=arcOnlyWindow ?? this;
+            var handle=new System.Windows.Interop.WindowInteropHelper(target).Handle;
+            bool confirmDown=(pad.Buttons&0x1000)!=0;
+            if(!confirmDown) arcConfirmNeedsRelease=false;
+            bool foreground=handle!=IntPtr.Zero && GetForegroundWindow()==handle;
+            if(!foreground && confirmDown && !arcConfirmNeedsRelease) {
+                arcConfirmNeedsRelease=true;
+                target.Activate(); SetForegroundWindow(handle);
+            }
+            // A press that requested focus must be released before it can confirm.
+            if(!foreground || arcConfirmNeedsRelease) pad.Buttons=(ushort)(pad.Buttons & ~0x1000);
+            HandleRadial(pad,(long)(System.Diagnostics.Stopwatch.GetTimestamp()*1000.0/System.Diagnostics.Stopwatch.Frequency));
+        }
+        bool HandleArcShortcutKey(System.Windows.Input.KeyEventArgs e) {
+            if((radial==null && arcOnlyWindow==null) || !arcOpenedByShortcut) return false;
+            e.Handled=true;
+            if(e.Key==System.Windows.Input.Key.Escape) {DismissArcShortcut(); return true;}
+            if(e.Key==System.Windows.Input.Key.Enter && !e.IsRepeat) {
+                var slot=radialSlots[radialIndex]; if(!arcOnly) CloseRadial(); ActivateRadialSlot(slot); return true;
+            }
+            int direction=e.Key==System.Windows.Input.Key.Up ? -1 : e.Key==System.Windows.Input.Key.Down ? 1 : 0;
+            if(direction!=0) {
+                radialIndex=(radialIndex+direction+radialSlots.Count)%radialSlots.Count;
+                LayoutArc(direction);
+            }
+            return true;
+        }
+        void DismissArcShortcut() {
+            bool restoreOverlay=arcOnly && !arcOnlyWasHidden;
+            CloseRadial();
+            if(restoreOverlay) ShowOverlay(true);
+        }
         void CloseRadial() {
+            arcOnly=arcOnlyWasHidden=false;
+            if(arcOnlyWindow!=null) {
+                var window=arcOnlyWindow; arcOnlyWindow=null; window.Close();
+                if(!IsVisible && !exiting) UpdateTrayHomeListener();
+            }
             if(radial!=null) {radial.IsOpen=false; radial=null; scene.Effect=null;}
-            radialCards.Clear();
+            radialCards.Clear(); arcOpenedByShortcut=false; arcOnlyNotice=null;
+        }
+        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+        static extern IntPtr CreateRectRgn(int left,int top,int right,int bottom);
+        [System.Runtime.InteropServices.DllImport("gdi32.dll")]
+        static extern bool DeleteObject(IntPtr region);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern int SetWindowRgn(IntPtr window,IntPtr region,bool redraw);
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        static extern int DwmFlush();
+
+        EventHandler arcRevealFrame;
+        IntPtr arcRevealClippedWindow;
+        void CancelArcReveal() {
+            if(arcRevealFrame!=null) {
+                CompositionTarget.Rendering-=arcRevealFrame;
+                arcRevealFrame=null;
+            }
+            if(arcRevealClippedWindow!=IntPtr.Zero) {
+                SetWindowRgn(arcRevealClippedWindow,IntPtr.Zero,true);
+                arcRevealClippedWindow=IntPtr.Zero;
+            }
+            Opacity=1;
+        }
+        void RevealArcOnlyList() {
+            if(!arcOnly) return;
+            CloseRadial();
+            var handle=new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+            var region=CreateRectRgn(0,0,0,0);
+            if(region!=IntPtr.Zero && SetWindowRgn(handle,region,true)!=0) arcRevealClippedWindow=handle;
+            else {
+                if(region!=IntPtr.Zero) DeleteObject(region);
+                Opacity=0;
+            }
+            int frames=0;
+            arcRevealFrame=(sender,args) => {
+                if(!IsVisible || exiting) {CancelArcReveal(); return;}
+                if(++frames<2) return;
+                DwmFlush();
+                CancelArcReveal();
+            };
+            CompositionTarget.Rendering+=arcRevealFrame;
+            try {
+                ShowOverlay(true);
+                UpdateLayout();
+                controllerWaitForForegroundRelease=true;
+            } catch {
+                CancelArcReveal();
+                throw;
+            }
         }
         static double ArcX(double offset) {return 135-5.9*offset*offset;}
         void LayoutArc(int direction) {
@@ -93,8 +212,8 @@ namespace PadLauncher {
             radialSlots=useLists ? arcLists.Select(list => new RadialSlot {Kind="list",Target=list.Id}).ToList()
                 : (settings.RadialSlots ?? PreviewRadialSlots()).Take(8).ToList();
             if(radialSlots.Count==0) radialSlots.Add(new RadialSlot());
-            radialButtons=buttons; radialIndex=0; arcDirection=arcInput=0; navigation.Reset();
-            var canvas=new Canvas {Width=520,Height=540,ClipToBounds=true,IsHitTestVisible=false};
+            radialButtons=buttons; arcConfirmNeedsRelease=(buttons&0x1000)!=0; radialIndex=0; arcDirection=arcInput=0; navigation.Reset();
+            var canvas=new Canvas {Width=520,Height=540,ClipToBounds=true,IsHitTestVisible=arcOnly};
             bool isLeft=settings.QuickSelectSide=="left";
             var rail=new System.Windows.Shapes.Path {Data=Geometry.Parse(isLeft ? "M 0,18 Q 270,270 0,522" : "M 520,18 Q 250,270 520,522"),
                 Stroke=mint,StrokeThickness=2,Opacity=.65,IsHitTestVisible=false};
@@ -106,7 +225,13 @@ namespace PadLauncher {
                     RenderTransform=new TranslateTransform(),Child=text};
                 canvas.Children.Add(card); radialCards.Add(card);
             }
+            if(arcOnly) {
+                arcOnlyNotice=Label("",15,mint);
+                arcOnlyNotice.Width=420; arcOnlyNotice.TextAlignment=TextAlignment.Center; arcOnlyNotice.TextWrapping=TextWrapping.Wrap;
+                Canvas.SetLeft(arcOnlyNotice,50); Canvas.SetTop(arcOnlyNotice,492); canvas.Children.Add(arcOnlyNotice);
+            }
             LayoutArc(0);
+            if(arcOnly) {ShowArcOnlyWindow(canvas,isLeft); return;}
             double scale=Math.Min(1.5,Math.Min(ActualWidth/canvas.Width,ActualHeight/canvas.Height));
             if(scale<=0) scale=1;
             var scaledArc=new Viewbox {Width=canvas.Width*scale,Height=canvas.Height*scale,Child=canvas};
@@ -114,7 +239,28 @@ namespace PadLauncher {
                 HorizontalOffset=isLeft ? 0 : Math.Max(0,ActualWidth-scaledArc.Width),VerticalOffset=Math.Max(0,(ActualHeight-scaledArc.Height)/2),
                 Child=scaledArc,StaysOpen=true,IsHitTestVisible=false};
             radial.IsOpen=true;
-            scene.Effect=arcOverlayBlur;
+            if(!arcOnly) scene.Effect=arcOverlayBlur;
+        }
+        void ShowArcOnlyWindow(Canvas canvas,bool isLeft) {
+            var monitor=ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
+            var area=monitor.WorkingArea;
+            var view=new Viewbox {Child=canvas};
+            var window=new Window {Title="Pad Launcher Arc",Content=view,Width=520,Height=540,ShowInTaskbar=false,
+                WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,AllowsTransparency=true,
+                Background=Brushes.Transparent,Topmost=true,WindowStartupLocation=WindowStartupLocation.Manual};
+            window.PreviewKeyDown+=(sender,args) => HandleArcShortcutKey(args);
+            arcOnlyWindow=window;
+            var handle=new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+            SetWindowPos(handle,new IntPtr(-1),area.Left,area.Top,1,1,0x0010);
+            var source=System.Windows.Interop.HwndSource.FromHwnd(handle);
+            double dpi=source!=null && source.CompositionTarget!=null ? source.CompositionTarget.TransformToDevice.M11 : 1;
+            double scale=Math.Min(1.5*dpi,Math.Min(area.Width/canvas.Width,area.Height/canvas.Height));
+            int width=(int)(canvas.Width*scale),height=(int)(canvas.Height*scale);
+            int left=isLeft ? area.Left : area.Right-width, top=area.Top+(area.Height-height)/2;
+            SetWindowPos(handle,new IntPtr(-1),left,top,width,height,0x0010);
+            window.Show();
+            SetWindowPos(handle,new IntPtr(-1),left,top,width,height,0x0010);
+            window.Activate(); SetForegroundWindow(handle);
         }
         List<RadialSlot> radialStarterSlots;
         List<RadialSlot> PreviewRadialSlots() {
@@ -270,13 +416,15 @@ namespace PadLauncher {
             if(slot==null || String.IsNullOrWhiteSpace(slot.Target)) {ShowNotice("Assign an item to this slot",1.5); return;}
             if(slot.Kind=="game") {LaunchRadialGame(library.Games.FirstOrDefault(g => g.Id==slot.Target)); return;}
             if(slot.Kind=="list") {
+                if(!CollectionEnabled(slot.Target)) {ShowNotice("This list is hidden from the overlay.",1.5); return;}
                 int index=filters.FindIndex(c => c.Id==slot.Target);
                 if(index<0) {
                     var list=CollectionOptions().FirstOrDefault(c => c.Id==slot.Target);
                     if(list==null) return;
                     filters.Add(list); index=filters.Count-1;
                 }
-                if(index!=collectionIndex) ChangeCollection(index-collectionIndex);
+                if(index!=collectionIndex) ChangeCollection(index-collectionIndex,animate:!arcOnly);
+                RevealArcOnlyList();
             }
             if(slot.Kind=="tag" && settings.ListTags!=null) {
                 var options=CollectionOptions();
@@ -291,7 +439,8 @@ namespace PadLauncher {
                 int index=filters.FindIndex(c => c.Id==collection.Id);
                 if(index<0) {filters.Add(collection); index=filters.Count-1;} else filters[index]=collection;
                 if(index==collectionIndex) FilterGames(false);
-                else ChangeCollection(index-collectionIndex);
+                else ChangeCollection(index-collectionIndex,animate:!arcOnly);
+                RevealArcOnlyList();
             }
         }
     }
