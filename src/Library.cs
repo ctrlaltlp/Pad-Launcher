@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -408,7 +408,12 @@ namespace PadLauncher {
         string angledSizing;
         public string AngledSizing {get {return angledSizing;} set {angledSizing=value=="mixed" ? "fit" : value;}}
     }
+    public class RadialSlot {
+        public string Kind {get;set;}
+        public string Target {get;set;}
+    }
     public class Settings {
+        public List<RadialSlot> RadialSlots {get;set;}
         public bool SteamEnabled {get;set;}
         public bool IncludeSteamShortcuts {get;set;}
         public string SteamShortcutLaunchMode {get;set;}
@@ -423,6 +428,7 @@ namespace PadLauncher {
         public Dictionary<string,ListLayout> ListLayouts {get;set;}
         public int ArtworkPreferenceVersion {get;set;}
         public Dictionary<string,string> EmulatorArtworkSources {get;set;}
+        public Dictionary<string,string> ListTags {get;set;}
         public Dictionary<string,string> ListArtworkSources {get;set;}
         public bool? RetroArchPreferLibretro {get;set;}
         public ListLayout RetroArchListLayout {get;set;}

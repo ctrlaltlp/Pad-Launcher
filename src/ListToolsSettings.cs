@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -7,6 +7,110 @@ using System.Windows.Controls;
 
 namespace PadLauncher {
     public partial class Launcher {
+        FrameworkElement CreateListTagsSettings(Window owner) {
+            var panel=new StackPanel {Name="ListTagsSettings",Margin=new Thickness(0,12,0,0)};
+            var note=Label("Choose a list and enter tags separated by commas. To remove a tag, delete it and save.",12,muted);
+            note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
+            var picker=new SettingsComboBox {Name="ListTagsPicker",DisplayMemberPath="Value",SelectedValuePath="Key",
+                ItemsSource=CollectionOptions().Select(list => new KeyValuePair<string,string>(list.Id,ListLabel(list))).ToList(),
+                Padding=new Thickness(8),Margin=new Thickness(0,8,0,8)};
+            panel.Children.Add(picker);
+            var input=new TextBox {Name="ListTagsInput",Padding=new Thickness(8),MaxLength=1000};
+            panel.Children.Add(input);
+            var save=new Button {Content="Save tags",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0),Padding=new Thickness(12,7,12,7)};
+            panel.Children.Add(save);
+            var status=Label("",12,muted); panel.Children.Add(status);
+            Action load=() => {
+                string id=picker.SelectedValue as string, tags;
+                input.IsEnabled=save.IsEnabled=id!=null;
+                input.Text=id!=null && settings.ListTags!=null && settings.ListTags.TryGetValue(id,out tags) ? tags : "";
+                status.Text="";
+            };
+            picker.SelectionChanged+=(s,e) => load();
+            save.Click+=(s,e) => {
+                var id=picker.SelectedValue as string;
+                if(id==null) return;
+                var previous=settings.ListTags;
+                var next=new Dictionary<string,string>(previous ?? new Dictionary<string,string>());
+                next[id]=String.Join(", ",input.Text.Split(',').Select(tag => tag.Trim()).Where(tag => tag.Length>0).Distinct(StringComparer.OrdinalIgnoreCase));
+                try {settings.ListTags=next; Storage.Write("settings.json",settings); input.Text=next[id]; status.Text="Tags saved.";}
+                catch(Exception error) {settings.ListTags=previous; ThemedMessage.Show(owner,error.Message,"List tags");}
+            };
+            picker.SelectedIndex=0; load();
+            var tabs=new TabControl {Name="ListTagsTabs",Background=owner.Background,Foreground=white,Margin=new Thickness(0,10,0,0)};
+            StyleSettingsSubtabs(tabs,true);
+
+            var byTag=new StackPanel {Margin=new Thickness(0,2,0,0)};
+            tabs.Items.Add(new TabItem {Header="By tag",Content=byTag});
+            tabs.Items.Add(new TabItem {Header="By list",Content=panel});
+            byTag.Children.Add(Label("Choose an existing tag or type a new one, then check the lists that should have it.",12,muted));
+            var tagPicker=new SettingsComboBox {Padding=new Thickness(8),Margin=new Thickness(0,8,0,8)};
+            byTag.Children.Add(Label("Existing tags",12,mint));
+            byTag.Children.Add(tagPicker);
+            var tagCaption=Label("Tag name",12,mint);
+            tagCaption.Margin=new Thickness(0,0,0,6); byTag.Children.Add(tagCaption);
+            var tagName=new TextBox {Padding=new Thickness(8),MaxLength=100,Margin=new Thickness(0,0,0,8)};
+            byTag.Children.Add(tagName);
+            var taggedOnly=new Button {Content="Show tagged lists only",
+                HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,8)};
+            byTag.Children.Add(taggedOnly);
+            var choices=new StackPanel();
+            byTag.Children.Add(new ScrollViewer {Content=choices,MaxHeight=280,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});
+            var boxes=CollectionOptions().Select(list => new CheckBox {Tag=list.Id,Content=ListLabel(list),Margin=new Thickness(0,4,0,4)}).ToList();
+            foreach(var box in boxes) choices.Children.Add(box);
+            bool showTaggedOnly=false;
+            Action filterTagged=() => {
+                foreach(var box in boxes) box.Visibility=!showTaggedOnly || box.IsChecked==true ? Visibility.Visible : Visibility.Collapsed;
+            };
+            taggedOnly.Click+=(sender,args) => {
+                showTaggedOnly=!showTaggedOnly;
+                if(showTaggedOnly) {taggedOnly.Background=mint; taggedOnly.Foreground=System.Windows.Media.Brushes.Black;}
+                else {taggedOnly.ClearValue(Control.BackgroundProperty); taggedOnly.ClearValue(Control.ForegroundProperty);}
+                filterTagged();
+            };
+            foreach(var box in boxes) box.Click+=(sender,args) => filterTagged();
+            var saveTag=new Button {Content="Save tag",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0),Padding=new Thickness(12,7,12,7)};
+            byTag.Children.Add(saveTag);
+            var tagStatus=Label("",12,muted); byTag.Children.Add(tagStatus);
+            Func<string,IEnumerable<string>> split=value => (value ?? "").Split(',').Select(tag => tag.Trim()).Where(tag => tag.Length>0);
+            Action loadTag=() => {
+                string tag=tagName.Text.Trim();
+                saveTag.IsEnabled=tag.Length>0 && !tag.Contains(",");
+                foreach(var box in boxes) {
+                    string value;
+                    box.IsChecked=settings.ListTags!=null && settings.ListTags.TryGetValue((string)box.Tag,out value) && split(value).Contains(tag,StringComparer.OrdinalIgnoreCase);
+                }
+                filterTagged(); tagStatus.Text="";
+            };
+            Action refreshTags=() => {
+
+                tagPicker.ItemsSource=(settings.ListTags ?? new Dictionary<string,string>()).Values.SelectMany(split).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(tag => tag,StringComparer.CurrentCultureIgnoreCase).ToList();
+                loadTag();
+            };
+            tagName.TextChanged+=(sender,args) => loadTag();
+            tagPicker.SelectionChanged+=(sender,args) => {if(tagPicker.SelectedItem is string) tagName.Text=(string)tagPicker.SelectedItem;};
+            tabs.SelectionChanged+=(sender,args) => {
+                if(args.Source!=tabs) return;
+                if(tabs.SelectedIndex==0) refreshTags(); else load();
+            };
+            saveTag.Click+=(sender,args) => {
+                string tag=tagName.Text.Trim();
+                if(tag.Length==0 || tag.Contains(",")) return;
+                var previous=settings.ListTags;
+                var next=new Dictionary<string,string>(previous ?? new Dictionary<string,string>());
+                foreach(var box in boxes) {
+                    string id=(string)box.Tag, value;
+                    if(!next.TryGetValue(id,out value) && box.IsChecked!=true) continue;
+                    var values=split(value).Where(item => !String.Equals(item,tag,StringComparison.OrdinalIgnoreCase)).ToList();
+                    if(box.IsChecked==true) values.Add(tag);
+                    next[id]=String.Join(", ",values);
+                }
+                try {settings.ListTags=next; Storage.Write("settings.json",settings); refreshTags(); tagStatus.Text="Tag saved.";}
+                catch(Exception error) {settings.ListTags=previous; ThemedMessage.Show(owner,error.Message,"List tags");}
+            };
+            refreshTags();
+            return tabs;
+        }
         bool hiddenGamesExpanded;
         public void SetHiddenGames(IEnumerable<string> ids) {
             var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));

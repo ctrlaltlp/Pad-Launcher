@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.7.3")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.7.3")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.7.3")]
+[assembly: System.Reflection.AssemblyVersion("0.5.8")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.8")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.8")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -301,6 +301,7 @@ namespace PadLauncher {
             PreviewTextInput+=(s,e) => HandleSearchText(e);
             Closed += (s,e) => { updateCancellation.Cancel(); controllerTimer.Stop(); noticeTimer.Stop(); navigationSaveTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
+                CloseRadial();
                 if(gameSearchWindow!=null) gameSearchWindow.Close();
                 if (!exiting) {
                     e.Cancel=true; controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
@@ -938,11 +939,13 @@ namespace PadLauncher {
             var customListSection=new Expander {Name="ListEditorSection",Header="List editor",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listEditorExpanded};
             customListSection.Expanded+=(s,e) => listEditorExpanded=true; customListSection.Collapsed+=(s,e) => listEditorExpanded=false;
             var customListPanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
+            var editorCollections=CollectionOptions();
+            var editorCollectionsById=editorCollections.ToDictionary(c => c.Id);
             var customListOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("","Create a new list")};
             customListOptions.Add(new KeyValuePair<string,string>("source:custom","Custom games"));
-            foreach(var item in settings.CustomLists ?? new List<CustomList>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
-            foreach(var item in settings.CombinedCollections ?? new List<CombinedCollection>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(CollectionOptions().First(c => c.Id==item.Id))));
-            foreach(var item in CollectionOptions().Where(c => EmulatorLibrary.IsAutomaticList(settings,c.Id))) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(item)));
+            foreach(var item in settings.CustomLists ?? new List<CustomList>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(editorCollectionsById[item.Id])));
+            foreach(var item in settings.CombinedCollections ?? new List<CombinedCollection>()) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(editorCollectionsById[item.Id])));
+            foreach(var item in editorCollections.Where(c => EmulatorLibrary.IsAutomaticList(settings,c.Id))) customListOptions.Add(new KeyValuePair<string,string>(item.Id,ListLabel(item)));
             var customListPicker=new SettingsComboBox {Name="CustomListPicker",ItemsSource=customListOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,14)};
             var individualNote=Label("Choose individual games for a new list, or edit, rename, duplicate or delete an existing list.",12,muted);
             individualNote.TextWrapping=TextWrapping.Wrap; individualNote.Margin=new Thickness(0,0,0,8); customListPanel.Children.Add(individualNote);
@@ -964,6 +967,7 @@ namespace PadLauncher {
             };
             var unavailableGames=new List<string>();
             var selectionCount=Label("",12,muted); customListPanel.Children.Add(selectionCount);
+            bool countQueued=false;
             Action updateCount=() => selectionCount.Text=gameBoxes.Values.Count(b => b.IsChecked==true)+" games selected"+(unavailableGames.Count>0 ? " · "+unavailableGames.Count+" unavailable games retained" : "");
             var selectionActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,8)};
             var selectGames=new Button {Name="SelectAllListGames",Content="Select all",Padding=new Thickness(12,7,12,7)};
@@ -1001,9 +1005,14 @@ namespace PadLauncher {
             var duplicateCustomList=new Button {Name="DuplicateCustomList",Content="Duplicate list",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
             var automaticListNote=Label("Automatic emulator lists can be renamed or duplicated. Manage their games under Emulators, or hide their list under Overlay lists.",12,new SolidColorBrush(Color.FromRgb(255,218,106)));
             automaticListNote.TextWrapping=TextWrapping.Wrap; automaticListNote.Margin=new Thickness(0,12,0,0);
+            bool refreshingEditor=false;
+            List<Game> editorGames=null;
+            var editorLabels=new Dictionary<string,string>();
+            HashSet<string> registeredEditorIds=null;
             Action loadCustomList=() => {
+                if(refreshingEditor || !customListSection.IsExpanded || customListPanel.Visibility==Visibility.Collapsed) return;
                 uncheckedGamesSnapshot=null; unavailableSnapshot=null; uncheckAddedGames.Content="Uncheck added";
-                var membershipOptions=CollectionOptions();
+                var membershipOptions=editorCollections;
                 var item=membershipOptions.FirstOrDefault(c => c.Id==customListPicker.SelectedValue as string);
                 customListName.Text=item==null ? "" : item.Name; gameSearch.Text="";
                 bool duplicating=listEditorMode=="duplicate",deleting=listEditorMode=="delete",showGames=listEditorMode=="create" || listEditorMode=="edit";
@@ -1012,7 +1021,7 @@ namespace PadLauncher {
                 customListName.IsEnabled=duplicating || item==null || item.Id!="source:custom";
                 if(duplicating && item!=null) {
                     string baseName=item.Name.Length>69 ? item.Name.Substring(0,69)+" copy" : item.Name+" copy",copyName=baseName; int suffix=2;
-                    while(CollectionOptions().Any(list => String.Equals(list.Name,copyName,StringComparison.CurrentCultureIgnoreCase))) copyName=baseName+" "+suffix++;
+                    while(editorCollections.Any(list => String.Equals(list.Name,copyName,StringComparison.CurrentCultureIgnoreCase))) copyName=baseName+" "+suffix++;
                     customListName.Text=copyName;
                 }
                 customNameCaption.Text=duplicating ? "New list name" : "List name";
@@ -1026,25 +1035,40 @@ namespace PadLauncher {
                 duplicateCustomList.Visibility=duplicating && item!=null ? Visibility.Visible : Visibility.Collapsed;
                 gameBoxes.Clear(); gameChoiceRows.Clear(); gameChoices.Children.Clear();
                 var selected=new HashSet<string>(item==null ? new List<string>() : item.Games ?? new List<string>());
-                unavailableGames=selected.Except(library.Games.Select(g => g.Id)).ToList();
-                foreach(var game in (showGames ? library.Games : new List<Game>()).OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).GroupBy(g => g.Id).Select(g => g.First())) {
-                    string source=GameSourceLabel(game);
+                if(showGames && editorGames==null) {
+                    editorGames=library.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).GroupBy(g => g.Id).Select(g => g.First()).ToList();
+                    registeredEditorIds=new HashSet<string>(editorGames.Select(g => g.Id));
+                }
+                unavailableGames=showGames ? selected.Where(id => !registeredEditorIds.Contains(id)).ToList() : new List<string>();
+                foreach(var game in (showGames ? (IEnumerable<Game>)editorGames : Enumerable.Empty<Game>())) {
+                    string source;
+                    if(!editorLabels.TryGetValue(game.Id,out source)) editorLabels[game.Id]=source=GameSourceLabel(game);
                     var box=new CheckBox {Content=game.Name+" · "+source,Tag=game.Name,Foreground=white,IsChecked=selected.Contains(game.Id),Margin=new Thickness(0,4,0,4)};
                     var gameRow=new StackPanel {Margin=new Thickness(0,0,0,6)}; gameRow.Children.Add(box);
-                    var membershipHint=Label(CustomLists.MembershipReason(settings,membershipOptions,item==null ? null : item.Id,game.Id),12,muted);
+                    var membershipHint=Label("",12,muted);
                     membershipHint.TextWrapping=TextWrapping.Wrap; membershipHint.Margin=new Thickness(28,0,0,4); gameRow.Children.Add(membershipHint);
                     Action updateHint=() => {
                         membershipHint.Visibility=box.IsChecked==true ? Visibility.Visible : Visibility.Collapsed;
-                        membershipHint.Text=CustomLists.MembershipReason(settings,membershipOptions,item==null ? null : item.Id,game.Id)+(box.IsChecked==true && !selected.Contains(game.Id) ? " · Not saved yet" : "");
+                        if(box.IsChecked==true) membershipHint.Text=CustomLists.MembershipReason(settings,membershipOptions,item==null ? null : item.Id,game.Id)+(box.IsChecked==true && !selected.Contains(game.Id) ? " · Not saved yet" : "");
                     };
-                    box.Checked+=(s,e) => {updateCount(); updateHint(); filterEditorGames();}; box.Unchecked+=(s,e) => {updateCount(); updateHint(); filterEditorGames();};
+                    RoutedEventHandler selectionChanged=(s,e) => {
+                        updateHint();
+                        bool shown=game.Name.IndexOf(gameSearch.Text.Trim(),StringComparison.CurrentCultureIgnoreCase)>=0 &&
+                            (listEditorMode!="edit" || !showAddedGamesOnly || box.IsChecked==true);
+                        box.Visibility=gameRow.Visibility=shown ? Visibility.Visible : Visibility.Collapsed;
+                        if(countQueued) return;
+                        countQueued=true;
+                        Dispatcher.BeginInvoke(new Action(() => {countQueued=false; updateCount();}));
+                    };
+                    box.Checked+=selectionChanged; box.Unchecked+=selectionChanged;
                     updateHint(); gameBoxes[game.Id]=box; gameChoiceRows[game.Id]=gameRow; gameChoices.Children.Add(gameRow);
                 }
                 saveCustomList.Content=item==null ? "Create list" : "Save changes"; deleteCustomList.Visibility=!deleting || item==null || item.Id=="source:custom" || automatic ? Visibility.Collapsed : Visibility.Visible; updateCount();
                 deleteListGames.Visibility=deleteCustomList.Visibility; filterEditorGames();
             };
             gameSearch.TextChanged+=(s,e) => filterEditorGames();
-            customListPicker.SelectionChanged+=(s,e) => loadCustomList(); loadCustomList();
+            customListPicker.SelectionChanged+=(s,e) => loadCustomList();
+            customListSection.Expanded+=(s,e) => {if(e.Source==customListSection) loadCustomList();};
             saveCustomList.Click+=(s,e) => {try {
                 var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                 var chosenGames=gameBoxes.Where(b => b.Value.IsChecked==true).Select(b => b.Key).ToList();
@@ -1085,7 +1109,7 @@ namespace PadLauncher {
             } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Custom lists");}};
             customListActions.Children.Add(saveCustomList); customListActions.Children.Add(duplicateCustomList); customListActions.Children.Add(deleteCustomList); customListActions.Children.Add(deleteListGames); customListPanel.Children.Add(customListActions); customListPanel.Children.Add(automaticListNote);
             var editorPanel=new StackPanel {Margin=new Thickness(12,8,12,12)};
-            var modes=new WrapPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,10,0,2)}; editorPanel.Children.Add(modes);
+            var modes=new System.Windows.Controls.Primitives.UniformGrid {Rows=1,HorizontalAlignment=HorizontalAlignment.Stretch,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,10,0,2)}; editorPanel.Children.Add(modes);
             editorPanel.Children.Add(customListPanel);
             var combinePanel=CreateCombinedListEditor(dialog,rebuild); editorPanel.Children.Add(combinePanel);
             var mergePanel=new StackPanel(); editorPanel.Children.Add(mergePanel);
@@ -1133,20 +1157,23 @@ namespace PadLauncher {
                 Storage.Write("settings.json",next); settings=next; ApplyLibrary(); listEditorMode="edit"; rebuild();
             } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Merge lists");}};
             var modeButtons=new Dictionary<string,Button>();
+            var tagsPanel=CreateListTagsSettings(dialog); editorPanel.Children.Add(tagsPanel);
             Action refreshEditor=() => {
                 bool create=listEditorMode=="create",edit=listEditorMode=="edit";
-                customListPanel.Visibility=listEditorMode!="merge" && listEditorMode!="combine" ? Visibility.Visible : Visibility.Collapsed;
+                tagsPanel.Visibility=listEditorMode=="tags" ? Visibility.Visible : Visibility.Collapsed;
+                customListPanel.Visibility=listEditorMode!="tags" && listEditorMode!="merge" && listEditorMode!="combine" ? Visibility.Visible : Visibility.Collapsed;
                 combinePanel.Visibility=listEditorMode=="combine" ? Visibility.Visible : Visibility.Collapsed;
                 mergePanel.Visibility=listEditorMode=="merge" ? Visibility.Visible : Visibility.Collapsed;
                 customListPicker.Visibility=create ? Visibility.Collapsed : Visibility.Visible;
-                customListPicker.ItemsSource=create ? customListOptions.Take(1).ToList() : listEditorMode=="duplicate" ? CollectionOptions().Select(list => new KeyValuePair<string,string>(list.Id,ListLabel(list))).ToList() : listEditorMode=="delete" ? customListOptions.Where(list => deletableSources.Contains(list.Key)).ToList() : customListOptions.Skip(1).ToList();
-                customListPicker.SelectedIndex=0; loadCustomList();
+                refreshingEditor=true;
+                customListPicker.ItemsSource=create ? customListOptions.Take(1).ToList() : listEditorMode=="duplicate" ? editorCollections.Select(list => new KeyValuePair<string,string>(list.Id,ListLabel(list))).ToList() : listEditorMode=="delete" ? customListOptions.Where(list => deletableSources.Contains(list.Key)).ToList() : customListOptions.Skip(1).ToList();
+                customListPicker.SelectedIndex=0; refreshingEditor=false; loadCustomList();
                 foreach(var pair in modeButtons) {pair.Value.Background=pair.Key==listEditorMode ? mint : new SolidColorBrush(Color.FromRgb(28,48,61)); pair.Value.Foreground=pair.Key==listEditorMode ? Brushes.Black : white;}
                 saveCustomList.IsEnabled=create || customListPicker.SelectedIndex>=0;
             };
-            foreach(string mode in new[]{"create","edit","combine","merge","duplicate","delete"}) {
+            foreach(string mode in new[]{"create","edit","combine","merge","duplicate","delete","tags"}) {
                 string chosenMode=mode;
-                var modeButton=new Button {Name="ListEditorMode_"+mode,Content=Char.ToUpper(mode[0])+mode.Substring(1),Padding=new Thickness(16,8,16,8),Height=38,VerticalAlignment=VerticalAlignment.Center,VerticalContentAlignment=VerticalAlignment.Center,Margin=new Thickness(4,0,4,0)};
+                var modeButton=new Button {Name="ListEditorMode_"+mode,Content=Char.ToUpper(mode[0])+mode.Substring(1),Padding=new Thickness(4,8,4,8),Height=38,VerticalAlignment=VerticalAlignment.Center,VerticalContentAlignment=VerticalAlignment.Center,Margin=new Thickness(2,0,2,0)};
                 modeButtons[mode]=modeButton; modes.Children.Add(modeButton);
                 modeButton.Click+=(s,e) => {listEditorMode=chosenMode; refreshEditor();};
             }
@@ -1218,6 +1245,8 @@ namespace PadLauncher {
                 catch(Exception error) { restoringSizing=true; sizingPicker.SelectedValue=previous; restoringSizing=false; ThemedMessage.Show(dialog,error.Message,"Settings"); }
             };
             sizingControls.Children.Add(sizingPicker); layout.Children.Add(sizingControls);
+            layout.Children.Add(CreateRadialSettings(dialog));
+            var gridHeading=Label("Grid settings",16,white); gridHeading.FontWeight=FontWeights.SemiBold; gridHeading.Margin=new Thickness(0,12,0,0); columnsControls.Children.Add(gridHeading);
             var columnsCaption=Label("Grid columns",14,mint); columnsCaption.Margin=new Thickness(0,14,0,10); columnsControls.Children.Add(columnsCaption);
             var columnsPicker=new SettingsComboBox {ItemsSource=Enumerable.Range(2,9).ToArray(),SelectedItem=settings.GridColumns >= 2 && settings.GridColumns <= 10 ? settings.GridColumns : 5,FontSize=14,Padding=new Thickness(10,7,10,7),Foreground=white};
             bool restoringColumns=false;
@@ -1765,7 +1794,7 @@ namespace PadLauncher {
             tabs.SelectionChanged+=(s,e) => {if(e.Source==tabs && tabs.SelectedIndex>=0) customGamesTabIndex=tabs.SelectedIndex;};
             panel.Children.Add(tabs); return panel;
         }
-        void StyleSettingsSubtabs(TabControl tabs) {
+        void StyleSettingsSubtabs(TabControl tabs,bool compact=false) {
             tabs.Template=(ControlTemplate)System.Windows.Markup.XamlReader.Parse(@"<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabControl}'>
                 <Grid><Grid.RowDefinitions><RowDefinition Height='Auto'/><RowDefinition Height='*'/></Grid.RowDefinitions>
                     <Border Background='#15242E' BorderBrush='#30434D' BorderThickness='1' CornerRadius='12' Padding='5' HorizontalAlignment='Left'>
@@ -1777,7 +1806,7 @@ namespace PadLauncher {
             tabs.ItemContainerStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabItem}'>
                 <Setter Property='Foreground' Value='#B9C9CC'/><Setter Property='FontSize' Value='14'/><Setter Property='FontWeight' Value='SemiBold'/><Setter Property='Background' Value='Transparent'/><Setter Property='Cursor' Value='Hand'/>
                 <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type TabItem}'>
-                    <Border x:Name='Segment' Background='{TemplateBinding Background}' CornerRadius='8' Padding='15,10' MinWidth='105' BorderThickness='1' BorderBrush='Transparent'>
+                    <Border x:Name='Segment' Background='{TemplateBinding Background}' CornerRadius='8' Padding='"+(compact ? "10,5" : "15,10")+@"' MinWidth='"+(compact ? "78" : "105")+@"' BorderThickness='1' BorderBrush='Transparent'>
                         <ContentPresenter ContentSource='Header' HorizontalAlignment='Center' VerticalAlignment='Center'/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -2135,7 +2164,7 @@ namespace PadLauncher {
             int next=(collectionIndex+delta+filters.Count)%filters.Count;
             if(next==collectionIndex) return;
             var oldList=DetachOutgoingList();
-            if(!CollectionEnabled(filters[collectionIndex].Id)) {
+            if(filters[collectionIndex].Id.StartsWith("radial-tag:",StringComparison.Ordinal) || !CollectionEnabled(filters[collectionIndex].Id)) {
                 filters.RemoveAt(collectionIndex);
                 if(next>collectionIndex) next--;
             }
@@ -2432,7 +2461,14 @@ namespace PadLauncher {
                 return;
             }
             if (demo) { ShowNotice("Preview mode · connect your Steam library to launch games."); return; }
-            var game=visible[selected];
+            LaunchRadialGame(visible[selected]);
+#endif
+        }
+        void LaunchRadialGame(Game game) {
+#if ARTWORK_TEST
+            ShowNotice("Artwork test only - game launching is disabled.");
+#else
+            if(launching || demo || game==null) return;
             string emulatorIssue=EmulatorLibrary.MissingReason(game,settings);
             if(emulatorIssue!=null) {ShowNotice(emulatorIssue+". Check Settings → Emulators."); return;}
             launching=true;
@@ -2514,11 +2550,12 @@ namespace PadLauncher {
 #if NAVIGATION_DIAGNOSTICS
             controllerTrace.Poll(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency,true,found,pad,Gamepad.Source);
 #endif
-            if (!found) { exitButton.Reset(); previousButtons=0; navigation.Reset(); return; }
+            if (!found) { CloseRadial(); radialWaitRelease=false; exitButton.Reset(); previousButtons=0; navigation.Reset(); return; }
             ApplyControllerState(pad,Gamepad.Source,(long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency));
         }
         internal void ApplyControllerState(PadState pad,string source,long milliseconds) {
             if(gameSearchWindow!=null) {HandleGameSearchController(pad,milliseconds); return;}
+            if(HandleRadial(pad)) return;
             pad=RemapController(pad,"overlay");
             if(suppressSearchRelease) {
                 previousButtons=pad.Buttons; previousInputSource=source;

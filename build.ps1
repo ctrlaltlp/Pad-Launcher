@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 $framework = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
 $compiler = Join-Path $framework 'csc.exe'
 if (!(Test-Path $compiler)) { throw 'The Windows .NET Framework 4 compiler is required.' }
@@ -33,6 +33,7 @@ $appSources += (Join-Path $PSScriptRoot 'src\LibretroPanelLayout.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\ListArtworkSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\PanelSizingSettings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\GameSearch.cs')
+$appSources += (Join-Path $PSScriptRoot 'src\RadialMenu.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\ControllerBindings.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\ControllerNavigationTrace.cs')
 $appSources += (Join-Path $PSScriptRoot 'src\ControlSettings.cs')
