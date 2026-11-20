@@ -306,12 +306,12 @@ namespace PadLauncher {
         public static string Label(Collection list,Library library) {
             return Label(list,library,null);
         }
-        public static string Label(Collection list,Library library,IEnumerable<string> hiddenIds) {
+        public static string Label(Collection list,Library library,IEnumerable<string> hiddenIds,bool countOnly=false) {
             if(list.Id=="unavailable-collections") return list.Name;
             var hidden=new HashSet<string>(hiddenIds ?? Enumerable.Empty<string>());
             var available=new HashSet<string>(library.Games.Where(g => !hidden.Contains(g.Id)).Select(g => g.Id));
             int count=list.UnsupportedDynamic ? 0 : list.Id=="all" ? available.Count : (list.Games ?? new List<string>()).Distinct().Count(available.Contains);
-            return list.Name+" ("+count+(count==1 ? " game)" : " games)");
+            return list.Name+" ("+count+(countOnly ? ")" : count==1 ? " game)" : " games)");
         }
         public static long RecentPlayed(Settings settings,Game game) {
             long launched=0;

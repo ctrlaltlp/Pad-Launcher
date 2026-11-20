@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.5.9.1")]
-[assembly: System.Reflection.AssemblyFileVersion("0.5.9.1")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.5.9.1")]
+[assembly: System.Reflection.AssemblyVersion("0.5.9.2")]
+[assembly: System.Reflection.AssemblyFileVersion("0.5.9.2")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.5.9.2")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -756,7 +756,7 @@ namespace PadLauncher {
                 catch(Exception error) {settings.OpenOverlayWithHome=previous; openWithHome.IsChecked=previous; ThemedMessage.Show(dialog,error.Message,"Controls");}
             };
             helpLayout.Children.Add(openWithHome);
-            var homeNote=Label("Tap PS on a natively connected DualShock 4 or DualSense, Home on a Switch Pro Controller, or Guide on an Xbox controller to open the overlay or request focus if it is already open. Xbox Guide requires Microsoft GameInput v4; regular Xbox controls work without it.",12,muted);
+            var homeNote=Label("Tap PS on a natively connected DualShock 4 or DualSense, Home on a Switch Pro Controller, or Guide on an Xbox controller to open the overlay or request focus if it is already open. Xbox Guide requires Microsoft GameInput v4; regular Xbox controls work without it. Refocus may not work properly yet.",12,muted);
                         homeNote.TextWrapping=TextWrapping.Wrap; helpLayout.Children.Add(homeNote);
 #if XBOX_GUIDE_TEST
             helpLayout.Children.Add(Label("Xbox Guide test: the same checkbox enables GameInput Guide detection from the tray.",12,muted));
@@ -2268,7 +2268,7 @@ namespace PadLauncher {
             RemoveGuideCards();
             launchCountSubtitle.Text="";
             if (filters.Count == 0) SetFilters();
-            collectionText.Text = GameSearchOpen ? (String.IsNullOrEmpty(gameSearchText) ? "Search:" : "Search: "+gameSearchText) : settings.ShowListGameCount ? CombinedCollections.Label(filters[collectionIndex],library,settings.HiddenGameIds) : filters[collectionIndex].Name;
+            collectionText.Text = GameSearchOpen ? (String.IsNullOrEmpty(gameSearchText) ? "Search:" : "Search: "+gameSearchText) : settings.ShowListGameCount ? CombinedCollections.Label(filters[collectionIndex],library,settings.HiddenGameIds,countOnly:true) : filters[collectionIndex].Name;
             if (visible.Count == 0) {
                 carousel.Children.Clear(); cards.Clear();
                 if(!GameSearchOpen && !demo && library.Games.Count==0) AddGuideCards();
