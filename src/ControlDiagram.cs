@@ -97,7 +97,7 @@ namespace PadLauncher {
             sticks.Width=520; Canvas.SetLeft(sticks,240); Canvas.SetTop(sticks,780); canvas.Children.Add(sticks);
             section.Children.Add(new Viewbox {Stretch=Stretch.Uniform,StretchDirection=StretchDirection.DownOnly,Child=canvas,HorizontalAlignment=HorizontalAlignment.Center});
             update=refreshDiagram=() => {
-                homeLabel.Text=draft.OpenOverlayWithHome ? "Open overlay from tray" : "Unassigned";
+                homeLabel.Text=draft.OpenOverlayWithHome ? "Open / refocus overlay" : "Unassigned";
                 homeLabel.Foreground=draft.OpenOverlayWithHome ? mint : muted;
                 foreach(var entry in labels) {
                     var assigned=ControlBindings.InContext(context).Where(action => ControlBindings.UsesButton(draft,action.FullId,entry.Key)).Select(action => DiagramActionName(action)).ToArray();
