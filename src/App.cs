@@ -756,7 +756,7 @@ namespace PadLauncher {
                 catch(Exception error) {settings.OpenOverlayWithHome=previous; openWithHome.IsChecked=previous; ThemedMessage.Show(dialog,error.Message,"Controls");}
             };
             helpLayout.Children.Add(openWithHome);
-            var homeNote=Label("Tap PS on a natively connected DualShock 4 or DualSense, Home on a Switch Pro Controller, or Guide on an Xbox controller to open the overlay or request focus if it is already open. Xbox Guide requires Microsoft GameInput v4; regular Xbox controls work without it. Refocus may not work properly yet.",12,muted);
+            var homeNote=Label("Tap PS on a natively connected DualShock 4 or DualSense, Home on a Switch Pro Controller, or Guide on an Xbox controller to open the overlay or request focus if it is already open. Xbox Guide requires Microsoft GameInput v4; regular Xbox controls work without it. Refocus may not work properly in all systems/setups.",12,muted);
                         homeNote.TextWrapping=TextWrapping.Wrap; helpLayout.Children.Add(homeNote);
 #if XBOX_GUIDE_TEST
             helpLayout.Children.Add(Label("Xbox Guide test: the same checkbox enables GameInput Guide detection from the tray.",12,muted));
