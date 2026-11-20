@@ -64,6 +64,10 @@ Left and right stick speeds are adjustable in Controls (both default to 5×). D-
 
 Choose **Angled** for a slanted artwork carousel or **Rectangular** for a straight carousel. Use the **Grid / carousel** shortcut to switch to Grid. Set its default size under **Overlay → Grid columns** and **Grid rows**. **Fixed (blurred edges)** keeps consistent panel sizing and fills unused edges with artwork colours; **Fit artwork** follows each cover's proportions to show the full image. Layout and sizing can be set globally or per list. Enable **Overlay → Remember layout changes made with controls** to keep layout switches for each list across restarts; this is off by default.
 
+## Arc menu
+
+Hold **R2 / RT / ZR** by default to open the **Arc menu**. Browse with D-pad Up/Down or scroll faster with the left stick. In **Settings → Arc**, choose a screen side and use your overlay lists or custom slots for games, lists, and tags. Custom starts with three slots. Use **+** to add a slot or **−** to remove the last one, then save. Manage tags in **List editor → Tags**. With tray access enabled, Arc can open on its own. Selecting a list or tag reveals the game overlay behind it, and releasing the button closes Arc.
+
 ## Artwork
 
 Pad Launcher uses existing launcher artwork and local images, plus **SteamGridDB (SGDB)** and **Libretro** downloads. SGDB requires your API key; Libretro does not. Downloaded images are cached locally, and manually chosen images take priority.
@@ -94,8 +98,6 @@ Open **Settings → Lists → List editor** to manage your lists.
 - **Merge** makes a snapshot of the selected lists. Keep the sources, delete all eligible sources, or choose which eligible sources to delete.
 - **Duplicate** copies a list’s current games into a new list you can name and edit independently.
 - **Delete** removes a custom or combined list. Choose **Delete list and unregister its games** to also remove those games from Pad Launcher. Game files stay on disk.
-
-Use **List editor → Tags** to edit tags by list or assign the same tag to several lists. Hold the assigned **Arc menu** button (default **R2 / RT / ZR**) on the overlay. Use D-pad Up/Down to step through items or the left stick to scroll faster. Under **Settings → Arc**, choose a screen side, use your overlay lists or eight custom slots for games, lists, and tags, and optionally activate the highlighted item on release. Remap **Arc menu (hold)** under **Settings → Controls → Show/Change controls**. To open Arc while the overlay is hidden, enable **Open Arc from the tray with the assigned button** under **Settings → Arc**.
 
 ## Command-line shortcuts
 

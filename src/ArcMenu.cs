@@ -47,7 +47,11 @@ namespace PadLauncher {
                 }
                 ushort pressed=(ushort)(pad.Buttons & ~arcButtons);
                 arcButtons=pad.Buttons;
-                if(arcOnly && (pressed&0x2000)!=0 && !ControlBindings.UsesButton(settings,"overlay.arc","east")) {DismissArc(); return true;}
+                if((pressed&0x2000)!=0 && !ControlBindings.UsesButton(settings,"overlay.arc","east")) {
+                    DismissArc();
+                    suppressSearchRelease=true;
+                    return true;
+                }
                 int direction=(pad.Buttons&1)!=0 && !ControlBindings.UsesButton(settings,"overlay.arc","up") ? -1 :
                     (pad.Buttons&2)!=0 && !ControlBindings.UsesButton(settings,"overlay.arc","down") ? 1 : 0;
                 int input=direction==0 ? 0 : 1;
@@ -102,9 +106,15 @@ namespace PadLauncher {
                 DismissArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true; return;
             }
             if(!ArcBindingDown(pad)) {
-                DismissArc();
-                arcTriggerWaitRelease=false;
-                suppressSearchRelease=true;
+                try {
+                    // A list or tag already confirmed during this hold has revealed the overlay.
+                    if(settings.QuickSelectActivateOnRelease && !IsVisible)
+                        ActivateArcSlot(arcSlots[arcSelectedIndex]);
+                } finally {
+                    DismissArc();
+                    arcTriggerWaitRelease=false;
+                    suppressSearchRelease=true;
+                }
                 return;
             }
             long now=ArcMilliseconds();
@@ -254,10 +264,11 @@ namespace PadLauncher {
             var arcLists=useLists ? filters.Where(list => CollectionEnabled(list.Id) && !list.UnsupportedDynamic &&
                 list.Id!="unavailable-collections" && !list.Id.StartsWith("arcPopup-tag:",StringComparison.Ordinal)).ToList() : null;
             arcSlots=useLists ? arcLists.Select(list => new ArcSlot {Kind="list",Target=list.Id}).ToList()
-                : (settings.RadialSlots ?? DefaultArcSlots()).Take(8).ToList();
+                : (settings.RadialSlots ?? DefaultArcSlots()).ToList();
             if(arcSlots.Count==0) arcSlots.Add(new ArcSlot());
+            arcSelectedIndex=Math.Max(0,arcSlots.FindIndex(slot => slot!=null && slot.Kind=="list" && slot.Target==settings.CollectionId));
             arcButtonsArmed=false; arcButtonsNeutralSince=-1;
-            arcButtons=buttons; arcConfirmNeedsRelease=(buttons&ArcConfirmMask())!=0; arcSelectedIndex=0; arcDirection=arcInput=0; navigation.Reset();
+            arcButtons=buttons; arcConfirmNeedsRelease=(buttons&ArcConfirmMask())!=0; arcDirection=arcInput=0; navigation.Reset();
             var canvas=new Canvas {Width=520,Height=540,ClipToBounds=true,IsHitTestVisible=arcOnly};
             bool isLeft=settings.QuickSelectSide=="left";
             var rail=new System.Windows.Shapes.Path {Data=Geometry.Parse(isLeft ? "M 0,18 Q 270,270 0,522" : "M 520,18 Q 250,270 520,522"),
@@ -339,7 +350,6 @@ namespace PadLauncher {
                 new ArcSlot {Kind="list",Target=pick(lists.Select(list => list.Id))},
                 new ArcSlot {Kind="tag",Target=pick(lists.Where(list => tags.ContainsKey(list.Id)).SelectMany(list => (tags[list.Id] ?? "").Split(',')).Select(tag => tag.Trim()))}
             };
-            while(slots.Count<8) slots.Add(new ArcSlot());
             return arcStarterSlots=slots;
         }
         FrameworkElement CreateArcSideSettings(Window owner) {
@@ -395,9 +405,9 @@ namespace PadLauncher {
             section.Content=panel;
             string button=ControlBindings.Label(settings,"overlay.arc");
             string openHint=button=="Unassigned" ? "Assign an Arc menu button in Show/Change controls. " : "Hold "+button+" to open the Arc menu. ";
-            var note=Label(openHint+"Use D-pad Up/Down to step or the left stick to scroll faster. The menu starts at slot 1.",12,muted);
+            var note=Label("",12,muted);
             note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
-            var mode=new SettingsComboBox {Name="QuickSelectMode",ItemsSource=new[]{"Use lists for the arc menu","Custom"},
+            var mode=new SettingsComboBox {Name="QuickSelectMode",ItemsSource=new[]{"Use overlay lists for the arc menu","Custom"},
                 SelectedIndex=settings.QuickSelectMode=="lists" ? 0 : 1,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
             panel.Children.Add(mode);
             var customPanel=new StackPanel();
@@ -407,7 +417,7 @@ namespace PadLauncher {
                 bool custom=settings.QuickSelectMode!="lists";
                 customPanel.Visibility=custom ? Visibility.Visible : Visibility.Collapsed;
                 note.Text=openHint+"Use D-pad Up/Down to step or the left stick to scroll faster."+
-                    (custom ? " The menu starts at slot 1." : " The menu follows the order of your overlay lists.");
+                    " Arc starts on your last accessed list when available.";
                 if(!custom || !section.IsExpanded || initialized) return;
                 initialized=true;
                 var options=new Dictionary<string,List<KeyValuePair<string,string>>> {
@@ -417,13 +427,14 @@ namespace PadLauncher {
                 };
                 var slots=settings.RadialSlots ?? DefaultArcSlots();
                 var kinds=new List<ComboBox>(); var targets=new List<ComboBox>();
-                for(int i=0;i<8;i++) {
-                    var slot=i<slots.Count ? slots[i] ?? new ArcSlot() : new ArcSlot();
+                var rows=new StackPanel();
+                customPanel.Children.Add(rows);
+                Action<ArcSlot> addSlot=slot => {
                     var row=new Grid {Margin=new Thickness(0,6,0,0)};
                     row.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(28)});
                     row.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(120)});
                     row.ColumnDefinitions.Add(new ColumnDefinition());
-                    var number=Label((i+1).ToString(),12,mint); number.VerticalAlignment=VerticalAlignment.Center; row.Children.Add(number);
+                    var number=Label((rows.Children.Count+1).ToString(),12,mint); number.VerticalAlignment=VerticalAlignment.Center; row.Children.Add(number);
                     var kind=new SettingsComboBox {ItemsSource=new[]{"Unassigned","Game","List","Tag"},Padding=new Thickness(8)};
                     Grid.SetColumn(kind,1); row.Children.Add(kind); kinds.Add(kind);
                     var target=new SettingsComboBox {DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(8,0,0,0)};
@@ -437,11 +448,33 @@ namespace PadLauncher {
                     };
                     kind.SelectedItem=String.IsNullOrEmpty(slot.Target) ? "Unassigned" : slot.Kind=="game" ? "Game" : slot.Kind=="list" ? "List" : slot.Kind=="tag" ? "Tag" : "Unassigned";
                     if(!String.IsNullOrEmpty(slot.Target)) target.SelectedValue=slot.Target;
-                    customPanel.Children.Add(row);
-                }
-                var save=new Button {Content="Save Arc menu",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,8,0,0)};
-                customPanel.Children.Add(save);
+                    rows.Children.Add(row);
+                };
+                foreach(var slot in slots) addSlot(slot ?? new ArcSlot());
+                if(rows.Children.Count==0) addSlot(new ArcSlot());
+                var buttons=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)};
+                customPanel.Children.Add(buttons);
+                var add=new Button {Content="+",Padding=new Thickness(12,7,12,7),ToolTip="Add slot"};
+                var remove=new Button {Content="−",Padding=new Thickness(12,7,12,7),Margin=new Thickness(6,0,0,0),ToolTip="Remove last slot",IsEnabled=rows.Children.Count>1};
+                System.Windows.Automation.AutomationProperties.SetName(add,"Add slot");
+                System.Windows.Automation.AutomationProperties.SetName(remove,"Remove last slot");
+                var save=new Button {Content="Save Arc menu",Padding=new Thickness(12,7,12,7),Margin=new Thickness(6,0,0,0)};
+                buttons.Children.Add(add); buttons.Children.Add(remove); buttons.Children.Add(save);
                 var status=Label("",12,muted); customPanel.Children.Add(status);
+                add.Click+=(s,e) => {
+                    addSlot(new ArcSlot());
+                    remove.IsEnabled=true;
+                    status.Text="";
+                };
+                remove.Click+=(s,e) => {
+                    int last=rows.Children.Count-1;
+                    if(last<1) return;
+                    rows.Children.RemoveAt(last);
+                    kinds.RemoveAt(last);
+                    targets.RemoveAt(last);
+                    remove.IsEnabled=rows.Children.Count>1;
+                    status.Text="";
+                };
                 save.Click+=(s,e) => {
                     var next=new List<ArcSlot>();
                     for(int i=0;i<kinds.Count;i++) {
