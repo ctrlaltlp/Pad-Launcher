@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.5.4")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.5.4")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.5.4")]
+[assembly: System.Reflection.AssemblyVersion("0.6.5.5")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.5.5")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.5.5")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -414,6 +414,7 @@ namespace PadLauncher {
         }
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] static extern bool IsWindowEnabled(IntPtr window);
         void FocusOverlayInput() {
             IntPtr handle=new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
             IntPtr previousForeground=GetForegroundWindow();
@@ -2629,6 +2630,24 @@ namespace PadLauncher {
             return foreground==new System.Windows.Interop.WindowInteropHelper(this).Handle ||
                 (gameSearchWindow!=null && foreground==new System.Windows.Interop.WindowInteropHelper(gameSearchWindow).Handle);
         }
+        bool SettingsHasForeground() {
+            if(helpWindow==null || !helpWindow.IsVisible) return false;
+            IntPtr foreground=GetForegroundWindow();
+            if(foreground==IntPtr.Zero) return false;
+            foreach(Window window in Application.Current.Windows) {
+                if(!window.IsVisible || new System.Windows.Interop.WindowInteropHelper(window).Handle!=foreground) continue;
+                for(var owner=window;owner!=null;owner=owner.Owner)
+                    if(owner==helpWindow) return true;
+                break;
+            }
+            return false;
+        }
+        bool OverlayCanReceiveControllerInput() {
+            var target=gameSearchWindow ?? this;
+            var handle=new System.Windows.Interop.WindowInteropHelper(target).Handle;
+            return OverlayHasForeground() ||
+                (handle!=IntPtr.Zero && IsWindowEnabled(handle) && SettingsHasForeground());
+        }
         bool controllerWaitForForegroundRelease;
         readonly XboxGuideInput xboxGuideInput=new XboxGuideInput();
         bool switchHomeWasDown;
@@ -2676,7 +2695,9 @@ namespace PadLauncher {
             if(arcOnlyWindow!=null) {PollTrayArc(); return;}
             if(!IsVisible) {PollTrayHome(); return;}
             bool homePressed=TakeOverlayHomePress();
-            if (preview || !OverlayHasForeground()) {
+            if(homePressed && !preview && !launching && !OverlayHasForeground() && OverlayCanReceiveControllerInput())
+                FocusVisibleOverlayFromShortcut();
+            if (preview || !OverlayCanReceiveControllerInput()) {
                 controllerWaitForForegroundRelease=true;
                 if(arcPopup!=null && !arcOnly) {CloseArc(); arcTriggerWaitRelease=false;}
                 if(homePressed && !launching &&
@@ -2703,7 +2724,7 @@ namespace PadLauncher {
                 if(pad.Buttons!=0 || pad.LT>=80 || pad.RT>=80) return;
                 controllerWaitForForegroundRelease=false;
             }
-            if(!OverlayHasForeground()) {controllerWaitForForegroundRelease=true; return;}
+            if(!OverlayCanReceiveControllerInput()) {controllerWaitForForegroundRelease=true; return;}
             ApplyControllerState(pad,Gamepad.Source,(long)(Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency));
         }
         internal void ApplyControllerState(PadState pad,string source,long milliseconds) {
