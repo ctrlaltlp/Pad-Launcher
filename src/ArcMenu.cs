@@ -310,13 +310,15 @@ namespace PadLauncher {
             }
         }
         void OpenArc(ushort buttons) {
-            bool useLists=(UseDesktopArcSettings ? settings.DesktopArcMode : settings.QuickSelectMode)=="lists";
+            string mode=UseDesktopArcSettings ? settings.DesktopArcMode : settings.QuickSelectMode;
+            bool customLists=mode=="custom-lists";
+            bool useLists=mode=="lists" || customLists;
             var excluded=GetArcExcludedListIds(UseDesktopArcSettings);
             List<Collection> arcLists=null;
             if(useLists) {
                 var activeLists=new HashSet<string>(filters.Select(list => list.Id));
-                arcLists=CollectionOptions().Where(list => CanInheritArcList(list) &&
-                    (activeLists.Contains(list.Id) || IsAlwaysAvailableArcList(list.Id)) &&
+                arcLists=ArcListOptions(customLists).Where(list =>
+                    (customLists || activeLists.Contains(list.Id) || IsAlwaysAvailableArcList(list.Id)) &&
                     !excluded.Contains(list.Id)).ToList();
             }
             arcSlots=useLists ? arcLists.Select(list => new ArcSlot {Kind="list",Target=list.Id}).ToList()
@@ -433,14 +435,11 @@ namespace PadLauncher {
         }
         FrameworkElement CreateArcSettings(Window owner) {
             var panel=new StackPanel();
-            var shareSettings=new CheckBox {Name="ShareArcMenuSettings",Content="Use the settings for both arc menus",
-                IsChecked=settings.ShareArcMenuSettings,Margin=new Thickness(0,12,0,0)};
-            panel.Children.Add(shareSettings);
             string arcButton=ControlBindings.Label(settings,"overlay.arc");
             string releaseLabel=arcButton=="Unassigned" ? "Activate on release (Arc shortcut unassigned)" : "Activate on release of "+arcButton;
             var trayArc=new CheckBox {Name="OpenArcFromTrayWithTrigger",
-                Content=arcButton=="Unassigned" ? "Open Arc from the tray (Arc shortcut unassigned)" : "Open Arc from the tray with "+arcButton,
-                IsChecked=settings.OpenArcFromTrayWithTrigger};
+                Content=arcButton=="Unassigned" ? "Open Arc from the desktop without the main overlay (Arc shortcut unassigned)" : "Open Arc from the desktop without the main overlay with "+arcButton,
+                IsChecked=settings.OpenArcFromTrayWithTrigger,Margin=new Thickness(0,10,0,0)};
             trayArc.Click+=(sender,args) => {
                 bool previous=settings.OpenArcFromTrayWithTrigger;
                 try {
@@ -452,6 +451,7 @@ namespace PadLauncher {
                     ThemedMessage.Show(owner,error.Message,"Arc menu");
                 }
             };
+            panel.Children.Add(trayArc);
             var overlayHeading=Label("Main overlay Arc menu",16,white);
             overlayHeading.FontWeight=FontWeights.SemiBold;
             overlayHeading.Margin=new Thickness(0,16,0,0);
@@ -463,18 +463,21 @@ namespace PadLauncher {
             arcOnlyHeading.FontWeight=FontWeights.SemiBold;
             arcOnlyHeading.Margin=new Thickness(0,28,0,0);
             panel.Children.Add(arcOnlyHeading);
+            var shareSettings=new CheckBox {Name="ShareArcMenuSettings",Content="Mirror main overlay Arc menu settings",
+                IsChecked=settings.ShareArcMenuSettings,Margin=new Thickness(0,10,0,0)};
+            panel.Children.Add(shareSettings);
             var desktopMenu=CreateArcMenuSettings(owner,true);
             var desktopSide=CreateArcSideSetting(owner,true);
             panel.Children.Add(desktopMenu);
             panel.Children.Add(desktopSide);
-            trayArc.Margin=new Thickness(0,10,0,0);
-            panel.Children.Add(trayArc);
             var desktopRelease=new StackPanel();
             var refreshDesktopRelease=AddArcReleaseSettings(desktopRelease,owner,releaseLabel,true);
             panel.Children.Add(desktopRelease);
             Action updateDesktopControls=() => {
                 var visibility=settings.ShareArcMenuSettings ? Visibility.Collapsed : Visibility.Visible;
-                desktopMenu.Visibility=desktopSide.Visibility=visibility;
+                desktopMenu.IsEnabled=!settings.ShareArcMenuSettings;
+                desktopMenu.Opacity=desktopMenu.IsEnabled ? 1 : 0.45;
+                desktopSide.Visibility=visibility;
                 desktopRelease.IsEnabled=!settings.ShareArcMenuSettings;
                 refreshDesktopRelease();
             };
@@ -539,13 +542,20 @@ namespace PadLauncher {
             return id=="recent" || id=="recently-added" || id=="favourites";
         }
         static readonly string[] DefaultArcExcludedListIds={"recent","recently-added","favourites"};
+        static readonly string[] ArcPinnedListIds={"recent","recently-added","most-played","favourites"};
+        IEnumerable<Collection> ArcListOptions(bool customLists) {
+            var options=!customLists ? CollectionOptions() :
+                EmulatorLibrary.DefaultListOrder(CombinedCollections.Options(library,settings),library,settings);
+            return options.Where(list => (customLists || CollectionEnabled(list.Id) || IsAlwaysAvailableArcList(list.Id)) &&
+                !list.UnsupportedDynamic && list.Id!="unavailable-collections" &&
+                !list.Id.StartsWith("arcPopup-tag:",StringComparison.Ordinal)).OrderBy(list => {
+                int rank=Array.IndexOf(ArcPinnedListIds,list.Id);
+                return rank<0 ? ArcPinnedListIds.Length : rank;
+            });
+        }
         IList<string> GetArcExcludedListIds(bool desktop) {
             var saved=desktop ? settings.DesktopArcExcludedListIds : settings.OverlayArcExcludedListIds;
             return saved==null ? (IList<string>)DefaultArcExcludedListIds : saved;
-        }
-        bool CanInheritArcList(Collection list) {
-            return (CollectionEnabled(list.Id) || IsAlwaysAvailableArcList(list.Id)) && !list.UnsupportedDynamic &&
-                list.Id!="unavailable-collections" && !list.Id.StartsWith("arcPopup-tag:",StringComparison.Ordinal);
         }
         FrameworkElement CreateArcMenuSettings(Window owner,bool desktop) {
             var section=new Expander {Header="Menu setting",Foreground=white,Margin=new Thickness(0,10,0,0)};
@@ -556,8 +566,9 @@ namespace PadLauncher {
             var note=Label("",12,muted);
             note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
             Func<string> currentMode=() => desktop ? settings.DesktopArcMode : settings.QuickSelectMode;
-            var mode=new SettingsComboBox {Name=desktop ? "DesktopArcMode" : "QuickSelectMode",ItemsSource=new[]{"Use overlay lists for the arc menu","Custom"},
-                SelectedIndex=currentMode()=="lists" ? 0 : 1,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
+            var modes=new[]{"lists","custom-lists","custom"};
+            var mode=new SettingsComboBox {Name=desktop ? "DesktopArcMode" : "QuickSelectMode",ItemsSource=new[]{"Use overlay lists","Use custom lists","Custom"},
+                SelectedIndex=Array.IndexOf(modes,currentMode() ?? "custom"),Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
             panel.Children.Add(mode);
             var inheritedPanel=new StackPanel {Margin=new Thickness(0,8,0,0)};
             panel.Children.Add(inheritedPanel);
@@ -565,15 +576,16 @@ namespace PadLauncher {
             panel.Children.Add(customPanel);
             bool initialized=false, restoringMode=false;
             Action refreshMode=() => {
-                bool custom=currentMode()!="lists";
+                bool customLists=currentMode()=="custom-lists";
+                bool custom=currentMode()!="lists" && !customLists;
                 customPanel.Visibility=custom ? Visibility.Visible : Visibility.Collapsed;
                 inheritedPanel.Visibility=custom ? Visibility.Collapsed : Visibility.Visible;
                 note.Text=openHint+"Use D-pad Up/Down to step or the left stick to scroll faster."+
                     " Arc starts on your last accessed list when available.";
                 if(!custom && section.IsExpanded) {
                     inheritedPanel.Children.Clear();
-                    inheritedPanel.Children.Add(Label("Choose which overlay lists appear in Arc",14,mint));
-                    foreach(var list in CollectionOptions().Where(CanInheritArcList)) {
+                    inheritedPanel.Children.Add(Label("Choose which lists appear in Arc",14,mint));
+                    foreach(var list in ArcListOptions(customLists)) {
                         string id=list.Id;
                         var include=new CheckBox {Content=list.Name,IsChecked=!GetArcExcludedListIds(desktop).Contains(id),
                             Margin=new Thickness(0,6,0,0)};
@@ -671,16 +683,16 @@ namespace PadLauncher {
             };
             section.Expanded+=(sender,args) => {if(args.Source==section) refreshMode();};
             mode.SelectionChanged+=(sender,args) => {
-                if(restoringMode) return;
+                if(restoringMode || mode.SelectedIndex<0) return;
                 string previous=currentMode();
                 try {
-                    string next=mode.SelectedIndex==0 ? "lists" : "custom";
+                    string next=modes[mode.SelectedIndex];
                     if(desktop) settings.DesktopArcMode=next; else settings.QuickSelectMode=next;
                     Storage.Write("settings.json",settings);
                     refreshMode();
                 } catch(Exception error) {
                     if(desktop) settings.DesktopArcMode=previous; else settings.QuickSelectMode=previous;
-                    restoringMode=true; mode.SelectedIndex=previous=="lists" ? 0 : 1; restoringMode=false;
+                    restoringMode=true; mode.SelectedIndex=Array.IndexOf(modes,previous ?? "custom"); restoringMode=false;
                     ThemedMessage.Show(owner,error.Message,"Arc menu");
                 }
             };
@@ -708,7 +720,8 @@ namespace PadLauncher {
             if(slot==null || String.IsNullOrWhiteSpace(slot.Target)) {ShowNotice("Assign an item to this slot",1.5); return;}
             if(slot.Kind=="game") {LaunchGame(library.Games.FirstOrDefault(g => g.Id==slot.Target)); return;}
             if(slot.Kind=="list") {
-                if(!CollectionEnabled(slot.Target) && !IsAlwaysAvailableArcList(slot.Target)) {TraceArc("selected list is hidden"); ShowNotice("This list is hidden from the overlay.",1.5); return;}
+                bool customLists=(UseDesktopArcSettings ? settings.DesktopArcMode : settings.QuickSelectMode)=="custom-lists";
+                if(!customLists && !CollectionEnabled(slot.Target) && !IsAlwaysAvailableArcList(slot.Target)) {TraceArc("selected list is hidden"); ShowNotice("This list is hidden from the overlay.",1.5); return;}
                 int index=filters.FindIndex(c => c.Id==slot.Target);
                 if(index<0) {
                     var list=CollectionOptions().FirstOrDefault(c => c.Id==slot.Target);
