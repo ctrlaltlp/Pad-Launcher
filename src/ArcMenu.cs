@@ -23,7 +23,8 @@ namespace PadLauncher {
         long arcButtonsNeutralSince=-1;
         bool arcButtonsArmed;
         List<ArcSlot> arcSlots;
-        ArcSlot arcConfirmedSlot;
+        int arcPendingReleaseInput;
+        long arcDpadReleasedAt=-1;
         readonly List<Border> arcCards=new List<Border>();
         readonly Brush arcSelected=new SolidColorBrush(Color.FromRgb(163,240,205));
         readonly Brush arcSelectedText=new SolidColorBrush(Color.FromRgb(13,25,34));
@@ -42,10 +43,7 @@ namespace PadLauncher {
 
             if(arcPopup!=null || arcOnlyWindow!=null) {
                 if(!arcOnly && !ArcBindingDown(pad)) {
-                    var slot=arcSlots[arcSelectedIndex];
-                    bool activate=settings.QuickSelectActivateOnRelease && slot!=arcConfirmedSlot;
                     CloseArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true;
-                    if(activate) ActivateArcSlot(slot);
                     return true;
                 }
                 ushort pressed=(ushort)(pad.Buttons & ~arcButtons);
@@ -57,11 +55,20 @@ namespace PadLauncher {
                 }
                 int direction=(pad.Buttons&1)!=0 && !ControlBindings.UsesButton(settings,"overlay.arc","up") ? -1 :
                     (pad.Buttons&2)!=0 && !ControlBindings.UsesButton(settings,"overlay.arc","down") ? 1 : 0;
+                bool dpadHeld=direction!=0;
+                if(!dpadHeld && arcInput==1 && arcBlurTimer!=null && arcBlurTimer.IsEnabled) {
+                    arcBlurTimer.Stop();
+                    arcBlurTimer.Interval=TimeSpan.FromMilliseconds(175);
+                    arcBlurTimer.Start();
+                }
+                if(dpadHeld || arcPendingReleaseInput!=1) arcDpadReleasedAt=-1;
+                else if(arcDpadReleasedAt<0) arcDpadReleasedAt=milliseconds;
                 int input=direction==0 ? 0 : 1;
                 if(input==0 && Math.Abs((int)pad.LY)>15000) {direction=pad.LY>0 ? -1 : 1; input=2;}
                 if(direction!=0 && (direction!=arcDirection || input!=arcInput || milliseconds>=arcNextStep)) {
                     bool first=direction!=arcDirection || input!=arcInput;
                     arcSelectedIndex=(arcSelectedIndex+direction+arcSlots.Count)%arcSlots.Count;
+                    if(!arcOnly) arcPendingReleaseInput=input;
                     LayoutArc(direction);
                     arcNextStep=milliseconds+(input==2 ? 105 : first ? 310 : 225);
                 }
@@ -70,11 +77,15 @@ namespace PadLauncher {
                     TraceArc("controller Confirm: "+Gamepad.Source);
                     var slot=arcSlots[arcSelectedIndex];
                     bool showsList=slot!=null && (slot.Kind=="list" || slot.Kind=="tag");
-                    if(!arcOnly && showsList) arcConfirmedSlot=slot;
+                    arcPendingReleaseInput=0;
                     if(!arcOnly && !showsList && settings.QuickSelectActivateOnRelease) {
                         CloseArc(); suppressSearchRelease=true;
                     }
                     suppressSearchRelease=true; ActivateArcSlot(slot);
+                } else if((arcPendingReleaseInput==1 && arcDpadReleasedAt>=0 && milliseconds-arcDpadReleasedAt>=150) ||
+                    (arcPendingReleaseInput==2 && Math.Abs((int)pad.LY)<11000)) {
+                    arcPendingReleaseInput=0;
+                    if(settings.QuickSelectActivateOnRelease) ActivateArcSlot(arcSlots[arcSelectedIndex]);
                 }
                 return true;
             }
@@ -111,15 +122,9 @@ namespace PadLauncher {
                 DismissArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true; return;
             }
             if(!ArcBindingDown(pad)) {
-                try {
-                    // A list or tag already confirmed during this hold has revealed the overlay.
-                    if(settings.QuickSelectActivateOnRelease && !IsVisible)
-                        ActivateArcSlot(arcSlots[arcSelectedIndex]);
-                } finally {
-                    DismissArc();
-                    arcTriggerWaitRelease=false;
-                    suppressSearchRelease=true;
-                }
+                DismissArc();
+                arcTriggerWaitRelease=false;
+                suppressSearchRelease=true;
                 return;
             }
             long now=ArcMilliseconds();
@@ -168,7 +173,8 @@ namespace PadLauncher {
         void CloseArc([System.Runtime.CompilerServices.CallerMemberName] string caller=null) {
             if(arcPopup!=null || arcOnlyWindow!=null || arcOnly) TraceArc("close requested by "+caller);
             arcOnly=false;
-            arcConfirmedSlot=null;
+            arcPendingReleaseInput=0;
+            arcDpadReleasedAt=-1;
             if(arcOnlyWindow!=null) {
                 var window=arcOnlyWindow; arcOnlyWindow=null; window.Close();
                 if(!IsVisible && !exiting) UpdateTrayHomeListener();
@@ -247,12 +253,20 @@ namespace PadLauncher {
                 if(arcBlurTimer==null) {
                     arcBlurTimer=new System.Windows.Threading.DispatcherTimer {Interval=TimeSpan.FromMilliseconds(150)};
                     arcBlurTimer.Tick+=(sender,args) => {
+                        if(arcInput==1 && arcDirection!=0) return;
+                        if(arcPopup!=null && !arcOnly && !settings.QuickSelectActivateOnRelease) {
+                            var slot=arcSlots[arcSelectedIndex];
+                            string highlightedList=slot==null ? null : slot.Kind=="list" ? slot.Target :
+                                slot.Kind=="tag" && !String.IsNullOrWhiteSpace(slot.Target) ? "arcPopup-tag:"+slot.Target : null;
+                            if(highlightedList==null || highlightedList!=settings.CollectionId) return;
+                        }
                         arcBlurTimer.Stop();
                         if(scene.Effect==arcOverlayBlur) scene.Effect=null;
                     };
                 }
                 scene.Effect=arcOverlayBlur;
                 arcBlurTimer.Stop();
+                arcBlurTimer.Interval=TimeSpan.FromMilliseconds(150);
                 arcBlurTimer.Start();
             }
             int count=arcCards.Count;
@@ -387,8 +401,8 @@ namespace PadLauncher {
                 }
             };
             panel.Children.Add(side);
-            var activateOnRelease=new CheckBox {Name="QuickSelectActivateOnRelease",Content="Activate on release",
-                IsChecked=settings.QuickSelectActivateOnRelease,Margin=new Thickness(0,12,0,0)};
+            var activateOnRelease=new CheckBox {Name="QuickSelectActivateOnRelease",Content="Activate on release (only when main overlay is active)",
+                IsChecked=settings.QuickSelectActivateOnRelease,Margin=new Thickness(0,10,0,0)};
             activateOnRelease.Click+=(sender,args) => {
                 bool previous=settings.QuickSelectActivateOnRelease;
                 try {
@@ -400,9 +414,8 @@ namespace PadLauncher {
                     ThemedMessage.Show(owner,error.Message,"Arc menu");
                 }
             };
-            panel.Children.Add(activateOnRelease);
             var trayArc=new CheckBox {Name="OpenArcFromTrayWithTrigger",Content="Open Arc from the tray with the assigned button",
-                IsChecked=settings.OpenArcFromTrayWithTrigger,Margin=new Thickness(0,10,0,0)};
+                IsChecked=settings.OpenArcFromTrayWithTrigger,Margin=new Thickness(0,12,0,0)};
             trayArc.Click+=(sender,args) => {
                 bool previous=settings.OpenArcFromTrayWithTrigger;
                 try {
@@ -415,6 +428,7 @@ namespace PadLauncher {
                 }
             };
             panel.Children.Add(trayArc);
+            panel.Children.Add(activateOnRelease);
             return panel;
         }
         FrameworkElement CreateArcMenuSettings(Window owner) {
