@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -102,6 +104,42 @@ namespace PadLauncher {
             return true;
         }
         bool trayArcTriggerReady;
+        [StructLayout(LayoutKind.Sequential)]
+        struct ArcWindowBounds { public int Left,Top,Right,Bottom; }
+        [DllImport("dwmapi.dll")]
+        static extern int DwmGetWindowAttribute(IntPtr window,int attribute,out ArcWindowBounds bounds,int size);
+        [DllImport("user32.dll")]
+        static extern bool GetWindowRect(IntPtr window,out ArcWindowBounds bounds);
+        [DllImport("user32.dll")]
+        static extern IntPtr GetShellWindow();
+        [DllImport("user32.dll",CharSet=CharSet.Unicode)]
+        static extern int GetClassName(IntPtr window,StringBuilder name,int capacity);
+        [DllImport("user32.dll")]
+        static extern bool IsZoomed(IntPtr window);
+        [DllImport("user32.dll",EntryPoint="GetWindowLongW")]
+        static extern int GetArcWindowStyle(IntPtr window,int index);
+
+        bool FullscreenWindowHasFocus() {
+            IntPtr foreground=GetForegroundWindow();
+            if(foreground==IntPtr.Zero || foreground==GetShellWindow() || OverlayHasForeground() || SettingsHasForeground()) return false;
+            if(arcOnlyWindow!=null && foreground==new System.Windows.Interop.WindowInteropHelper(arcOnlyWindow).Handle) return false;
+            // A maximized window with a title bar is still a regular desktop window.
+            const int captionStyle=0x00C00000;
+            if(IsZoomed(foreground) && (GetArcWindowStyle(foreground,-16)&captionStyle)==captionStyle) return false;
+            var className=new StringBuilder(64);
+            GetClassName(foreground,className,className.Capacity);
+            switch(className.ToString()) {
+                case "Progman": case "WorkerW": case "Shell_TrayWnd": case "Shell_SecondaryTrayWnd": return false;
+            }
+            ArcWindowBounds bounds;
+            const int extendedFrameBounds=9;
+            if(DwmGetWindowAttribute(foreground,extendedFrameBounds,out bounds,Marshal.SizeOf(typeof(ArcWindowBounds)))!=0 &&
+                !GetWindowRect(foreground,out bounds)) return false;
+            var monitor=System.Windows.Forms.Screen.FromHandle(foreground).Bounds;
+            const int tolerance=2;
+            return bounds.Left<=monitor.Left+tolerance && bounds.Top<=monitor.Top+tolerance &&
+                bounds.Right>=monitor.Right-tolerance && bounds.Bottom>=monitor.Bottom-tolerance;
+        }
         bool PollNativeTrayArc() {
             if(!settings.OpenArcFromTrayWithTrigger || exiting || preview || NeedsInitialSetup ||
                 OwnedWindows.Cast<Window>().Any(window => window.IsVisible)) {
@@ -114,7 +152,7 @@ namespace PadLauncher {
             if(!down) trayArcTriggerReady=true;
             if(!trayArcTriggerReady || !down) return false;
             trayArcTriggerReady=false;
-            if(launching || arcOnly) return false;
+            if(launching || arcOnly || FullscreenWindowHasFocus()) return false;
             arcOnly=true;
             arcTriggerWaitRelease=true;
             controllerTimer.Interval=TimeSpan.FromMilliseconds(16);
@@ -123,6 +161,14 @@ namespace PadLauncher {
         }
         static long ArcMilliseconds() {return (long)(System.Diagnostics.Stopwatch.GetTimestamp()*1000.0/System.Diagnostics.Stopwatch.Frequency);}
         void PollTrayArc() {
+            if(FullscreenWindowHasFocus()) {
+                CloseArc();
+                trayArcTriggerReady=false;
+                arcTriggerWaitRelease=false;
+                suppressSearchRelease=true;
+                controllerWaitForForegroundRelease=true;
+                return;
+            }
             PadState pad;
             if(preview || !Gamepad.Read(out pad)) {
                 DismissArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true; return;
