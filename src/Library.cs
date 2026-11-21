@@ -425,6 +425,8 @@ namespace PadLauncher {
         public string DesktopArcMode {get;set;}
         public string DesktopArcSide {get;set;}
         public bool ShareArcMenuSettings {get;set;}
+        public bool OverlayArcBlurEnabled {get;set;}
+        public bool DesktopArcBlurEnabled {get;set;}
         public List<ArcSlot> DesktopArcSlots {get;set;}
         public List<string> OverlayArcExcludedListIds {get;set;}
         public List<string> DesktopArcExcludedListIds {get;set;}
@@ -512,7 +514,7 @@ namespace PadLauncher {
         public string EaLauncherPath {get;set;}
         public bool SteamGridDbEnabled { get; set; }
         public bool LibretroArtworkEnabled {get;set;}
-        public Settings() { OpenArcFromTrayWithTrigger=true; ShareArcMenuSettings=true; QuickSelectMode="lists"; QuickSelectSide="right"; RetroPanelScale=1; PanelSizesLocked=true; ArtworkGap=16; ShowPanelOutlines=false; SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=false; RemoveMissingEmulatorGames=false; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; StickSpeedsLocked=true; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=3; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
+        public Settings() { OpenArcFromTrayWithTrigger=true; ShareArcMenuSettings=true; OverlayArcBlurEnabled=true; DesktopArcBlurEnabled=true; QuickSelectMode="lists"; QuickSelectSide="right"; RetroPanelScale=1; PanelSizesLocked=true; ArtworkGap=16; ShowPanelOutlines=false; SteamEnabled=true; IncludeSteamShortcuts=true; SteamShortcutLaunchMode="direct"; ShowListGameCount=false; RemoveMissingEmulatorGames=false; SkipEmptyLists=true; LeftStickSpeed=5; RightStickSpeed=5; StickSpeedsLocked=true; ButtonPrompts = "PlayStation"; ShowGameTitle = true; ShowCollectionName = true; OpenMonitor = "cursor"; DefaultCollectionId="remember"; CarouselScale=1; CarouselLayout="angled"; AngledPanelSizing="fixed"; GridColumns=5; GridRows=3; EpicEnabled=true; GogEnabled=true; EaEnabled=true; UbisoftEnabled=true; RockstarEnabled=true; SteamGridDbEnabled=true; }
     }
     public static class Prompts {
         public static string Style(Settings settings) {

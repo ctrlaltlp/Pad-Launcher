@@ -312,7 +312,7 @@ namespace PadLauncher {
         }
         static double ArcX(double offset) {return 135-5.9*offset*offset;}
         void LayoutArc(int direction) {
-            if(direction!=0 && IsVisible) {
+            if(direction!=0 && IsVisible && (UseDesktopArcSettings ? settings.DesktopArcBlurEnabled : settings.OverlayArcBlurEnabled)) {
                 if(arcBlurTimer==null) {
                     arcBlurTimer=new System.Windows.Threading.DispatcherTimer {Interval=TimeSpan.FromMilliseconds(150)};
                     arcBlurTimer.Tick+=(sender,args) => {
@@ -504,7 +504,7 @@ namespace PadLauncher {
             panel.Children.Add(overlayHeading);
             panel.Children.Add(CreateArcMenuSettings(owner,false));
             panel.Children.Add(CreateArcSideSetting(owner,false));
-            AddArcReleaseSettings(panel,owner,releaseLabel,false);
+            AddArcBlurAndReleaseSettings(panel,owner,releaseLabel,false);
             var arcOnlyHeading=Label("Desktop Arc menu",16,white);
             arcOnlyHeading.FontWeight=FontWeights.SemiBold;
             arcOnlyHeading.Margin=new Thickness(0,28,0,0);
@@ -517,7 +517,7 @@ namespace PadLauncher {
             panel.Children.Add(desktopMenu);
             panel.Children.Add(desktopSide);
             var desktopRelease=new StackPanel();
-            var refreshDesktopRelease=AddArcReleaseSettings(desktopRelease,owner,releaseLabel,true);
+            var refreshDesktopOptions=AddArcBlurAndReleaseSettings(desktopRelease,owner,releaseLabel,true);
             panel.Children.Add(desktopRelease);
             Action updateDesktopControls=() => {
                 var visibility=settings.ShareArcMenuSettings ? Visibility.Collapsed : Visibility.Visible;
@@ -525,9 +525,9 @@ namespace PadLauncher {
                 desktopMenu.Opacity=desktopMenu.IsEnabled ? 1 : 0.45;
                 desktopSide.Visibility=visibility;
                 desktopRelease.IsEnabled=!settings.ShareArcMenuSettings;
-                refreshDesktopRelease();
+                refreshDesktopOptions();
             };
-            panel.AddHandler(Button.ClickEvent,new RoutedEventHandler((sender,args) => refreshDesktopRelease()));
+            panel.AddHandler(Button.ClickEvent,new RoutedEventHandler((sender,args) => refreshDesktopOptions()));
             updateDesktopControls();
             shareSettings.Click+=(sender,args) => {
                 bool previous=settings.ShareArcMenuSettings;
@@ -543,7 +543,26 @@ namespace PadLauncher {
             };
             return panel;
         }
-        Action AddArcReleaseSettings(StackPanel panel,Window owner,string releaseLabel,bool desktop) {
+        Action AddArcBlurAndReleaseSettings(StackPanel panel,Window owner,string releaseLabel,bool desktop) {
+            var blur=new CheckBox {Name=desktop ? "DesktopArcBlurEnabled" : "OverlayArcBlurEnabled",
+                Content="Blur overlay",IsChecked=desktop && !settings.ShareArcMenuSettings ? settings.DesktopArcBlurEnabled : settings.OverlayArcBlurEnabled,
+                Margin=new Thickness(0,10,0,0)};
+            blur.Click+=(sender,args) => {
+                bool previous=desktop ? settings.DesktopArcBlurEnabled : settings.OverlayArcBlurEnabled;
+                try {
+                    if(desktop) settings.DesktopArcBlurEnabled=blur.IsChecked==true; else settings.OverlayArcBlurEnabled=blur.IsChecked==true;
+                    Storage.Write("settings.json",settings);
+                    if(!(UseDesktopArcSettings ? settings.DesktopArcBlurEnabled : settings.OverlayArcBlurEnabled)) {
+                        if(arcBlurTimer!=null) arcBlurTimer.Stop();
+                        if(scene.Effect==arcOverlayBlur) scene.Effect=null;
+                    }
+                } catch(Exception error) {
+                    if(desktop) settings.DesktopArcBlurEnabled=previous; else settings.OverlayArcBlurEnabled=previous;
+                    blur.IsChecked=previous;
+                    ThemedMessage.Show(owner,error.Message,"Arc menu");
+                }
+            };
+            panel.Children.Add(blur);
             Func<bool> readNavigation=() => desktop && !settings.ShareArcMenuSettings ? settings.DesktopArcActivateOnNavigationRelease : settings.QuickSelectActivateOnRelease;
             Func<bool> readButton=() => desktop && !settings.ShareArcMenuSettings ? settings.ArcActivateOnButtonRelease : settings.OverlayArcActivateOnButtonRelease;
             Action<bool,bool> setRelease=(navigation,button) => {
@@ -579,6 +598,7 @@ namespace PadLauncher {
             panel.Children.Add(buttonRelease);
             panel.Children.Add(navigationRelease);
             return () => {
+                blur.IsChecked=desktop && !settings.ShareArcMenuSettings ? settings.DesktopArcBlurEnabled : settings.OverlayArcBlurEnabled;
                 bool navigation=readNavigation();
                 navigationRelease.IsChecked=navigation;
                 buttonRelease.IsChecked=readButton() && !navigation;
