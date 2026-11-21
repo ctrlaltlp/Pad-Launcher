@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.5.3")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.5.3")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.5.3")]
+[assembly: System.Reflection.AssemblyVersion("0.6.5.4")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.5.4")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.5.4")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -287,6 +287,12 @@ namespace PadLauncher {
             demo = demoMode; preview = renderPreview;
             freshProfile=!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json")) && !File.Exists(System.IO.Path.Combine(Storage.Root,"library.json"));
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
+            if(settings.DesktopArcSide==null) settings.DesktopArcSide=settings.QuickSelectSide ?? "right";
+            if(settings.DesktopArcMode==null) {
+                settings.DesktopArcMode=settings.QuickSelectMode ?? "custom";
+                if(settings.DesktopArcSlots==null && settings.RadialSlots!=null)
+                    settings.DesktopArcSlots=new List<ArcSlot>(settings.RadialSlots);
+            }
 #if XBOX_GUIDE_TEST
             settings.SetupWizardDeclined=true;
             settings.OpenOverlayWithHome=true;
@@ -736,8 +742,7 @@ namespace PadLauncher {
             tabs.Items.Add(new TabItem {Header="Overlay",Content=settingsScroll});
             var arcLayout=new StackPanel {Margin=new Thickness(28)};
             var arcHeading=Label("Arc",26,white); arcHeading.FontWeight=FontWeights.SemiBold; arcLayout.Children.Add(arcHeading);
-            arcLayout.Children.Add(CreateArcSideSettings(dialog));
-            arcLayout.Children.Add(CreateArcMenuSettings(dialog));
+            arcLayout.Children.Add(CreateArcSettings(dialog));
             tabs.Items.Add(new TabItem {Header="Arc",Content=new ScrollViewer {Content=arcLayout,
                 VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}});
             tabs.Items.Add(new TabItem {Header="Lists",Content=listsScroll});
@@ -2662,8 +2667,7 @@ namespace PadLauncher {
             if(PollNativeTrayArc()) return;
             if(!TakeOverlayHomePress()) return;
             TraceArc("native tray tap received");
-            if(NeedsInitialSetup ||
-                (helpWindow!=null && helpWindow.IsVisible) || OwnedWindows.Cast<Window>().Any(window => window.IsVisible)) return;
+            if(NeedsInitialSetup || OwnedWindows.Cast<Window>().Any(window => window.IsVisible)) return;
             ShowOverlay();
             controllerWaitForForegroundRelease=true;
         }
@@ -2676,7 +2680,6 @@ namespace PadLauncher {
                 controllerWaitForForegroundRelease=true;
                 if(arcPopup!=null && !arcOnly) {CloseArc(); arcTriggerWaitRelease=false;}
                 if(homePressed && !launching &&
-                    (helpWindow==null || !helpWindow.IsVisible || helpWindow.WindowState==WindowState.Minimized) &&
                     !OwnedWindows.Cast<Window>().Any(window => window!=gameSearchWindow && window.IsVisible && window.WindowState!=WindowState.Minimized)) {
 #if FOCUS_DIAGNOSTICS
                     TraceFocus("controller shortcut refocus requested");

@@ -22,7 +22,9 @@ namespace PadLauncher {
         bool arcConfirmNeedsRelease;
         long arcButtonsNeutralSince=-1;
         bool arcButtonsArmed;
+        bool UseDesktopArcSettings { get { return arcOnly && !settings.ShareArcMenuSettings; } }
         List<ArcSlot> arcSlots;
+        ArcSlot arcActivatedSlot;
         int arcPendingReleaseInput;
         long arcDpadReleasedAt=-1;
         readonly List<Border> arcCards=new List<Border>();
@@ -43,7 +45,10 @@ namespace PadLauncher {
 
             if(arcPopup!=null || arcOnlyWindow!=null) {
                 if(!arcOnly && !ArcBindingDown(pad)) {
+                    var slot=arcSlots[arcSelectedIndex];
+                    bool activate=settings.OverlayArcActivateOnButtonRelease && !settings.QuickSelectActivateOnRelease && slot!=arcActivatedSlot;
                     CloseArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true;
+                    if(activate) ActivateArcSlot(slot);
                     return true;
                 }
                 ushort pressed=(ushort)(pad.Buttons & ~arcButtons);
@@ -68,7 +73,7 @@ namespace PadLauncher {
                 if(direction!=0 && (direction!=arcDirection || input!=arcInput || milliseconds>=arcNextStep)) {
                     bool first=direction!=arcDirection || input!=arcInput;
                     arcSelectedIndex=(arcSelectedIndex+direction+arcSlots.Count)%arcSlots.Count;
-                    if(!arcOnly) arcPendingReleaseInput=input;
+                    arcPendingReleaseInput=input;
                     LayoutArc(direction);
                     arcNextStep=milliseconds+(input==2 ? 105 : first ? 310 : 225);
                 }
@@ -85,7 +90,8 @@ namespace PadLauncher {
                 } else if((arcPendingReleaseInput==1 && arcDpadReleasedAt>=0 && milliseconds-arcDpadReleasedAt>=150) ||
                     (arcPendingReleaseInput==2 && Math.Abs((int)pad.LY)<11000)) {
                     arcPendingReleaseInput=0;
-                    if(settings.QuickSelectActivateOnRelease) ActivateArcSlot(arcSlots[arcSelectedIndex]);
+                    if(UseDesktopArcSettings ? settings.DesktopArcActivateOnNavigationRelease : settings.QuickSelectActivateOnRelease)
+                        ActivateArcSlot(arcSlots[arcSelectedIndex]);
                 }
                 return true;
             }
@@ -98,7 +104,7 @@ namespace PadLauncher {
         bool trayArcTriggerReady;
         bool PollNativeTrayArc() {
             if(!settings.OpenArcFromTrayWithTrigger || exiting || preview || NeedsInitialSetup ||
-                (helpWindow!=null && helpWindow.IsVisible) || OwnedWindows.Cast<Window>().Any(window => window.IsVisible)) {
+                OwnedWindows.Cast<Window>().Any(window => window.IsVisible)) {
                 trayArcTriggerReady=false;
                 return false;
             }
@@ -122,9 +128,18 @@ namespace PadLauncher {
                 DismissArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true; return;
             }
             if(!ArcBindingDown(pad)) {
-                DismissArc();
-                arcTriggerWaitRelease=false;
-                suppressSearchRelease=true;
+                try {
+                    var slot=arcSlots[arcSelectedIndex];
+                    bool activate=UseDesktopArcSettings
+                        ? settings.ArcActivateOnButtonRelease && !settings.DesktopArcActivateOnNavigationRelease
+                        : settings.OverlayArcActivateOnButtonRelease && !settings.QuickSelectActivateOnRelease;
+                    if(activate && slot!=arcActivatedSlot)
+                        ActivateArcSlot(slot);
+                } finally {
+                    DismissArc();
+                    arcTriggerWaitRelease=false;
+                    suppressSearchRelease=true;
+                }
                 return;
             }
             long now=ArcMilliseconds();
@@ -173,6 +188,7 @@ namespace PadLauncher {
         void CloseArc([System.Runtime.CompilerServices.CallerMemberName] string caller=null) {
             if(arcPopup!=null || arcOnlyWindow!=null || arcOnly) TraceArc("close requested by "+caller);
             arcOnly=false;
+            arcActivatedSlot=null;
             arcPendingReleaseInput=0;
             arcDpadReleasedAt=-1;
             if(arcOnlyWindow!=null) {
@@ -281,7 +297,7 @@ namespace PadLauncher {
                 card.Opacity=Math.Abs(offset)>3 ? 0 : 1-Math.Abs(offset)*.19;
                 Panel.SetZIndex(card,4-Math.Abs(offset));
                 double x=ArcX(offset)+12,y=ArcCenterY+offset*ArcStep-22;
-                bool isLeft=settings.QuickSelectSide=="left";
+                bool isLeft=(UseDesktopArcSettings ? settings.DesktopArcSide : settings.QuickSelectSide)=="left";
                 if(isLeft) Canvas.SetLeft(card,x); else Canvas.SetRight(card,x);
                 Canvas.SetTop(card,y);
                 var transform=(TranslateTransform)card.RenderTransform;
@@ -293,17 +309,17 @@ namespace PadLauncher {
             }
         }
         void OpenArc(ushort buttons) {
-            bool useLists=settings.QuickSelectMode=="lists";
+            bool useLists=(UseDesktopArcSettings ? settings.DesktopArcMode : settings.QuickSelectMode)=="lists";
             var arcLists=useLists ? filters.Where(list => CollectionEnabled(list.Id) && !list.UnsupportedDynamic &&
                 list.Id!="unavailable-collections" && !list.Id.StartsWith("arcPopup-tag:",StringComparison.Ordinal)).ToList() : null;
             arcSlots=useLists ? arcLists.Select(list => new ArcSlot {Kind="list",Target=list.Id}).ToList()
-                : (settings.RadialSlots ?? DefaultArcSlots()).ToList();
+                : ((UseDesktopArcSettings ? settings.DesktopArcSlots : settings.RadialSlots) ?? DefaultArcSlots()).ToList();
             if(arcSlots.Count==0) arcSlots.Add(new ArcSlot());
             arcSelectedIndex=Math.Max(0,arcSlots.FindIndex(slot => slot!=null && slot.Kind=="list" && slot.Target==settings.CollectionId));
             arcButtonsArmed=false; arcButtonsNeutralSince=-1;
             arcButtons=buttons; arcConfirmNeedsRelease=(buttons&ArcConfirmMask())!=0; arcDirection=arcInput=0; navigation.Reset();
             var canvas=new Canvas {Width=520,Height=540,ClipToBounds=true,IsHitTestVisible=arcOnly};
-            bool isLeft=settings.QuickSelectSide=="left";
+            bool isLeft=(UseDesktopArcSettings ? settings.DesktopArcSide : settings.QuickSelectSide)=="left";
             var rail=new System.Windows.Shapes.Path {Data=Geometry.Parse(isLeft ? "M 0,18 Q 270,270 0,522" : "M 520,18 Q 250,270 520,522"),
                 Stroke=mint,StrokeThickness=2,Opacity=.65,IsHitTestVisible=false};
             canvas.Children.Add(rail);
@@ -384,38 +400,40 @@ namespace PadLauncher {
             };
             return arcStarterSlots=slots;
         }
-        FrameworkElement CreateArcSideSettings(Window owner) {
+        FrameworkElement CreateArcSideSetting(Window owner,bool desktop) {
             var panel=new StackPanel();
             var sideLabel=Label("Screen side",14,mint); sideLabel.Margin=new Thickness(0,12,0,6); panel.Children.Add(sideLabel);
-            var side=new SettingsComboBox {Name="QuickSelectSide",ItemsSource=new[]{"Left","Right"},
-                SelectedIndex=settings.QuickSelectSide=="left" ? 0 : 1,Padding=new Thickness(8)};
+            string current=desktop ? settings.DesktopArcSide : settings.QuickSelectSide;
+            var side=new SettingsComboBox {Name=desktop ? "DesktopArcSide" : "QuickSelectSide",ItemsSource=new[]{"Left","Right"},
+                SelectedIndex=current=="left" ? 0 : 1,Padding=new Thickness(8)};
             bool restoringSide=false;
             side.SelectionChanged+=(sender,args) => {
                 if(restoringSide) return;
-                string previous=settings.QuickSelectSide;
-                try {settings.QuickSelectSide=side.SelectedIndex==0 ? "left" : "right"; Storage.Write("settings.json",settings);}
+                string previous=desktop ? settings.DesktopArcSide : settings.QuickSelectSide;
+                try {
+                    string next=side.SelectedIndex==0 ? "left" : "right";
+                    if(desktop) settings.DesktopArcSide=next; else settings.QuickSelectSide=next;
+                    Storage.Write("settings.json",settings);
+                }
                 catch(Exception error) {
-                    settings.QuickSelectSide=previous;
+                    if(desktop) settings.DesktopArcSide=previous; else settings.QuickSelectSide=previous;
                     restoringSide=true; side.SelectedIndex=previous=="left" ? 0 : 1; restoringSide=false;
                     ThemedMessage.Show(owner,error.Message,"Arc menu");
                 }
             };
             panel.Children.Add(side);
-            var activateOnRelease=new CheckBox {Name="QuickSelectActivateOnRelease",Content="Activate on release (only when main overlay is active)",
-                IsChecked=settings.QuickSelectActivateOnRelease,Margin=new Thickness(0,10,0,0)};
-            activateOnRelease.Click+=(sender,args) => {
-                bool previous=settings.QuickSelectActivateOnRelease;
-                try {
-                    settings.QuickSelectActivateOnRelease=activateOnRelease.IsChecked==true;
-                    Storage.Write("settings.json",settings);
-                } catch(Exception error) {
-                    settings.QuickSelectActivateOnRelease=previous;
-                    activateOnRelease.IsChecked=previous;
-                    ThemedMessage.Show(owner,error.Message,"Arc menu");
-                }
-            };
-            var trayArc=new CheckBox {Name="OpenArcFromTrayWithTrigger",Content="Open Arc from the tray with the assigned button",
-                IsChecked=settings.OpenArcFromTrayWithTrigger,Margin=new Thickness(0,12,0,0)};
+            return panel;
+        }
+        FrameworkElement CreateArcSettings(Window owner) {
+            var panel=new StackPanel();
+            var shareSettings=new CheckBox {Name="ShareArcMenuSettings",Content="Use the settings for both arc menus",
+                IsChecked=settings.ShareArcMenuSettings,Margin=new Thickness(0,12,0,0)};
+            panel.Children.Add(shareSettings);
+            string arcButton=ControlBindings.Label(settings,"overlay.arc");
+            string releaseLabel=arcButton=="Unassigned" ? "Activate on release (Arc shortcut unassigned)" : "Activate on release of "+arcButton;
+            var trayArc=new CheckBox {Name="OpenArcFromTrayWithTrigger",
+                Content=arcButton=="Unassigned" ? "Open Arc from the tray (Arc shortcut unassigned)" : "Open Arc from the tray with "+arcButton,
+                IsChecked=settings.OpenArcFromTrayWithTrigger};
             trayArc.Click+=(sender,args) => {
                 bool previous=settings.OpenArcFromTrayWithTrigger;
                 try {
@@ -427,26 +445,106 @@ namespace PadLauncher {
                     ThemedMessage.Show(owner,error.Message,"Arc menu");
                 }
             };
+            var overlayHeading=Label("Main overlay Arc menu",16,white);
+            overlayHeading.FontWeight=FontWeights.SemiBold;
+            overlayHeading.Margin=new Thickness(0,16,0,0);
+            panel.Children.Add(overlayHeading);
+            panel.Children.Add(CreateArcMenuSettings(owner,false));
+            panel.Children.Add(CreateArcSideSetting(owner,false));
+            AddArcReleaseSettings(panel,owner,releaseLabel,false);
+            var arcOnlyHeading=Label("Desktop Arc menu",16,white);
+            arcOnlyHeading.FontWeight=FontWeights.SemiBold;
+            arcOnlyHeading.Margin=new Thickness(0,28,0,0);
+            panel.Children.Add(arcOnlyHeading);
+            var desktopMenu=CreateArcMenuSettings(owner,true);
+            var desktopSide=CreateArcSideSetting(owner,true);
+            panel.Children.Add(desktopMenu);
+            panel.Children.Add(desktopSide);
+            trayArc.Margin=new Thickness(0,10,0,0);
             panel.Children.Add(trayArc);
-            panel.Children.Add(activateOnRelease);
+            var desktopRelease=new StackPanel();
+            var refreshDesktopRelease=AddArcReleaseSettings(desktopRelease,owner,releaseLabel,true);
+            panel.Children.Add(desktopRelease);
+            Action updateDesktopControls=() => {
+                var visibility=settings.ShareArcMenuSettings ? Visibility.Collapsed : Visibility.Visible;
+                desktopMenu.Visibility=desktopSide.Visibility=visibility;
+                desktopRelease.IsEnabled=!settings.ShareArcMenuSettings;
+                refreshDesktopRelease();
+            };
+            panel.AddHandler(Button.ClickEvent,new RoutedEventHandler((sender,args) => refreshDesktopRelease()));
+            updateDesktopControls();
+            shareSettings.Click+=(sender,args) => {
+                bool previous=settings.ShareArcMenuSettings;
+                try {
+                    settings.ShareArcMenuSettings=shareSettings.IsChecked==true;
+                    Storage.Write("settings.json",settings);
+                    updateDesktopControls();
+                } catch(Exception error) {
+                    settings.ShareArcMenuSettings=previous;
+                    shareSettings.IsChecked=previous;
+                    ThemedMessage.Show(owner,error.Message,"Arc menu");
+                }
+            };
             return panel;
         }
-        FrameworkElement CreateArcMenuSettings(Window owner) {
-            var section=new Expander {Header="Menu setting",Foreground=white,Margin=new Thickness(0,16,0,12)};
+        Action AddArcReleaseSettings(StackPanel panel,Window owner,string releaseLabel,bool desktop) {
+            Func<bool> readNavigation=() => desktop && !settings.ShareArcMenuSettings ? settings.DesktopArcActivateOnNavigationRelease : settings.QuickSelectActivateOnRelease;
+            Func<bool> readButton=() => desktop && !settings.ShareArcMenuSettings ? settings.ArcActivateOnButtonRelease : settings.OverlayArcActivateOnButtonRelease;
+            Action<bool,bool> setRelease=(navigation,button) => {
+                if(desktop) {
+                    settings.DesktopArcActivateOnNavigationRelease=navigation;
+                    settings.ArcActivateOnButtonRelease=button;
+                } else {
+                    settings.QuickSelectActivateOnRelease=navigation;
+                    settings.OverlayArcActivateOnButtonRelease=button;
+                }
+            };
+            var buttonRelease=new CheckBox {Name=desktop ? "ArcActivateOnButtonRelease" : "OverlayArcActivateOnButtonRelease",
+                Content=releaseLabel,IsChecked=readButton() && !readNavigation(),Margin=new Thickness(0,10,0,0)};
+            var navigationRelease=new CheckBox {Name=desktop ? "DesktopArcActivateOnNavigationRelease" : "QuickSelectActivateOnRelease",
+                Content="Activate on release of left-stick or D-pad",IsChecked=readNavigation(),Margin=new Thickness(0,10,0,0)};
+            RoutedEventHandler saveRelease=(sender,args) => {
+                bool previousNavigation=readNavigation();
+                bool previousButton=readButton();
+                try {
+                    if(sender==navigationRelease && navigationRelease.IsChecked==true) buttonRelease.IsChecked=false;
+                    if(sender==buttonRelease && buttonRelease.IsChecked==true) navigationRelease.IsChecked=false;
+                    setRelease(navigationRelease.IsChecked==true,buttonRelease.IsChecked==true);
+                    Storage.Write("settings.json",settings);
+                } catch(Exception error) {
+                    setRelease(previousNavigation,previousButton);
+                    navigationRelease.IsChecked=previousNavigation;
+                    buttonRelease.IsChecked=previousButton && !previousNavigation;
+                    ThemedMessage.Show(owner,error.Message,"Arc menu");
+                }
+            };
+            buttonRelease.Click+=saveRelease;
+            navigationRelease.Click+=saveRelease;
+            panel.Children.Add(buttonRelease);
+            panel.Children.Add(navigationRelease);
+            return () => {
+                bool navigation=readNavigation();
+                navigationRelease.IsChecked=navigation;
+                buttonRelease.IsChecked=readButton() && !navigation;
+            };
+        }
+        FrameworkElement CreateArcMenuSettings(Window owner,bool desktop) {
+            var section=new Expander {Header="Menu setting",Foreground=white,Margin=new Thickness(0,10,0,0)};
             var panel=new StackPanel {Margin=new Thickness(0,8,0,0)};
             section.Content=panel;
             string button=ControlBindings.Label(settings,"overlay.arc");
             string openHint=button=="Unassigned" ? "Assign an Arc menu button in Show/Change controls. " : "Hold "+button+" to open the Arc menu. ";
             var note=Label("",12,muted);
             note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
-            var mode=new SettingsComboBox {Name="QuickSelectMode",ItemsSource=new[]{"Use overlay lists for the arc menu","Custom"},
-                SelectedIndex=settings.QuickSelectMode=="lists" ? 0 : 1,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
+            Func<string> currentMode=() => desktop ? settings.DesktopArcMode : settings.QuickSelectMode;
+            var mode=new SettingsComboBox {Name=desktop ? "DesktopArcMode" : "QuickSelectMode",ItemsSource=new[]{"Use overlay lists for the arc menu","Custom"},
+                SelectedIndex=currentMode()=="lists" ? 0 : 1,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
             panel.Children.Add(mode);
             var customPanel=new StackPanel();
             panel.Children.Add(customPanel);
             bool initialized=false, restoringMode=false;
             Action refreshMode=() => {
-                bool custom=settings.QuickSelectMode!="lists";
+                bool custom=currentMode()!="lists";
                 customPanel.Visibility=custom ? Visibility.Visible : Visibility.Collapsed;
                 note.Text=openHint+"Use D-pad Up/Down to step or the left stick to scroll faster."+
                     " Arc starts on your last accessed list when available.";
@@ -457,7 +555,7 @@ namespace PadLauncher {
                     {"list",CollectionOptions().Select(c => new KeyValuePair<string,string>(c.Id,c.Name)).ToList()},
                     {"tag",(settings.ListTags ?? new Dictionary<string,string>()).Values.SelectMany(value => (value ?? "").Split(',')).Select(t => t.Trim()).Where(t => t.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t,StringComparer.CurrentCultureIgnoreCase).Select(t => new KeyValuePair<string,string>(t,t)).ToList()}
                 };
-                var slots=settings.RadialSlots ?? DefaultArcSlots();
+                var slots=(desktop ? settings.DesktopArcSlots : settings.RadialSlots) ?? DefaultArcSlots();
                 var kinds=new List<ComboBox>(); var targets=new List<ComboBox>();
                 var rows=new StackPanel();
                 customPanel.Children.Add(rows);
@@ -516,21 +614,27 @@ namespace PadLauncher {
                         }
                         next.Add(target==null ? new ArcSlot() : new ArcSlot {Kind=((string)kinds[i].SelectedItem).ToLowerInvariant(),Target=target});
                     }
-                    var previous=settings.RadialSlots;
-                    try {settings.RadialSlots=next; Storage.Write("settings.json",settings); status.Text="Arc menu saved.";}
-                    catch(Exception error) {settings.RadialSlots=previous; ThemedMessage.Show(owner,error.Message,"Arc menu");}
+                    var previous=desktop ? settings.DesktopArcSlots : settings.RadialSlots;
+                    try {
+                        if(desktop) settings.DesktopArcSlots=next; else settings.RadialSlots=next;
+                        Storage.Write("settings.json",settings); status.Text="Arc menu saved.";
+                    } catch(Exception error) {
+                        if(desktop) settings.DesktopArcSlots=previous; else settings.RadialSlots=previous;
+                        ThemedMessage.Show(owner,error.Message,"Arc menu");
+                    }
                 };
             };
             section.Expanded+=(sender,args) => {if(args.Source==section) refreshMode();};
             mode.SelectionChanged+=(sender,args) => {
                 if(restoringMode) return;
-                string previous=settings.QuickSelectMode;
+                string previous=currentMode();
                 try {
-                    settings.QuickSelectMode=mode.SelectedIndex==0 ? "lists" : "custom";
+                    string next=mode.SelectedIndex==0 ? "lists" : "custom";
+                    if(desktop) settings.DesktopArcMode=next; else settings.QuickSelectMode=next;
                     Storage.Write("settings.json",settings);
                     refreshMode();
                 } catch(Exception error) {
-                    settings.QuickSelectMode=previous;
+                    if(desktop) settings.DesktopArcMode=previous; else settings.QuickSelectMode=previous;
                     restoringMode=true; mode.SelectedIndex=previous=="lists" ? 0 : 1; restoringMode=false;
                     ThemedMessage.Show(owner,error.Message,"Arc menu");
                 }
@@ -553,6 +657,7 @@ namespace PadLauncher {
             return "Unassigned";
         }
         void ActivateArcSlot(ArcSlot slot) {
+            if(arcPopup!=null || arcOnlyWindow!=null) arcActivatedSlot=slot;
             TraceArc("activate slot kind="+(slot==null ? "(empty)" : slot.Kind)+"; launching="+launching);
             if(launching) return;
             if(slot==null || String.IsNullOrWhiteSpace(slot.Target)) {ShowNotice("Assign an item to this slot",1.5); return;}
