@@ -541,7 +541,7 @@ namespace PadLauncher {
         static bool IsAlwaysAvailableArcList(string id) {
             return id=="recent" || id=="recently-added" || id=="favourites";
         }
-        static readonly string[] DefaultArcExcludedListIds={"recent","recently-added","favourites"};
+        static readonly string[] DefaultArcExcludedListIds={"recently-added","favourites"};
         static readonly string[] ArcPinnedListIds={"recent","recently-added","most-played","favourites"};
         IEnumerable<Collection> ArcListOptions(bool customLists) {
             var options=!customLists ? CollectionOptions() :
