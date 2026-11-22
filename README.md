@@ -101,7 +101,7 @@ Open **Settings → Lists → List editor** to manage your lists.
 
 ## Command-line shortcuts
 
-Pass this argument to `PadLauncher.exe` from Controller Companion or another mapper:
+Pass this argument to `PadLauncher.exe` from DS4Windows, reWASD or Controller Companion or another mapper:
 
 - `--toggle-overlay` — Open the overlay, request focus if it is already open behind another window, or hide it if it already has focus.
 
