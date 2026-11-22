@@ -97,6 +97,9 @@ class ListTransitionTests {
                 Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("One") && !savedSettings.SelectedGamesByList.ContainsKey("recent"),"Recently played resets on returning and does not store a selection");
                 Key(persisted,System.Windows.Input.Key.Right);
                 Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("Two"),"Recently played can browse to an older game");
+                savedSettings.JumpListId="recent"; savedSettings.JumpListStartAtBeginning=true;
+                typeof(Launcher).GetMethod("JumpToConfiguredList",binding).Invoke(persisted,null);
+                Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("One"),"Jump to list starts at the first game when already on its configured list");
                 persisted.Close(); persisted.ShowOverlay();
                 Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("One"),"Reopening Recently played starts on the newest game");
                 persisted.SetAvailableCollections(new[]{"first","second"});
@@ -126,6 +129,14 @@ class ListTransitionTests {
                     favouritesSection.IsExpanded=true; help.UpdateLayout();
                     var favouritePicker=(SettingsComboBox)Find(help,"FavouriteOrderPicker");
                     Check(favouritePicker!=null && favouritePicker.Items.Count==2,"Favourites order lists every favourite");
+                    var jumpStart=(CheckBox)Find(help,"JumpListStartAtBeginning");
+                    Check(jumpStart!=null && jumpStart.IsChecked==true && (string)jumpStart.Content=="Always start from the beginning of the list when Jump to list is pressed","Lists shows the always-start-at-beginning jump setting");
+                    jumpStart.IsChecked=false;
+                    jumpStart.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                    Check(!savedSettings.JumpListStartAtBeginning,"Disabling always-start-at-beginning saves immediately");
+                    jumpStart.IsChecked=true;
+                    jumpStart.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                    Check(savedSettings.JumpListStartAtBeginning,"Enabling always-start-at-beginning saves immediately");
                     favouritePicker.SelectedValue="two";
                     ((Button)Find(help,"FavouriteMoveTop")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     var favouriteOrder=Storage.Read<Settings>("settings.json").FavouriteGameIds;
