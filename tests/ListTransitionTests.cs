@@ -87,7 +87,7 @@ class ListTransitionTests {
                 Key(persisted,System.Windows.Input.Key.PageDown); Key(persisted,System.Windows.Input.Key.PageUp);
                 Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text==remembered,"Switching lists restores the selected game for each list");
                 savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
-                navigationLibrary.Games[0].LastPlayed=200; navigationLibrary.Games[1].LastPlayed=100;
+                savedSettings.LaunchHistory=new System.Collections.Generic.Dictionary<string,long>{{"one",200},{"two",100}};
                 savedSettings.SelectedGamesByList["recent"]="two";
                 persisted.SetAvailableCollections(new[]{"first","recent"});
                 Key(persisted,System.Windows.Input.Key.PageDown);
@@ -126,6 +126,11 @@ class ListTransitionTests {
                     favouritesSection.IsExpanded=true; help.UpdateLayout();
                     var favouritePicker=(SettingsComboBox)Find(help,"FavouriteOrderPicker");
                     Check(favouritePicker!=null && favouritePicker.Items.Count==2,"Favourites order lists every favourite");
+                    var jumpStart=(CheckBox)Find(help,"JumpListStartAtBeginning");
+                    Check(jumpStart!=null && jumpStart.IsChecked==false,"Lists shows a Jump to list start-at-beginning setting");
+                    jumpStart.IsChecked=true;
+                    jumpStart.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                    Check(savedSettings.JumpListStartAtBeginning,"Jump to list start-at-beginning setting saves immediately");
                     favouritePicker.SelectedValue="two";
                     ((Button)Find(help,"FavouriteMoveTop")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     var favouriteOrder=Storage.Read<Settings>("settings.json").FavouriteGameIds;

@@ -141,9 +141,9 @@ class ExternalTests {
             Check(customLibrary.Games.Count==0 && customLibrary.Collections.Count==0 && File.Exists(custom.Target),"Removing entry keeps game files");
             Console.WriteLine("8 custom game checks passed");
             var featureSettings=new Settings {LaunchHistory=new Dictionary<string,long>{{"epic:one",300},{"steam:one",50}}};
-            var featureLibrary=new Library {Games=new List<Game>{new Game {Id="steam:one",Name="Steam",LastPlayed=200},new Game {Id="epic:one",Name="Epic"},new Game {Id="custom:none",Name="Unplayed"}}};
+            var featureLibrary=new Library {Games=new List<Game>{new Game {Id="steam:one",Name="Steam",LastPlayed=200},new Game {Id="steam:only",Name="Steam only",LastPlayed=400},new Game {Id="epic:one",Name="Epic"},new Game {Id="custom:none",Name="Unplayed"}}};
             var recent=CombinedCollections.Options(featureLibrary,featureSettings).Single(c => c.Id=="recent");
-            Check(recent.Games.SequenceEqual(new[]{"epic:one","steam:one"}),"Recent collection merges local launch history and Steam history in newest-first order");
+            Check(recent.Games.SequenceEqual(new[]{"steam:only","epic:one","steam:one"}),"Recent collection includes games launched through Steam and Pad Launcher, newest first");
             Check(featureSettings.RightStickSpeed==5,"Settings without a saved speed default to 5x right stick speed");
             Check(StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).StartsWith("\"") && StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).EndsWith("\""),"Windows startup executable path is quoted");
             byte[] coverBytes;
@@ -155,7 +155,7 @@ class ExternalTests {
             Check(selectedGame.Art==Path.Combine(Storage.Root,relativeCover) && selectedGame.ArtworkProvider=="chosen" && !Path.IsPathRooted(relativeCover),"Explicit artwork selection overrides existing art and stores a portable relative path");
             Check(File.Exists(steamArt),"Selecting artwork preserves original image");
             featureSettings.ArtworkOverrides.Clear(); selectedGame.Art=steamArt; ArtworkService.ApplyCached(selectedGame,featureSettings); Check(selectedGame.Art==steamArt,"Reset returns priority to original artwork");
-            Console.WriteLine("7 launcher feature checks passed");
+            Console.WriteLine("6 launcher feature checks passed");
             Check(ArtworkService.OriginalGrid(new Game {Id="10"},null,CancellationToken.None)==ArtworkService.OriginalSteamUrl(10),"Native Steam original artwork works without an API key");
             Check(ArtworkService.OriginalGrid(new Game {Id="epic:test",Source="epic",ArtworkUrl="https://cdn1.epicgames.com/original.jpg"},null,CancellationToken.None).Contains("epicgames.com"),"Epic original cover uses catalog source");
             ArtworkService.Fetch=(url,bearer,token) => Encoding.UTF8.GetBytes(url.Contains("autocomplete") ? "{\"success\":true,\"data\":[{\"id\":42,\"name\":\"Standalone\"}]}" : "{\"success\":true,\"data\":{\"external_platform_data\":{\"steam\":[{\"id\":10}]}}}");

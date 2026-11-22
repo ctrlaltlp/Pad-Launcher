@@ -409,6 +409,15 @@ public static class OverlayTests {
             Check(Math.Abs(artworkFrame.ActualHeight-artworkImage.ActualHeight)<1 && Storage.Read<Settings>("settings.json").AngledPanelSizing=="fit","Fit artwork can be restored immediately and is saved");
             bool invalidSizing=false; try { artworkWindow.SetAngledPanelSizing("unknown"); } catch(ArgumentException) { invalidSizing=true; }
             Check(invalidSizing && Storage.Read<Settings>("settings.json").AngledPanelSizing=="fit","Invalid sizing modes preserve the saved choice");
+            artworkWindow.SetAngledPanelSizing("fixed");
+            var resizeFlags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
+            var resolveSizing=typeof(Launcher).GetMethod("ResolveArtworkSizing",resizeFlags);
+            var noGames=new System.Collections.Generic.List<Game>();
+            foreach(string builtInList in new[]{"recent","recently-added","most-played","favourites"})
+                Check((string)resolveSizing.Invoke(artworkWindow,new object[]{builtInList,null,noGames})=="fit","Built-in list "+builtInList+" defaults to fit artwork");
+            Check((string)resolveSizing.Invoke(artworkWindow,new object[]{"all",null,noGames})=="fixed","Regular lists keep the global fixed artwork default");
+            Check((string)resolveSizing.Invoke(artworkWindow,new object[]{"favourites",new ListLayout {AngledSizing="fixed"},noGames})=="fixed","An explicit per-list fixed choice overrides the built-in fit default");
+            artworkWindow.SetAngledPanelSizing("fit");
             foreach(string artworkLayout in new[]{"rectangular","grid"}) {
                 artworkWindow.SetCarouselLayout(artworkLayout);
                 artworkContent.Measure(new Size(1600,900)); artworkContent.Arrange(new Rect(0,0,1600,900)); artworkContent.UpdateLayout();
