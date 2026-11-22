@@ -24,6 +24,20 @@ public static class OverlayTests {
         }
         return null;
     }
+    static int CountCheckBoxes(DependencyObject root) {
+        int count=root is CheckBox ? 1 : 0;
+        for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) count+=CountCheckBoxes(VisualTreeHelper.GetChild(root,i));
+        return count;
+    }
+    static Button FindButton(DependencyObject root,string prefix) {
+        var button=root as Button;
+        if(button!=null && button.Name.StartsWith(prefix,StringComparison.Ordinal)) return button;
+        for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) {
+            var match=FindButton(VisualTreeHelper.GetChild(root,i),prefix);
+            if(match!=null) return match;
+        }
+        return null;
+    }
     [STAThread] public static int Main() {
         Storage.Root=Path.Combine(Path.GetTempPath(),"PadLauncher-overlay-tests-"+Guid.NewGuid().ToString("N"));
         Launcher window=null;
@@ -252,7 +266,41 @@ public static class OverlayTests {
             var helpTabs=(TabControl)FindElement(helpRoot,"HelpSettingsTabs");
             var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[7]).Content;
             var settingsPage=(ScrollViewer)((TabItem)helpTabs.Items[0]).Content;
-            Check(helpTabs.Items.Count==10 && (string)((TabItem)helpTabs.Items[1]).Header=="Arc" && (string)((TabItem)helpTabs.Items[6]).Header=="Artwork" && (string)((TabItem)helpTabs.Items[7]).Header=="Controls" && (string)((TabItem)helpTabs.Items[0]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Launchers" && (string)((TabItem)helpTabs.Items[8]).Header=="Activity" && (string)((TabItem)helpTabs.Items[9]).Header=="System","Controls follows Artwork, then Activity, with System last");
+            Check(helpTabs.Items.Count==10 && (string)((TabItem)helpTabs.Items[1]).Header=="Lists" && (string)((TabItem)helpTabs.Items[2]).Header=="Arc" && (string)((TabItem)helpTabs.Items[6]).Header=="Artwork" && (string)((TabItem)helpTabs.Items[7]).Header=="Controls" && (string)((TabItem)helpTabs.Items[0]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[3]).Header=="Launchers" && (string)((TabItem)helpTabs.Items[8]).Header=="Activity" && (string)((TabItem)helpTabs.Items[9]).Header=="System","Lists follows Overlay and Arc follows Lists, with Controls after Artwork, Activity next, and System last");
+            var arcContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[2]).Content).Content;
+            var arcSection=(Expander)FindElement(arcContents,"ArcMenuSettings");
+            arcSection.IsExpanded=true; helpTabs.SelectedIndex=2;
+            helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
+            var arcMode=(ComboBox)FindElement((FrameworkElement)arcSection.Content,"QuickSelectMode");
+            arcMode.SelectedIndex=0;
+            helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
+            var arcChoices=(FrameworkElement)FindElement((FrameworkElement)arcSection.Content,"ArcListChoices");
+            Check(FindElement(arcChoices,"ArcListsMirrorNote")!=null && CountCheckBoxes(arcChoices)==0,"Mirror overlay lists has no separate Arc list selection");
+            var filtersField=typeof(Launcher).GetField("filters",refreshFlags);
+            var originalFilters=(System.Collections.Generic.List<Collection>)filtersField.GetValue(window);
+            try {
+                filtersField.SetValue(window,new System.Collections.Generic.List<Collection> {
+                    new Collection {Id="all",Name="All games"},new Collection {Id="recent",Name="Recently played"},
+                    new Collection {Id="favourites",Name="Favourites"},new Collection {Id="unavailable-collections",Name="No available lists"},
+                    new Collection {Id="arcPopup-tag:test",Name="Tag"}
+                });
+                var mirror=(System.Collections.Generic.List<Collection>)typeof(Launcher).GetMethod("MirrorOverlayArcLists",refreshFlags).Invoke(window,null);
+                Check(mirror.Select(list => list.Id).SequenceEqual(new[]{"all","recent","favourites"}),"Mirror overlay lists mirrors enabled overlay lists in order and ignores Arc-only exclusions");
+            } finally { filtersField.SetValue(window,originalFilters); }
+            arcMode.SelectedIndex=1;
+            helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
+            Check(CountCheckBoxes(arcChoices)>0,"Custom lists keeps its own selectable list choices");
+            var firstDown=FindButton(arcChoices,"ArcCustomListDown_");
+            Check(firstDown!=null,"Custom lists expose reorder controls");
+            var customChoicesMethod=typeof(Launcher).GetMethod("ArcCustomListChoices",refreshFlags);
+            var beforeOrder=(System.Collections.Generic.List<Collection>)customChoicesMethod.Invoke(window,new object[]{false});
+            string movedId=beforeOrder[0].Id;
+            firstDown.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var savedArcOrder=Storage.Read<Settings>("settings.json").OverlayArcListOrder;
+            Check(movedId!=null && savedArcOrder!=null && savedArcOrder.Count>1 && savedArcOrder[0]==beforeOrder[1].Id && savedArcOrder[1]==movedId,"Custom Arc lists can be reordered and save immediately");
+            arcMode.SelectedIndex=0;
+            helpTabs.SelectedIndex=0;
+            helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             Check(helpPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto && settingsPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto,"Both tabs show their slim scrollbar only when scrolling is needed");
             var systemContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[9]).Content).Content;
             var integrationsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[3]).Content).Content;
@@ -265,11 +313,11 @@ public static class OverlayTests {
             Check(((StackPanel)integrationsContents).Children.OfType<Expander>().Count()==8 && ((StackPanel)integrationsContents).Children.OfType<Expander>().All(section => !section.IsExpanded),"Each launcher has its own initially collapsed integration section");
             var xboxSection=(Expander)FindElement(integrationsContents,"XboxIntegrationSection");
             Check(xboxSection!=null && FindElement((FrameworkElement)xboxSection.Content,"XboxEnabledSetting") is CheckBox,"Xbox app has its own integration and inclusion checkbox");
-            var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[2]).Content).Content;
+            var listsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[1]).Content).Content;
             Check(FindElement(listsContents,"DefaultListSetting")!=null && FindElement(listsContents,"AvailableListsSection")!=null && FindElement((FrameworkElement)settingsPage.Content,"DefaultListSetting")==null,"List selection and availability live in Lists, separate from Appearance");
             var editorSection=(Expander)FindElement(listsContents,"ListEditorSection");
             Check(editorSection!=null && (string)editorSection.Header=="List editor" && FindElement(listsContents,"CustomListsSection")==null,"List editor replaces separate combine and game-edit sections");
-            editorSection.IsExpanded=true; helpTabs.SelectedIndex=2;
+            editorSection.IsExpanded=true; helpTabs.SelectedIndex=1;
             helpRoot.Measure(new Size(660,650)); helpRoot.Arrange(new Rect(0,0,660,650)); helpRoot.UpdateLayout();
             Check(FindElement(listsContents,"CustomListName")!=null && FindElement(listsContents,"SaveCustomList")!=null,"Create mode provides name and game selection");
             helpTabs.SelectedIndex=0;
@@ -484,7 +532,7 @@ public static class OverlayTests {
             var emptyHandle=new System.Windows.Interop.WindowInteropHelper(emptyWindow).EnsureHandle(); var emptySource=System.Windows.Interop.HwndSource.FromHwnd(emptyHandle);
             emptyWindow.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,emptySource,0,System.Windows.Input.Key.Enter) {RoutedEvent=System.Windows.Input.Keyboard.PreviewKeyDownEvent});
             var settingsDialog=emptyWindow.HelpWindow;
-            Check(settingsDialog!=null && ((TabControl)FindElement((FrameworkElement)settingsDialog.Content,"HelpSettingsTabs" )).SelectedIndex==2,"Enter on an empty library opens Settings on the Lists tab");
+            Check(settingsDialog!=null && ((TabControl)FindElement((FrameworkElement)settingsDialog.Content,"HelpSettingsTabs" )).SelectedIndex==1,"Enter on an empty library opens Settings on the Lists tab");
             settingsDialog.Close();
             emptyWindow.OpenSettingsTab(3);
             var reopened=emptyWindow.HelpWindow;

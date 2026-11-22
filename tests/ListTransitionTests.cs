@@ -130,7 +130,7 @@ class ListTransitionTests {
                 var help=persisted.CreateHelpWindow();
                 try {
                     help.Left=-20000; help.Show();
-                    ((TabControl)Find(help,"HelpSettingsTabs")).SelectedIndex=2; help.UpdateLayout();
+                    ((TabControl)Find(help,"HelpSettingsTabs")).SelectedIndex=1; help.UpdateLayout();
                     var favouritesSection=(Expander)Find(help,"FavouriteOrderSection");
                     Check(favouritesSection!=null,"Lists shows a favourites order section");
                     favouritesSection.IsExpanded=true; help.UpdateLayout();

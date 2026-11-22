@@ -66,7 +66,7 @@ Choose **Angled** for a slanted artwork carousel or **Rectangular** for a straig
 
 ## Arc menu
 
-Hold **R2 / RT / ZR** by default to open the **Arc menu**. Browse with D-pad Up/Down or scroll faster with the left stick. In **Settings → Arc**, choose a screen side and use your overlay lists or custom slots for games, lists, and tags. Custom starts with three slots. Use **+** to add a slot or **−** to remove the last one, then save. Manage tags in **List editor → Tags**. With tray access enabled, Arc can open on its own. Selecting a list or tag reveals the game overlay behind it, and releasing the button closes Arc.
+Hold **R2 / RT / ZR** by default to open the **Arc menu**. Browse with D-pad Up/Down or scroll faster with the left stick. In **Settings → Arc**, choose a screen side and a menu mode. **Mirror overlay lists** always mirrors the lists enabled under **Settings → Lists → Overlay lists**, in the same order, with no separate Arc list selection. Disable a list in overlay lists and it disappears from Arc; enable one and it appears. **Use custom lists** lets you choose which available lists appear in Arc and reorder them with the ↑ and ↓ buttons. **Custom** uses slots for games, lists, and tags and starts with three slots; use **+** to add a slot or **−** to remove the last one, then save. Manage tags in **List editor → Tags**. With tray access enabled, Arc can open on its own. Selecting a list or tag reveals the game overlay behind it, and releasing the button closes Arc.
 
 ## Artwork
 

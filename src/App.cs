@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.2")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.2")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.2")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.3")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.3")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.3")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -758,9 +758,9 @@ namespace PadLauncher {
             var arcLayout=new StackPanel {Margin=new Thickness(28)};
             var arcHeading=Label("Arc",26,white); arcHeading.FontWeight=FontWeights.SemiBold; arcLayout.Children.Add(arcHeading);
             arcLayout.Children.Add(CreateArcSettings(dialog));
+            tabs.Items.Add(new TabItem {Header="Lists",MinWidth=0,Content=listsScroll});
             tabs.Items.Add(new TabItem {Header="Arc",MinWidth=0,Content=new ScrollViewer {Content=arcLayout,
                 VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}});
-            tabs.Items.Add(new TabItem {Header="Lists",MinWidth=0,Content=listsScroll});
             tabs.Items.Add(new TabItem {Header="Launchers",Content=integrationsScroll});
             tabs.Items.Add(new TabItem {Header="Custom games",Content=customScroll});
             tabs.Items.Add(new TabItem {Header="Emulators",Content=emulatorScroll});
@@ -2447,7 +2447,7 @@ namespace PadLauncher {
             }
             carousel.Children.Add(guideActions);
         }
-        internal static int SettingsTabIndex(int oldIndex) {return oldIndex==0 ? 7 : oldIndex==1 ? 0 : oldIndex>=2 && oldIndex<=6 ? oldIndex : oldIndex+1;}
+        internal static int SettingsTabIndex(int oldIndex) {return oldIndex==0 ? 7 : oldIndex==1 ? 0 : oldIndex==2 ? 1 : oldIndex>=3 && oldIndex<=6 ? oldIndex : oldIndex+1;}
         public void OpenSettingsTab(int tab) {
             bool created=false;
             if(helpWindow==null) { helpWindow=CreateHelpWindow(); helpWindow.Closed+=(s,e) => { helpWindow=null; helpTabs=null; missingArtworkList=null; missingArtworkCount=null; }; created=true; }

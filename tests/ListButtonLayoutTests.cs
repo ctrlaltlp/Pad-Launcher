@@ -19,7 +19,7 @@ class ListButtonLayoutTests {
             Storage.Write("library.json",new Library {Games=new List<Game>{new Game {Id="1",Name="Game One",Source="steam"},new Game {Id="2",Name="Game Two",Source="steam"}}});
             launcher=new Launcher(false,true); window=launcher.CreateHelpWindow(); window.Left=-20000; window.Show();
             if(!window.Topmost || !launcher.Topmost) throw new Exception("Settings and the overlay must stay topmost.");
-            ((TabControl)Find(window,"HelpSettingsTabs")).SelectedIndex=2; window.UpdateLayout();
+            ((TabControl)Find(window,"HelpSettingsTabs")).SelectedIndex=1; window.UpdateLayout();
             ((Expander)Find(window,"ListEditorSection")).IsExpanded=true; window.UpdateLayout();
             ((Button)Find(window,"ListEditorMode_edit")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); window.UpdateLayout();
             ((ComboBox)Find(window,"CustomListPicker")).SelectedValue="list:test"; window.UpdateLayout();

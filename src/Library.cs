@@ -453,6 +453,8 @@ namespace PadLauncher {
         public List<ArcSlot> DesktopArcSlots {get;set;}
         public List<string> OverlayArcExcludedListIds {get;set;}
         public List<string> DesktopArcExcludedListIds {get;set;}
+        public List<string> OverlayArcListOrder {get;set;}
+        public List<string> DesktopArcListOrder {get;set;}
         public bool SteamEnabled {get;set;}
         public bool IncludeSteamShortcuts {get;set;}
         public string SteamShortcutLaunchMode {get;set;}
