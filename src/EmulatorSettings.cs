@@ -239,7 +239,7 @@ namespace PadLauncher {
                     var listChoices=new List<KeyValuePair<string,string>>();
                     foreach(var collection in EmulatorLibrary.DefaultListOrder(CombinedCollections.Options(library,settings),library,settings)) {
                         if(collection==null || String.IsNullOrEmpty(collection.Id) || collection.Id=="all" || collection.Id=="unavailable-collections" ||
-                            collection.Id=="recent" || collection.Id=="recently-added" || collection.Id=="most-played") continue;
+                            collection.Id=="recent" || collection.Id=="recently-added" || collection.Id=="most-played" || collection.Id=="most-played-lately") continue;
                         var matching=(collection.Games ?? new List<string>()).Where(registered.Contains).Distinct(StringComparer.OrdinalIgnoreCase)
                             .Select(gameId => gamesById[gameId]).OrderBy(game => game.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
                         if(matching.Count==0) continue;

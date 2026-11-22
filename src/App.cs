@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.1")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.1")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.1")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.2")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.2")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.2")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -90,6 +90,7 @@ namespace PadLauncher {
         public const string AppName="Pad Launcher";
 #endif
         [STAThread] public static void Main(string[] args) {
+            if(args.Contains("--track-playtime")) {PlayTimeTracker.Run(args); return;}
 #if XBOX_GUIDE_TEST
             if(args.Contains("--probe-guide")) {
                 using(var guide=new XboxGuideInput()) guide.Probe();
@@ -287,6 +288,7 @@ namespace PadLauncher {
             demo = demoMode; preview = renderPreview;
             freshProfile=!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json")) && !File.Exists(System.IO.Path.Combine(Storage.Root,"library.json"));
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
+            if(!demo && !renderPreview && PlayTimeTracker.Consume(settings,Storage.Root)) Storage.Write("settings.json",settings);
             if(settings.DesktopArcSide==null) settings.DesktopArcSide=settings.QuickSelectSide ?? "right";
             if(settings.DesktopArcMode==null) {
                 settings.DesktopArcMode=settings.QuickSelectMode ?? "custom";
@@ -430,10 +432,10 @@ namespace PadLauncher {
             }));
         }
         static bool IsSpecialJumpList(string id) {
-            return id=="favourites" || id=="recent" || id=="most-played";
+            return id=="favourites" || id=="recent" || id=="most-played" || id=="most-played-lately";
         }
         static bool IsAutoOrderedList(string id) {
-            return id=="recent" || id=="recently-added" || id=="most-played";
+            return id=="recent" || id=="recently-added" || id=="most-played" || id=="most-played-lately";
         }
         List<KeyValuePair<string,string>> DefaultListChoices() {
             var choices=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last list")};
@@ -456,7 +458,11 @@ namespace PadLauncher {
         }
         List<Collection> CollectionOptions() {
             var options=EmulatorLibrary.DefaultListOrder(CombinedCollections.Options(library,settings),library,settings);
-            if(settings.OverlayListOrder==null) return options;
+            if(settings.OverlayListOrder==null) {
+                var playedLately=options.FirstOrDefault(list => list.Id=="most-played-lately");
+                if(playedLately!=null) {options.Remove(playedLately); options.Insert(0,playedLately);}
+                return options;
+            }
             var ranks=settings.OverlayListOrder.Distinct().Select((id,index) => new {id,index}).ToDictionary(item => item.id,item => item.index);
             return options.OrderBy(list => ranks.ContainsKey(list.Id) ? ranks[list.Id] : Int32.MaxValue).ToList();
         }
@@ -542,7 +548,7 @@ namespace PadLauncher {
         string ResolveArtworkSizing(string listId,ListLayout profile,IList<Game> games) {
             string sizing=profile==null ? null : profile.AngledSizing;
             if(sizing=="fit" || sizing=="fixed") return sizing;
-            if(listId=="recent" || listId=="recently-added" || listId=="most-played" || listId=="favourites") return "fit";
+            if(listId=="recent" || listId=="recently-added" || listId=="most-played" || listId=="most-played-lately" || listId=="favourites") return "fit";
             string source=ArtworkService.ListDefaultSource(settings,listId);
             if(ArtworkService.PrimaryArtworkSource(source)=="libretro") return "fit";
             if(source=="auto" && games.Count>0 && games.All(game =>
@@ -712,7 +718,7 @@ namespace PadLauncher {
         }
         public Window CreateHelpWindow() {
             var dialog=new Window {
-                Title="Pad Launcher · Settings",Width=700,Height=920,MinWidth=700,MinHeight=500,
+                Title="Pad Launcher · Settings",Width=740,Height=920,MinWidth=740,MinHeight=500,
                 WindowStartupLocation=WindowStartupLocation.CenterScreen,ResizeMode=ResizeMode.CanResize,
                 Background=new SolidColorBrush(Color.FromRgb(13,25,34)),Foreground=white,FontFamily=FontFamily,
                 ShowInTaskbar=true,Topmost=true,Icon=Icon
@@ -727,6 +733,8 @@ namespace PadLauncher {
             var systemLayout=new StackPanel {Margin=new Thickness(28)};
             var artworkLayout=new StackPanel {Name="ArtworkSettingsPanel",Margin=new Thickness(28)};
             var artworkScroll=new ScrollViewer {Content=artworkLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            var activityLayout=new StackPanel {Margin=new Thickness(28)};
+            var activityScroll=new ScrollViewer {Content=activityLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var integrationsLayout=new StackPanel {Margin=new Thickness(28)};
             var integrationsScroll=new ScrollViewer {Content=integrationsLayout,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
             var emulatorLayout=new StackPanel {Margin=new Thickness(28)};
@@ -739,8 +747,10 @@ namespace PadLauncher {
             var tabs=new TabControl {Name="HelpSettingsTabs",Background=dialog.Background,BorderThickness=new Thickness(0),Foreground=white,Margin=new Thickness(12,12,12,0)};
             tabs.ItemContainerStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabItem}'>
                 <Setter Property='Background' Value='#22333F'/><Setter Property='Foreground' Value='#ECF3F2'/><Setter Property='FontSize' Value='14'/>
+                <Setter Property='HorizontalContentAlignment' Value='Stretch'/><Setter Property='VerticalContentAlignment' Value='Stretch'/>
+                <Setter Property='MinWidth' Value='64'/><Setter Property='Cursor' Value='Hand'/>
                 <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type TabItem}'>
-                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='7,11' Margin='0,0,4,0'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
+                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='8,10' Margin='0,0,3,0' HorizontalAlignment='Stretch' VerticalAlignment='Stretch'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
                     <ControlTemplate.Triggers><Trigger Property='IsSelected' Value='True'><Setter TargetName='TabBorder' Property='Background' Value='#A3F0CD'/><Setter Property='Foreground' Value='#0D1922'/></Trigger></ControlTemplate.Triggers>
                 </ControlTemplate></Setter.Value></Setter>
             </Style>");
@@ -748,14 +758,15 @@ namespace PadLauncher {
             var arcLayout=new StackPanel {Margin=new Thickness(28)};
             var arcHeading=Label("Arc",26,white); arcHeading.FontWeight=FontWeights.SemiBold; arcLayout.Children.Add(arcHeading);
             arcLayout.Children.Add(CreateArcSettings(dialog));
-            tabs.Items.Add(new TabItem {Header="Arc",Content=new ScrollViewer {Content=arcLayout,
+            tabs.Items.Add(new TabItem {Header="Arc",MinWidth=0,Content=new ScrollViewer {Content=arcLayout,
                 VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}});
-            tabs.Items.Add(new TabItem {Header="Lists",Content=listsScroll});
+            tabs.Items.Add(new TabItem {Header="Lists",MinWidth=0,Content=listsScroll});
             tabs.Items.Add(new TabItem {Header="Launchers",Content=integrationsScroll});
             tabs.Items.Add(new TabItem {Header="Custom games",Content=customScroll});
             tabs.Items.Add(new TabItem {Header="Emulators",Content=emulatorScroll});
-            tabs.Items.Add(new TabItem {Header="Controls",Content=helpScroll});
             tabs.Items.Add(new TabItem {Header="Artwork",Content=artworkScroll});
+            tabs.Items.Add(new TabItem {Header="Controls",Content=helpScroll});
+            tabs.Items.Add(new TabItem {Header="Activity",Content=activityScroll});
             tabs.Items.Add(new TabItem {Header="System",Content=systemScroll});
             tabs.SelectedIndex=0;
             helpTabs=tabs;
@@ -763,6 +774,7 @@ namespace PadLauncher {
             rebuild=() => {
             CleanupSettingsContent(dialog);
             artworkLayout.Children.Clear(); var artworkHeading=Label("Artwork",26,white); artworkHeading.FontWeight=FontWeights.SemiBold; artworkLayout.Children.Add(artworkHeading);
+            activityLayout.Children.Clear(); activityLayout.Children.Add(CreatePlayActivityPanel(dialog));
             layout.Children.Clear(); helpLayout.Children.Clear(); systemLayout.Children.Clear(); integrationsLayout.Children.Clear(); listsLayout.Children.Clear();
             customLayout.Children.Clear(); customLayout.Children.Add(CreateCustomGamesPanel(dialog,rebuild));
             emulatorLayout.Children.Clear(); emulatorLayout.Children.Add(CreateEmulatorsPanel(dialog,rebuild));
@@ -2235,6 +2247,7 @@ namespace PadLauncher {
             visible = library.Games.Where(g => !hidden.Contains(g.Id) && (filter.Id == "all" || (!filter.UnsupportedDynamic && membership.Contains(g.Id)))).ToList();
             if(filter.Id=="recent") visible=visible.OrderByDescending(g => CombinedCollections.RecentPlayed(settings,g)).ToList();
             if(filter.Id=="most-played") visible=visible.OrderByDescending(g => CombinedCollections.LaunchCount(settings,g)).ThenBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+            if(filter.Id=="most-played-lately") visible=CombinedCollections.OrderPlayedLately(visible,settings,DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             if(filter.Id=="recently-added") visible=visible.OrderByDescending(g => CombinedCollections.AddedAt(settings,g)).ThenBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
             string artworkSource=ArtworkService.ListDefaultSource(settings,filter.Id);
             visible=visible.Select(game => ArtworkService.ForList(game,settings,filter.Id,artworkSource)).ToList();
@@ -2311,7 +2324,7 @@ namespace PadLauncher {
                 else settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
             } else if(searchConsoleLabel!=null) searchConsoleLabel.Text=SearchSourceLabel(current,settings);
             string availabilityIssue=GameAvailabilityIssue(current);
-            if(!GameSearchOpen && filters[collectionIndex].Id=="most-played") {
+            if(!GameSearchOpen && (filters[collectionIndex].Id=="most-played" || filters[collectionIndex].Id=="most-played-lately")) {
                 long launchCount=CombinedCollections.LaunchCount(settings,current);
                 launchCountSubtitle.Text="("+launchCount+(launchCount==1 ? " time launched)" : " times launched)");
                 launchCountSubtitle.Margin=new Thickness(0,title.Margin.Top+34,0,0);
@@ -2434,7 +2447,7 @@ namespace PadLauncher {
             }
             carousel.Children.Add(guideActions);
         }
-        internal static int SettingsTabIndex(int oldIndex) {return oldIndex==0 ? 6 : oldIndex==1 ? 0 : oldIndex>=2 && oldIndex<=5 ? oldIndex : oldIndex+1;}
+        internal static int SettingsTabIndex(int oldIndex) {return oldIndex==0 ? 7 : oldIndex==1 ? 0 : oldIndex>=2 && oldIndex<=6 ? oldIndex : oldIndex+1;}
         public void OpenSettingsTab(int tab) {
             bool created=false;
             if(helpWindow==null) { helpWindow=CreateHelpWindow(); helpWindow.Closed+=(s,e) => { helpWindow=null; helpTabs=null; missingArtworkList=null; missingArtworkCount=null; }; created=true; }
@@ -2564,12 +2577,21 @@ namespace PadLauncher {
             launching=true;
             try {
                 Save();
-                Process.Start(GameLaunch.StartInfo(game,settings));
+                long started=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                var process=Process.Start(GameLaunch.StartInfo(game,settings));
                 if(settings.LaunchHistory==null) settings.LaunchHistory=new Dictionary<string,long>();
-                settings.LaunchHistory[game.Id]=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                settings.LaunchHistory[game.Id]=started;
                 if(settings.LaunchCounts==null) settings.LaunchCounts=new Dictionary<string,long>();
                 settings.LaunchCounts[game.Id]=CombinedCollections.LaunchCount(settings,game)+1;
                 Save();
+                bool track=process!=null && !process.HasExited && (game.EmulatorId!=null || game.DirectLaunchShortcut || game.Source=="custom" || (game.Shortcut && game.ShortcutDirectSupported && !String.IsNullOrEmpty(game.ShortcutTarget)));
+                if(track) {
+                    try {
+                        var helper=new ProcessStartInfo(System.Reflection.Assembly.GetExecutingAssembly().Location,
+                            "--track-playtime --data \""+Storage.Root+"\" --game \""+game.Id+"\" --pid "+process.Id+" --start "+started) {UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden};
+                        Process.Start(helper);
+                    } catch(Exception) {}
+                }
                 Close();
             } catch (Exception e) { launching=false; ShowNotice("Game could not be opened: "+e.Message); }
 #endif

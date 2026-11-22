@@ -624,7 +624,7 @@ namespace PadLauncher {
             return id=="recent" || id=="recently-added" || id=="favourites";
         }
         static readonly string[] DefaultArcExcludedListIds={"recently-added","favourites"};
-        static readonly string[] ArcPinnedListIds={"recent","recently-added","most-played","favourites"};
+        static readonly string[] ArcPinnedListIds={"most-played-lately","recent","recently-added","most-played","favourites"};
         IEnumerable<Collection> ArcListOptions(bool customLists) {
             var options=!customLists ? CollectionOptions() :
                 EmulatorLibrary.DefaultListOrder(CombinedCollections.Options(library,settings),library,settings);

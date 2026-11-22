@@ -143,7 +143,30 @@ class ExternalTests {
             var featureSettings=new Settings {LaunchHistory=new Dictionary<string,long>{{"epic:one",300},{"steam:one",50}}};
             var featureLibrary=new Library {Games=new List<Game>{new Game {Id="steam:one",Name="Steam",LastPlayed=200},new Game {Id="steam:only",Name="Steam only",LastPlayed=400},new Game {Id="epic:one",Name="Epic"},new Game {Id="custom:none",Name="Unplayed"}}};
             var recent=CombinedCollections.Options(featureLibrary,featureSettings).Single(c => c.Id=="recent");
-            Check(recent.Games.SequenceEqual(new[]{"steam:only","epic:one","steam:one"}),"Recent collection includes games launched through Steam and Pad Launcher, newest first");
+            Check(recent.Games.SequenceEqual(new[]{"epic:one","steam:one"}),"Recent collection includes only games launched through Pad Launcher, newest first");
+            long now=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var smartSettings=new Settings {
+                LaunchHistory=new Dictionary<string,long>{{"dominant",now-30*86400},{"recent",now-7*86400},{"stale",now-90*86400}},
+                LaunchCounts=new Dictionary<string,long>{{"dominant",100},{"recent",4},{"stale",10}}
+            };
+            var smartLibrary=new Library {Games=new List<Game>{new Game {Id="stale",Name="Stale"},new Game {Id="recent",Name="Recent"},new Game {Id="dominant",Name="Dominant"},new Game {Id="unplayed",Name="Unplayed"}}};
+            var playedLately=CombinedCollections.Options(smartLibrary,smartSettings).Single(c => c.Id=="most-played-lately");
+            Check(playedLately.Games.SequenceEqual(new[]{"dominant","recent","stale"}),"Most played lately mixes launch count, play time and a 60-day freshness half-life");
+            var playTimeSettings=new Settings {
+                LaunchHistory=new Dictionary<string,long>{{"long-session",now-1000},{"frequent-short",now-1000},{"short-session",now-1000}},
+                LaunchCounts=new Dictionary<string,long>{{"long-session",2},{"frequent-short",6},{"short-session",2}},
+                PlayTimeSeconds=new Dictionary<string,long>{{"long-session",20*3600},{"frequent-short",0},{"short-session",0}}
+            };
+            var longSession=CombinedCollections.PlayedLatelyScore(playTimeSettings,new Game {Id="long-session"},now);
+            var frequentShort=CombinedCollections.PlayedLatelyScore(playTimeSettings,new Game {Id="frequent-short"},now);
+            var shortSession=CombinedCollections.PlayedLatelyScore(playTimeSettings,new Game {Id="short-session"},now);
+            Check(longSession>shortSession && frequentShort>longSession,"Play time boosts Most played lately logarithmically without overpowering frequent launches");
+            featureSettings.PlayTimeSeconds=new Dictionary<string,long>{{"epic:one",90}};
+            featureSettings.GameAddedAt=new Dictionary<string,long>{{"custom:none",10}};
+            featureLibrary.Games.Single(g => g.Id=="epic:one").ImportedPlayTimeSeconds=30;
+            File.WriteAllText(Path.Combine(Storage.Root,PlayTimeTracker.SessionFile), "epic:one\t1000\t1060\r\nsteam:one\t1000\t1025\r\n");
+            bool consumed=PlayTimeTracker.Consume(featureSettings,Storage.Root);
+            Check(consumed && featureSettings.PlayTimeSeconds["epic:one"]==150 && featureSettings.PlayTimeSeconds["steam:one"]==25 && PlayTimeTracker.Total(featureSettings,featureLibrary.Games.Single(g => g.Id=="epic:one"))==180,"Playtime sessions accumulate and add imported Steam playtime");
             Check(featureSettings.RightStickSpeed==5,"Settings without a saved speed default to 5x right stick speed");
             Check(StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).StartsWith("\"") && StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).EndsWith("\""),"Windows startup executable path is quoted");
             byte[] coverBytes;

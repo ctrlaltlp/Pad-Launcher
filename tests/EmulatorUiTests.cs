@@ -248,7 +248,37 @@ class EmulatorUiTests {
             typeof(Launcher).GetMethod("ApplyLibrary",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).Invoke(launcher,new object[]{false});
             Check(!overlayTitle.Text.Contains("executable missing"),"Refreshing clears the emulator diagnostic after its executable is restored");
             var tabs=(TabControl)Find(content,"HelpSettingsTabs"); tabs.SelectedIndex=5; Layout(content);
-            Check((string)((TabItem)tabs.Items[5]).Header=="Emulators" && (string)((TabItem)tabs.Items[7]).Header=="Artwork" && (string)((TabItem)tabs.Items[8]).Header=="System","Artwork tab follows Emulators and System remains last");
+            Check(tabs.Items.Count>9 && (string)((TabItem)tabs.Items[5]).Header=="Emulators" && (string)((TabItem)tabs.Items[6]).Header=="Artwork" && (string)((TabItem)tabs.Items[7]).Header=="Controls" && (string)((TabItem)tabs.Items[8]).Header=="Activity" && (string)((TabItem)tabs.Items[9]).Header=="System","Controls follows Artwork, then Activity, with System last");
+            tabs.SelectedIndex=8; Layout(content);
+            var gameHeader=(Button)Find(content,"PlayActivitySort_game");
+            var lastHeader=(Button)Find(content,"PlayActivitySort_last");
+            var timeHeader=(Button)Find(content,"PlayActivitySort_time");
+            var launchesHeader=(Button)Find(content,"PlayActivitySort_launches");
+            Check(Find(content,"PlayActivityGames")!=null && gameHeader!=null && lastHeader!=null && timeHeader!=null && launchesHeader!=null,"Activity column headers sort the activity table");
+            Check(((string)timeHeader.Content).EndsWith("▼"),"Activity defaults to descending play time");
+            timeHeader.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(((string)timeHeader.Content).EndsWith("▲"),"Clicking Play time reverses the activity sort");
+            timeHeader.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(((string)timeHeader.Content).EndsWith("▼"),"Clicking Play time again restores descending order");
+            var activityGrid=(DataGrid)Find(content,"PlayActivityGames");
+            Func<DependencyObject,System.Windows.Controls.Primitives.DataGridColumnHeader> findHeader=null;
+            findHeader=node => {
+                var columnHeader=node as System.Windows.Controls.Primitives.DataGridColumnHeader;
+                if(columnHeader!=null && columnHeader.Column!=null && columnHeader.Column.Header==timeHeader) return columnHeader;
+                for(int i=0;i<VisualTreeHelper.GetChildrenCount(node);i++) {var found=findHeader(VisualTreeHelper.GetChild(node,i)); if(found!=null) return found;}
+                return null;
+            };
+            var playTimeHeader=findHeader(activityGrid);
+            Check(playTimeHeader!=null,"Activity exposes the full Play time column header");
+            if(playTimeHeader!=null) playTimeHeader.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0,System.Windows.Input.MouseButton.Left){RoutedEvent=System.Windows.Input.Mouse.PreviewMouseDownEvent});
+            Check(((string)timeHeader.Content).EndsWith("▲"),"Clicking anywhere on a column header sorts it");
+            var includeImported=(CheckBox)Find(content,"PlayActivityIncludeImportedPlayTime");
+            Check(activityGrid.Columns.Count==4 && ((FrameworkElement)activityGrid.Columns[3].Header).Name=="PlayActivitySort_last","Activity places Last launched in the last column");
+            Check(includeImported!=null && includeImported.IsChecked==false,"Activity uses Pad Launcher play time only by default");
+            Check(activityGrid!=null && activityGrid.Foreground!=null && activityGrid.CellStyle!=null && activityGrid.RowStyle!=null && activityGrid.ColumnHeaderStyle!=null,"Activity table uses the themed readable row, cell and header styles");
+            includeImported.IsChecked=true; includeImported.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(Storage.Read<Settings>("settings.json").IncludeImportedPlayTime,"Activity can include imported play time when enabled");
+            tabs.SelectedIndex=5; Layout(content);
             var emulatorTabs=(TabControl)Find(content,"EmulatorTabs");
             emulatorTabs.SelectedIndex=1; Layout(content);
             var sections=((StackPanel)((TabItem)emulatorTabs.Items[1]).Content).Children.OfType<Expander>().ToList();
@@ -329,7 +359,7 @@ class EmulatorUiTests {
             Check(retroListPicker!=null && retroGamePicker!=null && Find(content,"EmulatorGameListLabel_retroarch")!=null,"RetroArch games can be browsed by list");
             var retroListOptions=((IEnumerable<KeyValuePair<string,string>>)retroListPicker.ItemsSource).ToList();
             Check(retroListOptions.Any(option => option.Key==listId && option.Value.StartsWith("Imported test list")),"RetroArch list picker includes imported and custom lists containing RetroArch games");
-            Check(!retroListOptions.Any(option => option.Key=="recent" || option.Key=="recently-added" || option.Key=="most-played"),"RetroArch list picker omits Recently played, Recently added and Most played");
+            Check(!retroListOptions.Any(option => option.Key=="recent" || option.Key=="recently-added" || option.Key=="most-played" || option.Key=="most-played-lately"),"RetroArch list picker omits automatic play-history lists");
             retroListPicker.SelectedValue=listId; Layout(content);
             Check(retroGamePicker.Items.Count==2 && ((TextBlock)Find(content,"EmulatorGamesLabel_retroarch")).Text.Contains("2"),"Choosing a RetroArch list shows only that list's games");
             Check(RunImportAll(dialog,content),"Import all wizard reviews every emulator and commits through its button");

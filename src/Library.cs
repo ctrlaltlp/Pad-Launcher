@@ -60,6 +60,7 @@ namespace PadLauncher {
         public List<string> Categories { get; set; }
         public bool HasMetadata { get; set; }
         public long LastPlayed { get; set; }
+        public long ImportedPlayTimeSeconds { get; set; }
         public bool HasPlayHistory { get; set; }
         public Game() { Tags = new List<string>(); StoreTags = new List<string>(); Categories = new List<string>(); }
     }
@@ -316,11 +317,27 @@ namespace PadLauncher {
         public static long RecentPlayed(Settings settings,Game game) {
             long launched=0;
             if(settings.LaunchHistory!=null) settings.LaunchHistory.TryGetValue(game.Id,out launched);
-            return Math.Max(game.LastPlayed,launched);
+            return launched;
         }
         public static long LaunchCount(Settings settings,Game game) {
             long count;
             return settings.LaunchCounts!=null && settings.LaunchCounts.TryGetValue(game.Id,out count) ? count : 0;
+        }
+        public static double PlayedLatelyScore(Settings settings,Game game,long now) {
+            long count=LaunchCount(settings,game);
+            if(count<=0) return -1;
+            long last=RecentPlayed(settings,game);
+            if(last<=0) return 0;
+            double days=Math.Max(0,(now-last)/86400.0);
+            double hours=Math.Max(0,PlayTimeTracker.Local(settings,game))/3600.0;
+            double playTimeWeight=1+Math.Log(1+hours,2)/4;
+            return count*playTimeWeight*Math.Pow(0.5,days/60.0);
+        }
+        public static List<Game> OrderPlayedLately(IEnumerable<Game> games,Settings settings,long now) {
+            return games.Where(game => LaunchCount(settings,game)>0)
+                .OrderByDescending(game => PlayedLatelyScore(settings,game,now))
+                .ThenByDescending(game => RecentPlayed(settings,game))
+                .ThenBy(game => game.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
         }
         public static List<Collection> Options(Library library,Settings settings) {
             var options=new List<Collection> {new Collection {Id="all",Name="All games",Games=library.Games.Select(g => g.Id).ToList()}};
@@ -347,6 +364,12 @@ namespace PadLauncher {
                 Id="most-played",Name=mostPlayedNameUsed ? "Most played (automatic)" : "Most played",
                 Games=library.Games.Where(game => LaunchCount(settings,game)>0).OrderByDescending(game => LaunchCount(settings,game))
                     .ThenBy(game => game.Name,StringComparer.CurrentCultureIgnoreCase).Select(game => game.Id).ToList()
+            });
+            bool playedLatelyNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Most played lately",StringComparison.OrdinalIgnoreCase)) ||
+                (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => String.Equals(list.Name,"Most played lately",StringComparison.OrdinalIgnoreCase));
+            options.Add(new Collection {
+                Id="most-played-lately",Name=playedLatelyNameUsed ? "Most played lately (automatic)" : "Most played lately",
+                Games=OrderPlayedLately(library.Games,settings,DateTimeOffset.UtcNow.ToUnixTimeSeconds()).Select(game => game.Id).ToList()
             });
             bool addedNameUsed=(settings.CustomLists ?? new List<CustomList>()).Any(list => String.Equals(list.Name,"Recently added",StringComparison.OrdinalIgnoreCase)) || (settings.CombinedCollections ?? new List<CombinedCollection>()).Any(list => String.Equals(list.Name,"Recently added",StringComparison.OrdinalIgnoreCase));
             options.Add(new Collection {Id="recently-added",Name=addedNameUsed ? "Recently added (automatic)" : "Recently added",Games=library.Games.Where(g => AddedAt(settings,g)>0).OrderByDescending(g => AddedAt(settings,g)).ThenBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).Select(g => g.Id).ToList()});
@@ -503,6 +526,8 @@ namespace PadLauncher {
         public bool SkipEmptyLists {get;set;}
         public string DefaultCustomGameListId {get;set;}
         public List<string> OverlayListOrder {get;set;}
+        public Dictionary<string,long> PlayTimeSeconds {get;set;}
+        public bool IncludeImportedPlayTime {get;set;}
         public string JumpListButton {get;set;}
         public string JumpListId {get;set;}
         public bool JumpListStartAtBeginning {get;set;}

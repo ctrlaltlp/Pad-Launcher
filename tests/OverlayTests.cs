@@ -250,11 +250,11 @@ public static class OverlayTests {
             var helpDialog=resident.CreateHelpWindow();
             var helpRoot=(FrameworkElement)helpDialog.Content;
             var helpTabs=(TabControl)FindElement(helpRoot,"HelpSettingsTabs");
-            var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[6]).Content;
+            var helpPage=(ScrollViewer)((TabItem)helpTabs.Items[7]).Content;
             var settingsPage=(ScrollViewer)((TabItem)helpTabs.Items[0]).Content;
-            Check(helpTabs.Items.Count==9 && (string)((TabItem)helpTabs.Items[1]).Header=="Arc" && (string)((TabItem)helpTabs.Items[6]).Header=="Controls" && (string)((TabItem)helpTabs.Items[0]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Launchers" && (string)((TabItem)helpTabs.Items[8]).Header=="System","Settings tabs keep System last");
+            Check(helpTabs.Items.Count==10 && (string)((TabItem)helpTabs.Items[1]).Header=="Arc" && (string)((TabItem)helpTabs.Items[6]).Header=="Artwork" && (string)((TabItem)helpTabs.Items[7]).Header=="Controls" && (string)((TabItem)helpTabs.Items[0]).Header=="Overlay" && (string)((TabItem)helpTabs.Items[2]).Header=="Lists" && (string)((TabItem)helpTabs.Items[3]).Header=="Launchers" && (string)((TabItem)helpTabs.Items[8]).Header=="Activity" && (string)((TabItem)helpTabs.Items[9]).Header=="System","Controls follows Artwork, then Activity, with System last");
             Check(helpPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto && settingsPage.VerticalScrollBarVisibility==ScrollBarVisibility.Auto,"Both tabs show their slim scrollbar only when scrolling is needed");
-            var systemContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[8]).Content).Content;
+            var systemContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[9]).Content).Content;
             var integrationsContents=(FrameworkElement)((ScrollViewer)((TabItem)helpTabs.Items[3]).Content).Content;
             Check(FindElement(systemContents,"StartWithWindowsSetting")!=null && FindElement(systemContents,"SteamGridDbSetting")!=null,"System contains startup and SteamGridDB settings");
             var steamSection=(Expander)FindElement(integrationsContents,"SteamIntegrationSection");
@@ -413,7 +413,7 @@ public static class OverlayTests {
             var resizeFlags=System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic;
             var resolveSizing=typeof(Launcher).GetMethod("ResolveArtworkSizing",resizeFlags);
             var noGames=new System.Collections.Generic.List<Game>();
-            foreach(string builtInList in new[]{"recent","recently-added","most-played","favourites"})
+            foreach(string builtInList in new[]{"recent","recently-added","most-played","most-played-lately","favourites"})
                 Check((string)resolveSizing.Invoke(artworkWindow,new object[]{builtInList,null,noGames})=="fit","Built-in list "+builtInList+" defaults to fit artwork");
             Check((string)resolveSizing.Invoke(artworkWindow,new object[]{"all",null,noGames})=="fixed","Regular lists keep the global fixed artwork default");
             Check((string)resolveSizing.Invoke(artworkWindow,new object[]{"favourites",new ListLayout {AngledSizing="fixed"},noGames})=="fixed","An explicit per-list fixed choice overrides the built-in fit default");
@@ -495,7 +495,7 @@ public static class OverlayTests {
             var emptyHelp=emptyWindow.CreateHelpWindow();
             var emptyHelpRoot=(FrameworkElement)emptyHelp.Content;
             var emptyTabs=(TabControl)FindElement(emptyHelpRoot,"HelpSettingsTabs");
-            var emptyOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)emptyTabs.Items[7]).Content).Content;
+            var emptyOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)emptyTabs.Items[6]).Content).Content;
             var emptyMissing=(WrapPanel)FindElement(emptyOverlayPage,"MissingArtworkList");
             var emptyMissingCount=(TextBlock)FindElement(emptyOverlayPage,"MissingArtworkCount");
             Check(emptyMissing!=null && emptyMissing.Children.Count==0 && emptyMissingCount.Text=="Every game has artwork.","Missing artwork list reports nothing to fix when the library is empty");
@@ -506,7 +506,7 @@ public static class OverlayTests {
             var bareHelp=bareWindow.CreateHelpWindow();
             var bareHelpRoot=(FrameworkElement)bareHelp.Content;
             var bareTabs=(TabControl)FindElement(bareHelpRoot,"HelpSettingsTabs");
-            var bareOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)bareTabs.Items[7]).Content).Content;
+            var bareOverlayPage=(FrameworkElement)((ScrollViewer)((TabItem)bareTabs.Items[6]).Content).Content;
             var bareMissing=(WrapPanel)FindElement(bareOverlayPage,"MissingArtworkList");
             var bareMissingCount=(TextBlock)FindElement(bareOverlayPage,"MissingArtworkCount");
             Check(bareMissing!=null && bareMissing.Children.Count==1 && String.Equals((string)((Button)bareMissing.Children[0]).Content,"No art game",StringComparison.Ordinal) && bareMissingCount.Text=="1 game needs artwork.","Missing artwork list names the games that still need covers");

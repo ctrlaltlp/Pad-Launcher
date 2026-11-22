@@ -16,7 +16,7 @@ class ArtworkRefreshUiTests {
         try {
             Storage.Write("settings.json",new Settings());
             launcher=new Launcher(true,true); owner=launcher.CreateHelpWindow(); owner.Show();
-            var tabs=Elements(owner).OfType<TabControl>().Single(item => item.Name=="HelpSettingsTabs"); tabs.SelectedIndex=7;
+            var tabs=Elements(owner).OfType<TabControl>().Single(item => item.Name=="HelpSettingsTabs"); tabs.SelectedIndex=6;
             foreach(var section in Elements(owner).OfType<Expander>().ToList()) section.IsExpanded=true;
             owner.UpdateLayout();
             if(Elements(owner).OfType<Button>().Any(button => button.Name=="RedownloadListArtwork" || button.Name=="RedownloadRetroArchArtwork")) throw new Exception("Duplicate redownload actions remain");

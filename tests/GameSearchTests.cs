@@ -198,7 +198,7 @@ class GameSearchTests {
             ((Window)typeof(Launcher).GetField("gameSearchWindow",binding).GetValue(launcher)).Close();
             settingsWindow=launcher.CreateHelpWindow(); settingsWindow.Show();
             Check(!Elements(settingsWindow).OfType<Expander>().Any(item => item.Name=="LibretroListsSection"),"The redundant Libretro lists checklist is removed");
-            Find<TabControl>(settingsWindow,"HelpSettingsTabs").SelectedIndex=7;
+            Find<TabControl>(settingsWindow,"HelpSettingsTabs").SelectedIndex=6;
             Find<ComboBox>(settingsWindow,"ListArtworkPicker").SelectedValue="psx";
             Check(!Elements(settingsWindow).OfType<CheckBox>().Any(box => box.Name=="LibretroArtworkSetting"),"System no longer exposes a global Libretro checkbox");
             var inheritedArtwork=Find<TextBlock>(settingsWindow,"ListArtworkEffectiveSource");

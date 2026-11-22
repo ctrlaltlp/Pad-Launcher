@@ -85,10 +85,13 @@ Choose which lists appear and arrange their order under **Settings → Lists →
 Preconfigured lists:
 - **Recently added:** Newly registered games from all sources, newest first. Tracking starts when this feature is first used; existing games have no historical added date. Refreshing or reimporting a game does not move it to the top.
 - **Favourites:** Your hand-picked games. Press R3 / right stick click or F by default to add or remove the selected game.
-- **Recently played:** Games ordered by their latest launch in Pad Launcher or Steam/other launcher play history, newest first.
+- **Recently played:** Games ordered by their latest launch in Pad Launcher, newest first.
 - **Most played:** Games ranked by how often you launch them through Pad Launcher. Counting starts with version 0.5.5.
+- **Most played lately:** Games ranked by launch count, Pad Launcher play time and freshness. Longer sessions add a logarithmically scaled boost, so they matter without overpowering frequently launched games. A game loses half its effective score every 60 days since its last launch, so recently played games move ahead of ones that have gone stale. It appears first by default; reordering the overlay lists overrides that position.
 
-**Favourites**, **Recently played**, and **Most played** can be selected under **Lists → Jump to list** even when disabled in **Overlay lists**. Those choices are marked **(not in overlay)**. Use the assigned Jump to list button to open it. Regular list cycling skips it after you switch away. Enable **Always start from the beginning of the list when Jump to list is pressed** to reset the jump destination to its first game, including when that list is already open. Other list changes keep the highlighted game.
+**Favourites**, **Recently played**, **Most played**, and **Most played lately** can be selected under **Lists → Jump to list** even when disabled in **Overlay lists**. Those choices are marked **(not in overlay)**. Use the assigned Jump to list button to open it. Regular list cycling skips it after you switch away. Enable **Always start from the beginning of the list when Jump to list is pressed** to reset the jump destination to its first game, including when that list is already open. Other list changes keep the highlighted game.
+
+**Settings → Activity** shows each game's last launched time, play time and launch count. Play time uses launches through Pad Launcher only by default; enable **Include imported play time** to add Steam or other launcher play time where available. Sort the table by play time, last launched or launch count.
 
 Open **Settings → Lists → List editor** to manage your lists.
 

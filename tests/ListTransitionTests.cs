@@ -82,6 +82,13 @@ class ListTransitionTests {
                 navigationLibrary.Collections[0].Games.Add("two");
                 typeof(Launcher).GetField("library",binding).SetValue(persisted,navigationLibrary);
                 persisted.SetAvailableCollections(new[]{"first","second"});
+                var listOptions=(System.Collections.Generic.List<Collection>)typeof(Launcher).GetMethod("CollectionOptions",binding).Invoke(persisted,null);
+                Check(listOptions[0].Id=="most-played-lately","Most played lately sorts first until the user sets a list order");
+                savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
+                savedSettings.OverlayListOrder=new System.Collections.Generic.List<string>{"all","most-played-lately"};
+                listOptions=(System.Collections.Generic.List<Collection>)typeof(Launcher).GetMethod("CollectionOptions",binding).Invoke(persisted,null);
+                Check(listOptions[0].Id=="all","A user-defined list order overrides the default top position");
+                savedSettings.OverlayListOrder=null;
                 Key(persisted,System.Windows.Input.Key.Right);
                 string remembered=((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text;
                 Key(persisted,System.Windows.Input.Key.PageDown); Key(persisted,System.Windows.Input.Key.PageUp);

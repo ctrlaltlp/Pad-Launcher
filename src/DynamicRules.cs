@@ -78,6 +78,7 @@ namespace PadLauncher {
                 foreach (Game game in library.Games) {
                     if (!game.Shortcut && apps!=null) game.HasPlayHistory=true;
                     long last; if (Int64.TryParse(Vdf.Str(Vdf.Get(apps,game.Id),"LastPlayed"),out last)) game.LastPlayed=Math.Max(game.LastPlayed,last);
+                    long minutes; if (Int64.TryParse(Vdf.Str(Vdf.Get(apps,game.Id),"Playtime"),out minutes)) game.ImportedPlayTimeSeconds=Math.Max(game.ImportedPlayTimeSeconds,minutes*60);
                 }
             } catch (Exception e) { library.Warnings.Add("Play history: "+e.Message); }
             string path=Path.Combine(steam,"appcache","appinfo.vdf");

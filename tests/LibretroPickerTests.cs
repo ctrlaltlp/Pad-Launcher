@@ -53,7 +53,8 @@ class LibretroPickerTests {
             gap.Value=32; Check(Storage.Read<Settings>("settings.json").ArtworkGap==32,"Changing the gap slider saves immediately");
             bool invalidGap=false; try {launcher.SetArtworkGap(65);} catch(ArgumentOutOfRangeException) {invalidGap=true;}
             Check(invalidGap && Storage.Read<Settings>("settings.json").ArtworkGap==32,"Invalid spacing cannot overwrite the saved gap");
-            var listPicker=Find<ComboBox>(owner,"ListLayoutPicker"); string listId=listPicker.SelectedValue as string;
+            var listPicker=Find<ComboBox>(owner,"ListLayoutPicker"); listPicker.SelectedValue="all"; string listId=listPicker.SelectedValue as string;
+            Find<ComboBox>(owner,"ListArtworkPicker").SelectedValue="all";
             Check(!Children(owner).OfType<Button>().Any(button => button.Name=="RedownloadListArtwork"),"Per-list artwork settings no longer duplicate redownload actions");
             var listSource=Find<ComboBox>(owner,"ListArtworkSourceSetting");
             Check(listSource.IsEnabled && listSource.Items.Count==5,"Artwork source remains editable when the list inherits its layout");
