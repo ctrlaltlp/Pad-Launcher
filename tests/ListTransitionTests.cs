@@ -183,6 +183,15 @@ class ListTransitionTests {
                 Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("One"),"Most played can browse to a less played game");
                 persisted.Close(); persisted.ShowOverlay();
                 Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameTitle")).Text.StartsWith("Two"),"Reopening Most played starts on the most launched game");
+                savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);
+                long latelyNow=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                savedSettings.LaunchHistory=new System.Collections.Generic.Dictionary<string,long>{{"one",latelyNow-86400},{"two",latelyNow}};
+                savedSettings.LaunchCounts=new System.Collections.Generic.Dictionary<string,long>{{"one",1},{"two",5}};
+                savedSettings.PlayTimeSeconds=new System.Collections.Generic.Dictionary<string,long>{{"one",1800},{"two",14400}};
+                savedSettings.CollectionId="first";
+                persisted.SetAvailableCollections(new[]{"first","most-played-lately"});
+                Key(persisted,System.Windows.Input.Key.PageDown);
+                Check(((TextBlock)Find((FrameworkElement)persisted.Content,"SelectedGameLaunchCount")).Text.Contains("· 4h"),"Most played lately shows play hours beside the launch count");
                 persisted.SetAvailableCollections(new[]{"first","recently-added"});
                 Key(persisted,System.Windows.Input.Key.PageDown);
                 savedSettings=(Settings)typeof(Launcher).GetField("settings",binding).GetValue(persisted);

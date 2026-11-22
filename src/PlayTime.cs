@@ -15,6 +15,10 @@ namespace PadLauncher {
         public static long Total(Settings settings,Game game) {
             return Local(settings,game)+(game==null ? 0 : Math.Max(0,game.ImportedPlayTimeSeconds));
         }
+        public static string Hours(Settings settings,Game game) {
+            long seconds=Local(settings,game);
+            return Math.Round(seconds/3600.0,1).ToString("0.#")+"h";
+        }
         public static bool Consume(Settings settings,string root) {
             if(settings==null || String.IsNullOrWhiteSpace(root)) return false;
             string path=Path.Combine(root,SessionFile);

@@ -14,8 +14,10 @@ namespace PadLauncher {
         Window arcOnlyWindow;
         TextBlock arcOnlyNotice;
         readonly System.Windows.Media.Effects.BlurEffect arcOverlayBlur=new System.Windows.Media.Effects.BlurEffect {Radius=14,RenderingBias=System.Windows.Media.Effects.RenderingBias.Performance};
-        System.Windows.Threading.DispatcherTimer arcBlurTimer;
+        System.Windows.Threading.DispatcherTimer arcBlurTimer,arcFocusTimer;
         bool arcTriggerWaitRelease,arcOnly;
+        int arcFocusAttempts;
+        long arcNoPadSince=-1;
 
         int arcSelectedIndex;
         int arcDirection,arcInput;
@@ -135,6 +137,48 @@ namespace PadLauncher {
         static extern bool IsZoomed(IntPtr window);
         [DllImport("user32.dll",EntryPoint="GetWindowLongW")]
         static extern int GetArcWindowStyle(IntPtr window,int index);
+        [DllImport("user32.dll")]
+        static extern uint GetWindowThreadProcessId(IntPtr window,out uint processId);
+        [DllImport("user32.dll")]
+        static extern bool AttachThreadInput(uint attach,uint attachTo,bool join);
+        [DllImport("kernel32.dll")]
+        static extern uint GetCurrentThreadId();
+
+        void FocusArcOnlyWindow(Window window) {
+            if(window==null || window!=arcOnlyWindow || !window.IsVisible) return;
+            IntPtr handle=new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if(handle==IntPtr.Zero) return;
+            window.Activate(); SetForegroundWindow(handle); window.Focus();
+            if(GetForegroundWindow()==handle) return;
+            // Windows can deny foreground activation to a process started in the
+            // background (for example at login). Join the current foreground
+            // input queue briefly so the first desktop Arc gets controller focus.
+            IntPtr foreground=GetForegroundWindow();
+            if(foreground==IntPtr.Zero) return;
+            uint processId;
+            uint foregroundThread=GetWindowThreadProcessId(foreground,out processId);
+            uint currentThread=GetCurrentThreadId();
+            if(foregroundThread==0 || foregroundThread==currentThread) return;
+            if(!AttachThreadInput(currentThread,foregroundThread,true)) return;
+            try {window.Activate(); SetForegroundWindow(handle); window.Focus();}
+            finally {AttachThreadInput(currentThread,foregroundThread,false);}
+        }
+        void RetryArcOnlyFocus(Window window) {
+            if(arcFocusTimer==null) {
+                arcFocusTimer=new System.Windows.Threading.DispatcherTimer {Interval=TimeSpan.FromMilliseconds(60)};
+                arcFocusTimer.Tick+=(sender,args) => {
+                    var target=arcOnlyWindow;
+                    if(target==null || !target.IsVisible) {arcFocusTimer.Stop(); return;}
+                    FocusArcOnlyWindow(target);
+                    IntPtr handle=new System.Windows.Interop.WindowInteropHelper(target).Handle;
+                    if(GetForegroundWindow()==handle || ++arcFocusAttempts>=5) arcFocusTimer.Stop();
+                };
+            }
+            arcFocusAttempts=0;
+            arcFocusTimer.Stop();
+            FocusArcOnlyWindow(window);
+            arcFocusTimer.Start();
+        }
 
         bool FullscreenWindowHasFocus() {
             IntPtr foreground=GetForegroundWindow();
@@ -186,10 +230,21 @@ namespace PadLauncher {
                 controllerWaitForForegroundRelease=true;
                 return;
             }
+            long now=ArcMilliseconds();
             PadState pad;
-            if(preview || !Gamepad.Read(out pad)) {
+            if(preview) {
                 DismissArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true; return;
             }
+            if(!Gamepad.Read(out pad)) {
+                // Re-registering raw input for the standalone window can leave
+                // one or two polls without a report. Keep the Arc open briefly
+                // instead of closing before the first controller report arrives.
+                if(arcNoPadSince<0) arcNoPadSince=now;
+                if(now-arcNoPadSince<750) return;
+                arcNoPadSince=-1;
+                DismissArc(); arcTriggerWaitRelease=false; suppressSearchRelease=true; return;
+            }
+            arcNoPadSince=-1;
             if(!ArcBindingDown(pad)) {
                 try {
                     var slot=arcSlots[arcSelectedIndex];
@@ -205,7 +260,6 @@ namespace PadLauncher {
                 }
                 return;
             }
-            long now=ArcMilliseconds();
             ushort confirmMask=ArcConfirmMask();
             int actionMask=confirmMask | (ControlBindings.UsesButton(settings,"overlay.arc","east") ? 0 : 0x2000);
             if(!arcButtonsArmed) {
@@ -255,6 +309,8 @@ namespace PadLauncher {
             arcActivatedSlot=null;
             arcPendingReleaseInput=0;
             arcDpadReleasedAt=-1;
+            arcNoPadSince=-1;
+            if(arcFocusTimer!=null) arcFocusTimer.Stop();
             if(arcOnlyWindow!=null) {
                 var window=arcOnlyWindow; arcOnlyWindow=null; window.Close();
                 if(!IsVisible && !exiting) UpdateTrayHomeListener();
@@ -451,7 +507,14 @@ namespace PadLauncher {
             SetWindowPos(handle,new IntPtr(-1),left,top,width,height,0x0010);
             window.Show();
             SetWindowPos(handle,new IntPtr(-1),left,top,width,height,0x0010);
-            window.Activate(); SetForegroundWindow(handle);
+            // The overlay may never have been shown yet. Register gamepad input
+            // against this visible window (not the still-hidden overlay) and
+            // make sure polling is running before the first input report.
+            if(!preview) {
+                Gamepad.StartNative(handle);
+                if(!controllerTimer.IsEnabled) {controllerTimer.Interval=TimeSpan.FromMilliseconds(16); controllerTimer.Start();}
+            }
+            RetryArcOnlyFocus(window);
             TraceArc("standalone window shown");
         }
         List<ArcSlot> arcStarterSlots;
