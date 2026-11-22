@@ -290,7 +290,7 @@ namespace PadLauncher {
                 var config=EmulatorLibrary.Config(settings,game.EmulatorId);
                 var entry=config==null ? null : (config.Games ?? new List<EmulatorGame>()).FirstOrDefault(item => item.Id==game.Id);
                 if(entry==null) throw new InvalidOperationException("This emulator game no longer exists.");
-                string path=EmulatorLibrary.GamePath(game.EmulatorId,replacement);
+                string path=EmulatorLibrary.GamePath(game.EmulatorId,replacement,entry.CorePath ?? (config==null ? null : config.CorePath),config==null ? null : config.Path);
                 if(config.Games.Any(item => item.Id!=entry.Id && String.Equals(item.Path,path,StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException("That game file is already added to this emulator.");
                 entry.Path=path;
             } else if(game.Source=="custom") {

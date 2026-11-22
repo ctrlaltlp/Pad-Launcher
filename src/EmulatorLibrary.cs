@@ -67,7 +67,7 @@ namespace PadLauncher {
             new EmulatorPreset {Id="shadps4",Name="shadPS4",System="PlayStation 4",Extensions=".bin",Hint="Choose the emulator executable and an installed game's eboot.bin. Install PKG files in shadPS4 first."},
             new EmulatorPreset {Id="ppsspp",Name="PPSSPP",System="PlayStation Portable",Extensions=".iso;.cso;.chd;.pbp;.elf;.prx",Hint="Choose a PSP disc image or EBOOT.PBP. For extracted games, select EBOOT.PBP."},
             new EmulatorPreset {Id="vita3k",Name="Vita3K",System="PlayStation Vita",Extensions=".bin",Hint="Select an installed title folder inside Vita3K's ux0/app folder, or its eboot.bin. Install games in Vita3K first."},
-            new EmulatorPreset {Id="retroarch",Name="RetroArch",System="Multiple systems",Extensions=".nes;.fds;.sfc;.smc;.snes;.gb;.gbc;.gba;.sgb;.n64;.z64;.v64;.nds;.md;.gen;.smd;.32x;.sms;.gg;.pce;.sgx;.ngp;.ngc;.ws;.wsc;.a26;.a52;.a78;.lnx;.j64;.jag;.cue;.chd;.iso;.pbp;.m3u;.ccd;.cso;.zip;.7z;.bin;.rom;.col;.int;.vec;.vb;.uze;.bs;.st;.msa;.adf;.hdf;.d64;.d81;.prg;.tap;.crt;.dsk;.mx1;.mx2;.cas;.tzx;.z80;.sna;.nib",Hint="Select a core before adding games. Scan a folder for that core's system; core metadata filters compatible extensions when available. Existing games keep their assigned core."}
+            new EmulatorPreset {Id="retroarch",Name="RetroArch",System="Multiple systems",Extensions=".nes;.fds;.sfc;.smc;.snes;.gb;.gbc;.gba;.sgb;.n64;.z64;.v64;.nds;.md;.gen;.smd;.32x;.sms;.gg;.pce;.sgx;.ngp;.ngc;.ws;.wsc;.a26;.a52;.a78;.lnx;.j64;.jag;.cue;.chd;.iso;.pbp;.m3u;.ccd;.cso;.zip;.7z;.bin;.rom;.col;.int;.vec;.vb;.uze;.bs;.st;.msa;.adf;.hdf;.d64;.d81;.prg;.tap;.crt;.dsk;.mx1;.mx2;.cas;.tzx;.z80;.sna;.nib;.rvz;.gcm;.wbfs;.wia;.ciso;.gcz;.dol;.elf;.wad;.xci;.nsp;.nro;.3ds;.3dsx;.cci;.cxi;.wua;.wud;.wux;.rpx",Hint="Select a core before adding games. Scan a folder for that core's system; core metadata filters compatible extensions when available. Existing games keep their assigned core."}
         };
         public static EmulatorPreset Preset(string id) {
             var result=Presets.FirstOrDefault(p => p.Id==id);
@@ -113,21 +113,20 @@ namespace PadLauncher {
         public static List<string> Cores(string executable) {
             try {return new RetroArchCoreResolver(executable).Paths.OrderBy(p => p,StringComparer.CurrentCultureIgnoreCase).ToList();} catch {return new List<string>();}
         }
-        static HashSet<string> ScanExtensions(string id,string corePath) {
-            var all=new HashSet<string>(Preset(id).Extensions.Split(';'),StringComparer.OrdinalIgnoreCase);
-            if(id!="retroarch" || String.IsNullOrWhiteSpace(corePath)) return all;
-            try {
-                corePath=Core(corePath); string folder=System.IO.Path.GetDirectoryName(corePath),name=System.IO.Path.GetFileNameWithoutExtension(corePath)+".info";
-                var info=new[]{System.IO.Path.Combine(folder,name),System.IO.Path.Combine(folder,"..","info",name)}.FirstOrDefault(File.Exists);
-                if(info!=null && new FileInfo(info).Length<1024*1024) {
-                    var match=Regex.Match(File.ReadAllText(info),@"(?m)^\s*supported_extensions\s*=\s*""([^""]+)""");
-                    if(match.Success) {
-                        var extensions=new HashSet<string>(match.Groups[1].Value.Split('|').Select(e => "."+e.Trim().TrimStart('.')),StringComparer.OrdinalIgnoreCase);
-                        extensions.Add(".zip"); extensions.Add(".7z"); extensions.Add(".m3u"); extensions.IntersectWith(all); if(extensions.Count>3) return extensions;
-                        if(extensions.Any(e => e!=".zip" && e!=".7z" && e!=".m3u")) return extensions;
-                    }
+        static HashSet<string> RetroArchExtensions(string corePath,string executable) {
+            var extensions=new HashSet<string>(RetroArchCoreResolver.CoreExtensions(corePath),StringComparer.OrdinalIgnoreCase);
+            if(extensions.Count==0) {
+                extensions.UnionWith(Preset("retroarch").Extensions.Split(';'));
+                if(!String.IsNullOrWhiteSpace(executable)) {
+                    try {extensions.UnionWith(new RetroArchCoreResolver(executable).InstalledExtensions);} catch {}
                 }
-            } catch {} return all;
+            }
+            extensions.Add(".zip"); extensions.Add(".7z"); extensions.Add(".m3u");
+            return extensions;
+        }
+        static HashSet<string> ScanExtensions(string id,string corePath) {
+            if(id!="retroarch") return new HashSet<string>(Preset(id).Extensions.Split(';'),StringComparer.OrdinalIgnoreCase);
+            return RetroArchExtensions(corePath,null);
         }
         internal static bool SplitRetroArchArchive(string path,out string archive,out string member) {
             archive=null; member=null; if(String.IsNullOrWhiteSpace(path)) return false;
@@ -140,15 +139,16 @@ namespace PadLauncher {
             if(split<0) return false;
             archive=value.Substring(0,split); member=value.Substring(split+1).Replace('\\','/'); return true;
         }
-        public static string GamePath(string id,string path) {
+        public static string GamePath(string id,string path,string corePath=null,string executable=null) {
             var preset=Preset(id);
+            var allowed=id=="retroarch" ? RetroArchExtensions(corePath,executable) : null;
             if(String.IsNullOrWhiteSpace(path)) throw new ArgumentException("Choose a game file.");
             string archive,member;
             if(id=="retroarch" && SplitRetroArchArchive(path,out archive,out member)) {
                 archive=System.IO.Path.GetFullPath(Environment.ExpandEnvironmentVariables(archive));
                 if(!File.Exists(archive)) throw new FileNotFoundException("The game archive could not be found.",archive);
                 if(String.IsNullOrWhiteSpace(member) || member.StartsWith("/") || member.Contains(":") || member.Contains("\"") || member.Any(Char.IsControl) || member.Split('/').Any(part => part=="..")) throw new ArgumentException("The ROM path inside the archive is invalid.");
-                if(!preset.Extensions.Split(';').Contains(System.IO.Path.GetExtension(member).ToLowerInvariant())) throw new ArgumentException("The archive entry is not a supported RetroArch game file.");
+                if(!allowed.Contains(System.IO.Path.GetExtension(member).ToLowerInvariant())) throw new ArgumentException("The archive entry is not a supported RetroArch game file.");
                 return archive+"#"+member;
             }
             path=System.IO.Path.GetFullPath(Environment.ExpandEnvironmentVariables(path.Trim().Trim('"')));
@@ -168,7 +168,8 @@ namespace PadLauncher {
             string extension=System.IO.Path.GetExtension(path).ToLowerInvariant();
             if(id=="azahar" && extension==".app" && !IsAzaharApplication(path)) throw new ArgumentException("Choose an installed executable 3DS base game, not content data, an update or DLC.");
             if(id=="dolphin" && extension==".json") ValidateDolphinPreset(path);
-            if(!preset.Extensions.Split(';').Contains(extension) || ((id=="rpcs3" || id=="shadps4") && extension==".bin" && !System.IO.Path.GetFileName(path).Equals("EBOOT.BIN",StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("Choose a supported "+preset.Name+" game file. "+preset.Hint);
+            bool supported=id=="retroarch" ? allowed.Contains(extension) : preset.Extensions.Split(';').Contains(extension);
+            if(!supported || ((id=="rpcs3" || id=="shadps4") && extension==".bin" && !System.IO.Path.GetFileName(path).Equals("EBOOT.BIN",StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("Choose a supported "+preset.Name+" game file. "+preset.Hint);
             return path;
         }
         static void ValidateDolphinPreset(string path) {
@@ -231,11 +232,11 @@ namespace PadLauncher {
             if(String.IsNullOrWhiteSpace(title)) return name;
             return disc.Success ? title+" "+disc.Groups[1].Value : title;
         }
-        public static int AddGames(Settings settings,string id,IEnumerable<string> paths,IDictionary<string,string> names=null) {
+        public static int AddGames(Settings settings,string id,IEnumerable<string> paths,IDictionary<string,string> names=null,string corePath=null) {
             var config=Config(settings,id); Executable(config==null ? null : config.Path);
-            string core=id=="retroarch" ? Core(config.CorePath) : null;
+            string core=id=="retroarch" ? Core(String.IsNullOrWhiteSpace(corePath) ? config.CorePath : corePath) : null;
             // Validate the whole selection before changing saved membership.
-            var normalized=(paths ?? Enumerable.Empty<string>()).Select(path => GamePath(id,path)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var normalized=(paths ?? Enumerable.Empty<string>()).Select(path => GamePath(id,path,core,config.Path)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if(config.Games==null) config.Games=new List<EmulatorGame>();
             int added=0;
             foreach(string path in normalized) {
@@ -250,9 +251,9 @@ namespace PadLauncher {
             var config=Config(settings,id); var game=config==null ? null : (config.Games ?? new List<EmulatorGame>()).FirstOrDefault(g => g.Id==gameId);
             if(game==null) throw new ArgumentException("This emulator game no longer exists.");
             name=(name ?? "").Trim(); if(name.Length==0 || name.Length>120) throw new ArgumentException("Enter a game name of 1–120 characters.");
-            string normalized=GamePath(id,path);
-            if(config.Games.Any(g => g.Id!=gameId && String.Equals(g.Path,normalized,StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("That game file is already added to this emulator.");
             string core=id=="retroarch" ? Core(corePath ?? game.CorePath ?? config.CorePath) : null;
+            string normalized=GamePath(id,path,core,config.Path);
+            if(config.Games.Any(g => g.Id!=gameId && String.Equals(g.Path,normalized,StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("That game file is already added to this emulator.");
             game.Name=name; game.Path=normalized; game.CorePath=core; if(arguments!=null) game.Arguments=arguments.Trim();
         }
         public static bool ConfirmMissingRom(string path) {
@@ -351,16 +352,171 @@ namespace PadLauncher {
             if(settings.SelectedGamesByList!=null) foreach(string listId in settings.SelectedGamesByList.Where(pair => pair.Value==gameId).Select(pair => pair.Key).ToArray()) settings.SelectedGamesByList.Remove(listId);
             if(settings.SelectedId==gameId) settings.SelectedId=null;
         }
-        // Order by the first console supported by a multi-console preset.
-        static readonly string[][] ConsoleOrder={
-            new[]{"Atari","2600","5200","7800","lynx","jaguar"},
-            new[]{"Microsoft","xbox","xbox360","xboxone","xboxseries"},
-            new[]{"NEC","pcengine","turbografx16","supergrafx","pcfx"},
-            new[]{"Nintendo","nes","nintendoentertainmentsystem","famicom","familycomputerdisksystem","gameboy","snes","supernintendoentertainmentsystem","superfamicom","virtualboy","nintendo64","n64","gameboycolor","gameboyadvance","gamecube","nds","nintendods","wii","nintendodsi","nintendo3ds","3ds","wiiu","switch","nintendoswitch"},
-            new[]{"Sega","sg1000","mastersystem","megadrive","genesis","gamegear","segacd","megacd","32x","saturn","dreamcast"},
-            new[]{"SNK","neogeo","neogeopocket","neogeopocketcolor"},
-            new[]{"Sony","playstation","ps1","playstation2","ps2","playstationportable","psp","playstation3","ps3","playstationvita","psvita","playstation4","ps4","playstation5","ps5"}
+        // Lists are ordered by maker, then TV/handheld, then console release year.
+        sealed class ConsoleInfo {
+            public string Maker;
+            public bool Handheld;
+            public int Year;
+        }
+        static readonly string[][] ConsoleMetadataRows={
+            new[]{"3DO","TV","1993","3do","the3docompany3do"},
+            new[]{"Amstrad","TV","1984","cpc","amstradcpc","cpc464","cpc6128"},
+            new[]{"Arcade","TV","1971","arcade","arcadegames","fbneo","mame"},
+            new[]{"Atari","TV","1977","atari2600","2600","vcs","atarivideocomputersystem"},
+            new[]{"Atari","TV","1979","atari8bit","atari800","atarixegs","xegs"},
+            new[]{"Atari","TV","1982","atari5200","5200"},
+            new[]{"Atari","TV","1985","atarist"},
+            new[]{"Atari","TV","1986","atari7800","7800"},
+            new[]{"Atari","Handheld","1989","atarilynx","lynx"},
+            new[]{"Atari","TV","1993","atarijaguar","jaguar"},
+            new[]{"Atari","TV","1995","atarijaguarcd","jaguarcd"},
+            new[]{"Bandai","Handheld","1999","wonderswan","bandaiwonderswan"},
+            new[]{"Bandai","Handheld","2000","wonderswancolor","wsc","bandaiwonderswancolor"},
+            new[]{"Casio","TV","1983","pv1000","casiopv1000"},
+            new[]{"Coleco","TV","1982","colecovision","coleco"},
+            new[]{"Commodore","TV","1982","commodore64","c64"},
+            new[]{"Commodore","TV","1985","amiga","commodoreamiga"},
+            new[]{"Emerson","TV","1982","arcadia2001","emersonarcadia2001"},
+            new[]{"Entex","Handheld","1982","adventurevision","entexadventurevision"},
+            new[]{"Epoch","TV","1984","supercassettevision","epochsupercassettevision"},
+            new[]{"Fairchild","TV","1976","channelf","fairchildchannelf"},
+            new[]{"Funtech","TV","1995","superacan","funtechsuperacan"},
+            new[]{"GamePark","Handheld","2001","gp32","gameparkgp32"},
+            new[]{"GCE","TV","1982","vectrex","gcevectrex"},
+            new[]{"Hartung","Handheld","1990","gamemaster","hartunggamemaster"},
+            new[]{"LeapFrog","Handheld","2003","leapster","leapsterlearninggamesystem"},
+            new[]{"Magnavox","TV","1978","odyssey2","magnavoxodyssey2","videopac"},
+            new[]{"Mattel","TV","1979","intellivision","mattelintellivision"},
+            new[]{"Microsoft","TV","1983","msx","microsoftmsx"},
+            new[]{"Microsoft","TV","1985","msx2","microsoftmsx2"},
+            new[]{"Microsoft","TV","2001","xbox","microsoftxbox"},
+            new[]{"Microsoft","TV","2005","xbox360","microsoftxbox360"},
+            new[]{"Microsoft","TV","2013","xboxone","microsoftxboxone"},
+            new[]{"Microsoft","TV","2020","xboxseries","xboxseriesx","xboxseriess","microsoftxboxseries"},
+            new[]{"NEC","TV","1979","pc8001","necpc8001"},
+            new[]{"NEC","TV","1981","pc88","necpc88"},
+            new[]{"NEC","TV","1982","pc98","necpc98"},
+            new[]{"NEC","TV","1987","pcengine","turbografx16","turbografx","pce","necpcengine"},
+            new[]{"NEC","TV","1988","pcenginecd","turbografxcd","pcenginecdturbografxcd"},
+            new[]{"NEC","TV","1989","supergrafx","pcenginesupergrafx"},
+            new[]{"NEC","TV","1994","pcfx","necpcfx"},
+            new[]{"Nintendo","Handheld","1980","gameandwatch","gamewatch","nintendogameandwatch"},
+            new[]{"Nintendo","TV","1983","nes","famicom","nintendoentertainmentsystem","familycomputer","nintendones"},
+            new[]{"Nintendo","TV","1986","fds","famicomdisksystem","familycomputerdisksystem","nintendofamicomdisksystem"},
+            new[]{"Nintendo","Handheld","1989","gameboy","gb","nintendogameboy"},
+            new[]{"Nintendo","TV","1990","snes","supernintendo","superfamicom","supernintendoentertainmentsystem","supernes"},
+            new[]{"Nintendo","Handheld","1995","virtualboy","nintendovirtualboy"},
+            new[]{"Nintendo","TV","1995","satellaview","nintendosatellaview"},
+            new[]{"Nintendo","TV","1996","nintendo64","n64"},
+            new[]{"Nintendo","TV","1996","sufamiturbo","nintendosufamiturbo"},
+            new[]{"Nintendo","Handheld","1998","gameboycolor","gbc","nintendogameboycolor"},
+            new[]{"Nintendo","TV","1999","nintendo64dd","n64dd"},
+            new[]{"Nintendo","Handheld","2001","gameboyadvance","gba","nintendogameboyadvance"},
+            new[]{"Nintendo","TV","2001","gamecube","gcn","nintendogamecube"},
+            new[]{"Nintendo","Handheld","2001","pokemonmini","nintendopokemonmini"},
+            new[]{"Nintendo","Handheld","2004","nintendods","nds","ds"},
+            new[]{"Nintendo","TV","2006","wii","nintendowii"},
+            new[]{"Nintendo","Handheld","2008","nintendodsi","dsi"},
+            new[]{"Nintendo","Handheld","2011","nintendo3ds","3ds","nintendonintendo3ds","2ds"},
+            new[]{"Nintendo","TV","2012","wiiu","nintendowiiu"},
+            new[]{"Nintendo","TV","2017","switch","nintendoswitch"},
+            new[]{"Philips","TV","1983","videopacplus","philipsvideopac"},
+            new[]{"Philips","TV","1991","cdi","philipscdi"},
+            new[]{"RCA","TV","1977","studioii","rcastudioii"},
+            new[]{"Sega","TV","1983","sg1000","segasg1000"},
+            new[]{"Sega","TV","1985","mastersystem","segamastersystem","markiii","segamegamastersystem"},
+            new[]{"Sega","TV","1988","megadrive","genesis","segagenesis","segamegadrive","megadrivegenesis"},
+            new[]{"Sega","Handheld","1990","gamegear","segagamegear"},
+            new[]{"Sega","TV","1991","megacd","segacd","segamegacd","megacdsegacd"},
+            new[]{"Sega","TV","1993","pico","segapico"},
+            new[]{"Sega","TV","1994","32x","sega32x"},
+            new[]{"Sega","TV","1994","saturn","segasaturn"},
+            new[]{"Sega","TV","1998","dreamcast","segadreamcast"},
+            new[]{"Sega","TV","1998","naomi","seganaomi"},
+            new[]{"Sega","TV","2001","naomi2","seganaomi2"},
+            new[]{"Sharp","TV","1982","x1","sharpx1"},
+            new[]{"Sharp","TV","1987","x68000","sharpx68000"},
+            new[]{"Sinclair","TV","1981","zx81","sinclairzx81"},
+            new[]{"Sinclair","TV","1982","zxspectrum","spectrum","sinclairzxspectrum"},
+            new[]{"SNK","TV","1990","neogeo","neogeoaes","neogeomvs","snkneogeo"},
+            new[]{"SNK","TV","1994","neogeocd","snkneogeocd"},
+            new[]{"SNK","Handheld","1998","neogeopocket","ngp","snkneogeopocket"},
+            new[]{"SNK","Handheld","1999","neogeopocketcolor","ngpc","snkneogeopocketcolor"},
+            new[]{"Sony","TV","1994","playstation","ps1","psx","sonyplaystation"},
+            new[]{"Sony","TV","2000","playstation2","ps2","sonyplaystation2"},
+            new[]{"Sony","Handheld","2004","playstationportable","psp","sonyplaystationportable"},
+            new[]{"Sony","TV","2006","playstation3","ps3","sonyplaystation3"},
+            new[]{"Sony","Handheld","2011","playstationvita","psvita","vita","sonyplaystationvita"},
+            new[]{"Sony","TV","2013","playstation4","ps4","sonyplaystation4"},
+            new[]{"Sony","TV","2020","playstation5","ps5","sonyplaystation5"},
+            new[]{"Spectravideo","TV","1983","svi318","svi328","svi318svi328","spectravideo"},
+            new[]{"Tiger","Handheld","1997","gamecom","tigergamecom"},
+            new[]{"VTech","TV","1981","creativision","vtechcreativision"},
+            new[]{"VTech","TV","2004","vsmile","vtechvsmile"},
+            new[]{"Watara","Handheld","1992","supervision","watarasupervision"},
+            new[]{"PC","TV","1981","pc","dos","windows","scummvm","doom","quake","rpgmaker","tic80","lowresnx","vircon32","dinothawr","mrboom","flashback","rickdangerous","tombraider","wolfenstein3d"},
+            new[]{"Other","Handheld","1976","handheldelectronicgame","electronicgame"}
         };
+        static readonly Dictionary<string,ConsoleInfo> ConsoleMetadata=BuildConsoleMetadata();
+        static Dictionary<string,ConsoleInfo> BuildConsoleMetadata() {
+            var result=new Dictionary<string,ConsoleInfo>(StringComparer.OrdinalIgnoreCase);
+            foreach(var row in ConsoleMetadataRows) {
+                int year; if(row.Length<4 || !Int32.TryParse(row[2],out year)) continue;
+                var info=new ConsoleInfo {Maker=row[0],Handheld=String.Equals(row[1],"Handheld",StringComparison.OrdinalIgnoreCase),Year=year};
+                for(int index=3;index<row.Length;index++) if(!String.IsNullOrWhiteSpace(row[index]) && !result.ContainsKey(row[index])) result[row[index]]=info;
+            }
+            return result;
+        }
+        static string ConsoleKey(string value) {
+            string normalized=(value ?? "").Normalize(System.Text.NormalizationForm.FormD);
+            return new string(normalized.Where(character => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(character)!=System.Globalization.UnicodeCategory.NonSpacingMark && Char.IsLetterOrDigit(character)).ToArray()).ToLowerInvariant();
+        }
+        static bool LooksHandheld(string value) {
+            string key=ConsoleKey(value);
+            return new[]{"handheld","gameboy","gbc","gba","lynx","gamegear","neogeopocket","wonderswan","playstationportable","psp","playstationvita","psvita","nintendods","nds","nintendodsi","dsi","nintendo3ds","3ds","2ds","pokemonmini","virtualboy","supervision","gamecom","gp32","leapster","adventurevision","gameandwatch"}.Any(part => key.Contains(part));
+        }
+        static bool TryConsoleInfo(string value,out ConsoleInfo info) {
+            info=null;
+            string name=(value ?? "").Trim();
+            foreach(string suffix in new[]{" (automatic list)"," · RetroArch"," - RetroArch"}) if(name.EndsWith(suffix,StringComparison.OrdinalIgnoreCase)) name=name.Substring(0,name.Length-suffix.Length).Trim();
+            name=System.Text.RegularExpressions.Regex.Replace(name,@"\s*\(\d+\)$","").Trim();
+            if(name.Length==0) return false;
+            string maker=null,console=name;
+            int separator=name.IndexOf(" - ",StringComparison.Ordinal);
+            if(separator>0) {maker=name.Substring(0,separator).Trim(); console=name.Substring(separator+3).Trim();}
+            int dot=console.IndexOf(" · ",StringComparison.Ordinal); if(dot>0) console=console.Substring(0,dot).Trim();
+            foreach(string candidate in new[]{name,console}) {
+                string key=ConsoleKey(candidate);
+                if(ConsoleMetadata.TryGetValue(key,out info)) return true;
+            }
+            string normalized=ConsoleKey(console);
+            string match=ConsoleMetadata.Keys.OrderByDescending(key => key.Length).FirstOrDefault(key => key.Length>=3 && normalized.Contains(key));
+            if(match!=null) {info=ConsoleMetadata[match]; return true;}
+            if(!String.IsNullOrWhiteSpace(maker)) {
+                info=new ConsoleInfo {Maker=maker,Handheld=LooksHandheld(console),Year=9999};
+                return true;
+            }
+            return false;
+        }
+        static string ConsoleSortKey(ConsoleInfo info) {
+            return info==null ? "~|2|9999" : info.Maker.ToLowerInvariant()+"|"+(info.Handheld ? "1" : "0")+"|"+info.Year.ToString("D4");
+        }
+        static string ConsoleSortKey(string value) {
+            ConsoleInfo info; return TryConsoleInfo(value,out info) ? ConsoleSortKey(info) : "~|2|9999";
+        }
+        static string ListConsoleKey(Collection list,Dictionary<string,string> systems) {
+            const string prefix="source:emulator:";
+            string system;
+            if((list.Id ?? "").StartsWith(prefix,StringComparison.Ordinal) && PresetConsole.TryGetValue(list.Id.Substring(prefix.Length),out system)) return ConsoleSortKey(system);
+            ConsoleInfo named;
+            if(TryConsoleInfo(list.Name,out named)) return ConsoleSortKey(named);
+            ConsoleInfo best=null;
+            foreach(string value in (list.Games ?? new List<string>()).Where(systems.ContainsKey).Select(id => systems[id]).Distinct(StringComparer.OrdinalIgnoreCase)) {
+                ConsoleInfo info; if(!TryConsoleInfo(value,out info)) continue;
+                if(best==null || String.Compare(ConsoleSortKey(info),ConsoleSortKey(best),StringComparison.OrdinalIgnoreCase)<0) best=info;
+            }
+            return ConsoleSortKey(best);
+        }
         static readonly Dictionary<string,string> PresetConsole=new Dictionary<string,string> {
             {"xemu","Microsoft - Xbox"},{"xenia","Microsoft - Xbox 360"},
             {"mgba","Nintendo - Game Boy"},{"dolphin","Nintendo - GameCube"},{"melonds","Nintendo - Nintendo DS"},
@@ -368,36 +524,16 @@ namespace PadLauncher {
             {"duckstation","Sony - PlayStation"},{"pcsx2","Sony - PlayStation 2"},{"ppsspp","Sony - PlayStation Portable"},
             {"rpcs3","Sony - PlayStation 3"},{"vita3k","Sony - PlayStation Vita"},{"shadps4","Sony - PlayStation 4"}
         };
-        static readonly HashSet<string> HandheldSystems=new HashSet<string> {
-            "lynx","gameboy","virtualboy","gameboycolor","gameboyadvance","nds","nintendods","nintendodsi",
-            "nintendo3ds","3ds","gamegear","neogeopocket","neogeopocketcolor","playstationportable","psp",
-            "playstationvita","psvita"
-        };
-        static string ConsoleOrderKey(string value) {
-            var parts=(value ?? "").Split(new[]{" - "},2,StringSplitOptions.None);
-            if(parts.Length!=2) return null;
-            var system=new string(System.Text.RegularExpressions.Regex.Replace(parts[1],@"\s*\([^)]*\)","").Where(Char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
-            var group=ConsoleOrder.FirstOrDefault(row => String.Equals(row[0],parts[0],StringComparison.OrdinalIgnoreCase));
-            if(group==null) return null;
-            int rank=Array.IndexOf(group,system);
-            return group[0]+":"+(rank<0 ? "2" : HandheldSystems.Contains(system) ? "1" : "0")+":"+(rank>0 ? rank : 999).ToString("D3");
-        }
         internal static List<Collection> DefaultListOrder(List<Collection> options,Library library,Settings settings) {
             var emulatorLists=options.Where(list => list.Source=="emulator").ToList();
             if(emulatorLists.Count==0) return options;
-            var systems=library.Games.Where(game => game.EmulatorId=="retroarch" && !String.IsNullOrWhiteSpace(game.ArtworkSystem))
+            var systems=library.Games.Where(game => !String.IsNullOrWhiteSpace(game.ArtworkSystem))
                 .GroupBy(game => game.Id).ToDictionary(group => group.Key,group => group.First().ArtworkSystem);
             var customIds=new HashSet<string>((settings.CustomLists ?? new List<CustomList>()).Select(list => list.Id)
                 .Concat((settings.CombinedCollections ?? new List<CombinedCollection>()).Select(list => list.Id)));
             customIds.Add("source:custom");
-            var ordered=emulatorLists.OrderBy(list => {
-                const string prefix="source:emulator:";
-                string system;
-                if((list.Id ?? "").StartsWith(prefix,StringComparison.Ordinal) && PresetConsole.TryGetValue(list.Id.Substring(prefix.Length),out system))
-                    return ConsoleOrderKey(system);
-                return (list.Games ?? new List<string>()).Where(systems.ContainsKey).Select(id => ConsoleOrderKey(systems[id]))
-                    .FirstOrDefault(key => key!=null) ?? ConsoleOrderKey(list.Name) ?? "~";
-            },StringComparer.OrdinalIgnoreCase).ThenBy(list => list.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+            var ordered=emulatorLists.OrderBy(list => ListConsoleKey(list,systems),StringComparer.OrdinalIgnoreCase)
+                .ThenBy(list => list.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
             var before=options.TakeWhile(list => list.Source!="emulator").Where(list => !customIds.Contains(list.Id));
             var custom=options.Where(list => customIds.Contains(list.Id));
             var after=options.SkipWhile(list => list.Source!="emulator").Where(list => list.Source!="emulator" && !customIds.Contains(list.Id));
@@ -447,13 +583,13 @@ namespace PadLauncher {
             var config=Config(settings,game.EmulatorId);
             if(config==null || String.IsNullOrWhiteSpace(config.Path)) return name+" not configured";
             try {Executable(config.Path);} catch {return name+" executable missing or invalid";}
-            try {GamePath(game.EmulatorId,game.LaunchId);}
+            var saved=game.EmulatorId=="retroarch" ? (config.Games ?? new List<EmulatorGame>()).FirstOrDefault(item => item.Id==game.Id) : null;
+            string core=saved==null ? config.CorePath : saved.CorePath ?? config.CorePath;
+            try {GamePath(game.EmulatorId,game.LaunchId,core,config.Path);}
             catch(FileNotFoundException) {return "Game file missing";}
             catch(DirectoryNotFoundException) {return "Game folder missing";}
             catch {return "Game file missing or unsupported";}
             if(game.EmulatorId=="retroarch") {
-                var saved=(config.Games ?? new List<EmulatorGame>()).FirstOrDefault(item => item.Id==game.Id);
-                string core=saved==null ? config.CorePath : saved.CorePath ?? config.CorePath;
                 if(String.IsNullOrWhiteSpace(core)) return "RetroArch core not selected";
                 try {GameCore(config,game.Id);} catch {return "RetroArch core missing or invalid";}
             }
@@ -558,7 +694,7 @@ namespace PadLauncher {
                 if(!extensions.Contains(extension)) continue;
                 if((id=="rpcs3" || id=="vita3k" || id=="shadps4") && !System.IO.Path.GetFileName(file).Equals("eboot.bin",StringComparison.OrdinalIgnoreCase)) continue;
                 if(id=="xenia" && (extension=="" || extension==".live" || extension==".con" || extension==".pirs") && !IsXeniaGamePackage(file)) continue;
-                try {result.Paths.Add(GamePath(id,file));} catch(ArgumentException) {} catch(IOException) {} catch(UnauthorizedAccessException) {}
+                try {result.Paths.Add(GamePath(id,file,corePath));} catch(ArgumentException) {} catch(IOException) {} catch(UnauthorizedAccessException) {}
             }
             result.Paths=result.Paths.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(p => p,StringComparer.CurrentCultureIgnoreCase).ToList(); return result;
         }
@@ -639,10 +775,11 @@ namespace PadLauncher {
         public static ProcessStartInfo StartInfo(Game game,Settings settings) {
             if(settings==null) throw new InvalidOperationException("Emulator settings are unavailable.");
             var config=Config(settings,game.EmulatorId);
-            string executable=Executable(config==null ? null : config.Path),path=GamePath(game.EmulatorId,game.LaunchId),quoted="\""+path+"\"",arguments;
+            string core=game.EmulatorId=="retroarch" && config!=null ? GameCore(config,game.Id) : null;
+            string executable=Executable(config==null ? null : config.Path),path=GamePath(game.EmulatorId,game.LaunchId,core,config==null ? null : config.Path),quoted="\""+path+"\"",arguments;
             arguments=config!=null && config.Arguments!=null ? config.Arguments : DefaultArguments(game.EmulatorId,executable);
-            arguments=arguments.Replace("{game}",quoted).Replace("{core}",game.EmulatorId=="retroarch" ? "\""+GameCore(config,game.Id)+"\"" : "").Replace("{title}","\""+new DirectoryInfo(path).Name+"\"");
-            if(!String.IsNullOrWhiteSpace(game.Arguments)) arguments=game.Arguments.Contains("{game}") ? game.Arguments.Replace("{game}",quoted).Replace("{core}",game.EmulatorId=="retroarch" ? "\""+GameCore(config,game.Id)+"\"" : "") : arguments+" "+game.Arguments;
+            arguments=arguments.Replace("{game}",quoted).Replace("{core}",core==null ? "" : "\""+core+"\"").Replace("{title}","\""+new DirectoryInfo(path).Name+"\"");
+            if(!String.IsNullOrWhiteSpace(game.Arguments)) arguments=game.Arguments.Contains("{game}") ? game.Arguments.Replace("{game}",quoted).Replace("{core}",core==null ? "" : "\""+core+"\"") : arguments+" "+game.Arguments;
             return new ProcessStartInfo(executable,arguments) {UseShellExecute=true,WorkingDirectory=System.IO.Path.GetDirectoryName(executable)};
         }
     }

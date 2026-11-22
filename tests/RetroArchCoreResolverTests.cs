@@ -19,6 +19,7 @@ class RetroArchCoreResolverTests {
             Write(folder,"cores/unused_libretro.dll");
             var resolver=new RetroArchCoreResolver(exe); string problem;
             Check(resolver.Paths.Count==2 && EmulatorLibrary.Cores(exe).Contains(mgba),"Core discovery honours configured core and info directories");
+            Check(resolver.InstalledExtensions.Contains(".gb") && resolver.InstalledExtensions.Contains(".sfc"),"Installed core extension metadata is normalized to dotted extensions");
             Check(resolver.Resolve("DETECT","DETECT",null,null,null,"Game.zip#Game.gb","Nintendo - Game Boy.lpl",out problem)==mgba && problem==null,"Standard DETECT playlist resolves a unique compatible installed core from its metadata");
             string oldCore=Path.Combine(root,"old install","cores","mgba_libretro.dll");
             Check(resolver.Relocate(oldCore)==mgba && resolver.Relocate(@":\downloaded_cores\mgba_libretro.dll")==mgba,"Missing old installation paths and portable paths resolve to the same installed DLL");

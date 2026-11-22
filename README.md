@@ -26,7 +26,7 @@ Supports **DuckStation, PCSX2, RPCS3, xemu, Xenia, Dolphin, Eden, melonDS, Vita3
 
 There are 2 ways to import emulator games to the app:
 - Import library from emulator: Reads the emulator’s configured game folders, playlists, registered games or installed titles, depending on the emulator. Folder-based libraries may involve scanning those folders.
-- Scan ROM folders: Separately scans a folder you choose in Pad Launcher, including its subfolders. It does not require a library configured inside the emulator.
+- Scan ROM folders: Separately scans a folder you choose in Pad Launcher, including its subfolders. It does not require a library configured inside the emulator, except RetroArch. RetroArch needs a library configured to import the games into the app, and has an Add game manually feature as well.
 Both let you review detected games, rename new entries and choose a destination list before adding them. Repeating an import or scan reuses existing game entries without creating duplicates.
 
 Automatic emulator lists use **Console · Emulator** names, such as **PS2 · PCSX2**. New RetroArch playlist lists use names such as **SNES · RetroArch**.

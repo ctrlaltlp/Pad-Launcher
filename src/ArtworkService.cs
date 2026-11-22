@@ -22,7 +22,7 @@ namespace PadLauncher {
         public static bool AllowedImageUrl(string value) {
             Uri uri;
             if(!Uri.TryCreate(value,UriKind.Absolute,out uri) || uri.Scheme!="https") return false;
-            return uri.Host=="thumbnails.libretro.com" || uri.Host.EndsWith(".epicgames.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamgriddb.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamstatic.com",StringComparison.OrdinalIgnoreCase);
+            return uri.Host=="thumbnails.libretro.com" || uri.Host=="raw.githubusercontent.com" || uri.Host.EndsWith(".epicgames.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamgriddb.com",StringComparison.OrdinalIgnoreCase) || uri.Host.EndsWith(".steamstatic.com",StringComparison.OrdinalIgnoreCase);
         }
         public static byte[] Get(string url,string key,CancellationToken token) {
             ServicePointManager.SecurityProtocol|=SecurityProtocolType.Tls12;

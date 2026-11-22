@@ -14,6 +14,39 @@ namespace PadLauncher {
         public List<string> Paths {get {return installed.Select(core => core.Path).ToList();}}
         static string Value(Dictionary<string,string> data,string key) {string value; return data.TryGetValue(key,out value) ? EmulatorImport.Scalar(value) : null;}
         static HashSet<string> Parts(string value) {return new HashSet<string>((value ?? "").Split('|').Select(part => part.Trim()).Where(part => part.Length>0),StringComparer.OrdinalIgnoreCase);}
+        static HashSet<string> CoreParts(Dictionary<string,string> data) {
+            return new HashSet<string>(Parts(Value(data,"supported_extensions")).Select(extension => "."+extension.TrimStart('.')),StringComparer.OrdinalIgnoreCase);
+        }
+        public static HashSet<string> CoreExtensions(string corePath) {
+            var extensions=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if(String.IsNullOrWhiteSpace(corePath)) return extensions;
+            try {
+                string path=EmulatorLibrary.Core(corePath),folder=System.IO.Path.GetDirectoryName(path),name=System.IO.Path.GetFileNameWithoutExtension(path)+".info";
+                string metadata=new[]{System.IO.Path.Combine(folder,name),System.IO.Path.Combine(folder,"..","info",name)}.FirstOrDefault(File.Exists);
+                if(metadata!=null && new FileInfo(metadata).Length<1024*1024) extensions=CoreParts(EmulatorImport.SettingsFile(metadata));
+            } catch(ArgumentException) {} catch(IOException) {} catch(UnauthorizedAccessException) {} catch(System.Security.SecurityException) {}
+            return extensions;
+        }
+        public HashSet<string> Extensions(string corePath) {
+            var extensions=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if(String.IsNullOrWhiteSpace(corePath)) return extensions;
+            try {
+                var match=installed.FirstOrDefault(core => String.Equals(core.Path,corePath,StringComparison.OrdinalIgnoreCase));
+                if(match==null) {
+                    string resolved=Relocate(corePath);
+                    if(resolved!=null) match=installed.FirstOrDefault(core => String.Equals(core.Path,resolved,StringComparison.OrdinalIgnoreCase));
+                }
+                extensions=match==null ? CoreExtensions(corePath) : new HashSet<string>(match.Extensions.Select(extension => "."+extension.TrimStart('.')),StringComparer.OrdinalIgnoreCase);
+            } catch(ArgumentException) {} catch(IOException) {}
+            return extensions;
+        }
+        public HashSet<string> InstalledExtensions {
+            get {
+                var extensions=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach(var core in installed) extensions.UnionWith(core.Extensions.Select(extension => "."+extension.TrimStart('.')));
+                return extensions;
+            }
+        }
         public RetroArchCoreResolver(string executable) {
             root=System.IO.Path.GetDirectoryName(EmulatorLibrary.Executable(executable));
             string configPath=System.IO.Path.Combine(root,"retroarch.cfg");

@@ -111,6 +111,157 @@ namespace PadLauncher {
             refreshTags();
             return tabs;
         }
+        bool favouriteOrderExpanded;
+        string editedFavouriteOrderId;
+        FrameworkElement CreateFavouriteOrderSettings(Window owner) {
+            var section=new Expander {Name="FavouriteOrderSection",Header="Favourites order",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=favouriteOrderExpanded};
+            section.Expanded+=(s,e) => favouriteOrderExpanded=true;
+            section.Collapsed+=(s,e) => favouriteOrderExpanded=false;
+            var panel=new StackPanel {Margin=new Thickness(12,8,12,12)}; section.Content=panel;
+            var note=Label("Drag a game by its handle, or choose a game and move it to the top or bottom. Changes save immediately and update the Favourites list.",12,muted);
+            note.TextWrapping=TextWrapping.Wrap; panel.Children.Add(note);
+            var picker=new SettingsComboBox {Name="FavouriteOrderPicker",DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(0,12,0,8)};
+            panel.Children.Add(picker);
+            var actions=new WrapPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,8)};
+            var top=new Button {Name="FavouriteMoveTop",Content="Move to top",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0)};
+            var bottom=new Button {Name="FavouriteMoveBottom",Content="Move to bottom",Padding=new Thickness(12,7,12,7)};
+            actions.Children.Add(top); actions.Children.Add(bottom); panel.Children.Add(actions);
+            var rowsPanel=new StackPanel {Name="FavouriteOrderRows"};
+            var scroll=new ScrollViewer {Content=rowsPanel,MaxHeight=300,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};
+            panel.Children.Add(scroll);
+            var empty=Label("No favourites yet. Press R3 on a game, or add it from its list memberships, to create one.",12,muted);
+            empty.TextWrapping=TextWrapping.Wrap; empty.Visibility=Visibility.Collapsed; panel.Children.Add(empty);
+            var status=Label("",12,muted); status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,8,0,0); panel.Children.Add(status);
+            const string favouriteDragFormat="PadLauncher.FavouriteGame";
+            var rows=new Dictionary<string,Border>();
+            bool refreshing=false;
+            Action updateActions=() => {
+                string id=picker.SelectedValue as string;
+                bool has=id!=null && rows.ContainsKey(id);
+                top.IsEnabled=bottom.IsEnabled=has;
+            };
+            Action render=null;
+            Action<string,int> move=null;
+            move=(id,delta) => {
+                if(String.IsNullOrWhiteSpace(id)) return;
+                var order=(settings.FavouriteGameIds ?? new List<string>()).Where(value => !String.IsNullOrWhiteSpace(value)).Distinct().ToList();
+                int index=order.IndexOf(id);
+                if(index<0) return;
+                int target=index+delta;
+                if(target<0) target=0;
+                if(target>=order.Count) target=order.Count-1;
+                if(target==index) return;
+                order.RemoveAt(index); order.Insert(target,id);
+                try {
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    next.FavouriteGameIds=order;
+                    Storage.Write("settings.json",next); settings=next;
+                    ApplyLibrary();
+                    editedFavouriteOrderId=id;
+                    render();
+                    status.Text="Favourites order saved.";
+                } catch(Exception error) {status.Text=error.Message;}
+            };
+            render=() => {
+                refreshing=true;
+                var order=(settings.FavouriteGameIds ?? new List<string>()).Where(value => !String.IsNullOrWhiteSpace(value)).Distinct().ToList();
+                var games=library.Games.GroupBy(game => game.Id).Select(group => group.First()).ToDictionary(game => game.Id);
+                var choices=new List<KeyValuePair<string,string>>();
+                foreach(string id in order) {
+                    Game game;
+                    string label=games.TryGetValue(id,out game) ? game.Name+" · "+GameSourceLabel(game) : id+" (unavailable)";
+                    choices.Add(new KeyValuePair<string,string>(id,label));
+                }
+                picker.ItemsSource=choices;
+                string selected=editedFavouriteOrderId;
+                if(selected!=null && choices.Any(choice => choice.Key==selected)) picker.SelectedValue=selected;
+                else if(choices.Count>0) picker.SelectedValue=choices[0].Key;
+                else picker.SelectedIndex=-1;
+                if(picker.SelectedValue is string) editedFavouriteOrderId=(string)picker.SelectedValue;
+                rows.Clear(); rowsPanel.Children.Clear();
+                empty.Visibility=order.Count==0 ? Visibility.Visible : Visibility.Collapsed;
+                scroll.Visibility=order.Count==0 ? Visibility.Collapsed : Visibility.Visible;
+                foreach(string id in order) {
+                    string gameId=id;
+                    string label=choices.First(choice => choice.Key==id).Value;
+                    var row=new DockPanel {LastChildFill=true,Margin=new Thickness(0,0,0,4)};
+                    var handle=new Border {Padding=new Thickness(10,3,10,3),Margin=new Thickness(8,0,0,0),Background=System.Windows.Media.Brushes.Transparent,
+                        Cursor=System.Windows.Input.Cursors.SizeAll,ToolTip="Drag to reorder",Focusable=true,
+                        Child=new TextBlock {Text="⋮⋮",FontSize=20,Foreground=muted,VerticalAlignment=VerticalAlignment.Center}};
+                    DockPanel.SetDock(handle,Dock.Right);
+                    row.Children.Add(handle);
+                    var name=Label(label,13,white); name.TextTrimming=TextTrimming.CharacterEllipsis; name.ToolTip=label;
+                    row.Children.Add(name);
+                    var dropRow=new Border {Child=row,AllowDrop=true,BorderBrush=mint,BorderThickness=new Thickness(0)};
+                    rows[id]=dropRow;
+                    Point? dragStart=null;
+                    handle.MouseLeftButtonDown+=(s,e) => {dragStart=e.GetPosition(null); handle.Focus(); e.Handled=true;};
+                    handle.MouseLeftButtonUp+=(s,e) => dragStart=null;
+                    handle.MouseMove+=(s,e) => {
+                        if(e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed) {dragStart=null; return;}
+                        if(!dragStart.HasValue) return;
+                        Point position=e.GetPosition(null);
+                        if(Math.Abs(position.X-dragStart.Value.X)<SystemParameters.MinimumHorizontalDragDistance &&
+                            Math.Abs(position.Y-dragStart.Value.Y)<SystemParameters.MinimumVerticalDragDistance) return;
+                        dragStart=null;
+                        try {DragDrop.DoDragDrop(handle,new DataObject(favouriteDragFormat,gameId),DragDropEffects.Move);}
+                        finally {foreach(var entry in rows.Values) entry.BorderThickness=new Thickness(0);}
+                    };
+                    handle.KeyDown+=(s,e) => {
+                        if(e.Key==System.Windows.Input.Key.Up || e.Key==System.Windows.Input.Key.Down) {
+                            move(gameId,e.Key==System.Windows.Input.Key.Up ? -1 : 1); handle.Focus(); e.Handled=true;
+                        } else if(e.Key==System.Windows.Input.Key.Home) {
+                            move(gameId,-1000000); handle.Focus(); e.Handled=true;
+                        } else if(e.Key==System.Windows.Input.Key.End) {
+                            move(gameId,1000000); handle.Focus(); e.Handled=true;
+                        }
+                    };
+                    dropRow.DragOver+=(s,e) => {
+                        if(!e.Data.GetDataPresent(favouriteDragFormat)) {e.Effects=DragDropEffects.None; return;}
+                        e.Effects=DragDropEffects.Move; e.Handled=true;
+                        bool below=e.GetPosition(dropRow).Y>dropRow.ActualHeight/2;
+                        dropRow.BorderThickness=below ? new Thickness(0,0,0,2) : new Thickness(0,2,0,0);
+                        double y=e.GetPosition(scroll).Y;
+                        if(y<24) scroll.LineUp();
+                        else if(y>scroll.ActualHeight-24) scroll.LineDown();
+                    };
+                    dropRow.DragLeave+=(s,e) => dropRow.BorderThickness=new Thickness(0);
+                    dropRow.Drop+=(s,e) => {
+                        dropRow.BorderThickness=new Thickness(0);
+                        string dragged=e.Data.GetData(favouriteDragFormat) as string;
+                        if(dragged==null) return;
+                        var currentOrder=(settings.FavouriteGameIds ?? new List<string>()).Where(value => !String.IsNullOrWhiteSpace(value)).Distinct().ToList();
+                        int from=currentOrder.IndexOf(dragged),to=currentOrder.IndexOf(gameId);
+                        if(from<0 || to<0) return;
+                        if(e.GetPosition(dropRow).Y>dropRow.ActualHeight/2) to++;
+                        if(from<to) to--;
+                        move(dragged,to-from); e.Handled=true;
+                    };
+                    rowsPanel.Children.Add(dropRow);
+                }
+                refreshing=false;
+                updateActions();
+            };
+            picker.SelectionChanged+=(s,e) => {
+                if(refreshing) return;
+                if(picker.SelectedValue is string) editedFavouriteOrderId=(string)picker.SelectedValue;
+                updateActions();
+            };
+            top.Click+=(s,e) => {
+                string id=picker.SelectedValue as string;
+                if(id==null) return;
+                var order=(settings.FavouriteGameIds ?? new List<string>()).Where(value => !String.IsNullOrWhiteSpace(value)).Distinct().ToList();
+                move(id,-order.IndexOf(id));
+            };
+            bottom.Click+=(s,e) => {
+                string id=picker.SelectedValue as string;
+                if(id==null) return;
+                var order=(settings.FavouriteGameIds ?? new List<string>()).Where(value => !String.IsNullOrWhiteSpace(value)).Distinct().ToList();
+                move(id,order.Count-1-order.IndexOf(id));
+            };
+            render();
+            return section;
+        }
         bool hiddenGamesExpanded;
         public void SetHiddenGames(IEnumerable<string> ids) {
             var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));

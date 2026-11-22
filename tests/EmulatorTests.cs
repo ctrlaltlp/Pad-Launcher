@@ -50,7 +50,10 @@ class EmulatorTests {
             FileAt(root,"PS4\\CUSA00001\\data.bin");
             Sfo(Path.Combine(root,"PS4","CUSA00001","sce_sys","param.sfo"),"Game M – PS4");
             Check(EmulatorLibrary.Scan("shadps4",Path.Combine(root,"PS4"),System.Threading.CancellationToken.None,null,true).Paths.SequenceEqual(new[]{paths["shadps4"]}),"shadPS4 scans game executables only");
-            string core=FileAt(root,"Emulators and games\\cores\\snes9x_libretro.dll"),otherCore=FileAt(root,"Emulators and games\\cores\\mgba_libretro.dll");
+            string core=FileAt(root,"Emulators and games\\cores\\snes9x_libretro.dll"),otherCore=FileAt(root,"Emulators and games\\cores\\snes9x_next_libretro.dll"),scanCore=FileAt(root,"Emulators and games\\cores\\mgba_libretro.dll");
+            FileAt(root,"Emulators and games\\info\\snes9x_libretro.info","supported_extensions = \"sfc|smc\"");
+            FileAt(root,"Emulators and games\\info\\snes9x_next_libretro.info","supported_extensions = \"sfc|smc\"");
+            FileAt(root,"Emulators and games\\info\\mgba_libretro.info","supported_extensions = \"gba|gb|gbc\"");
             EmulatorLibrary.SaveCore(settings,core);
             paths["azahar"]=FileAt(root,"3DS/Example (USA).cci");
             foreach(var preset in EmulatorLibrary.Presets) {
@@ -85,13 +88,12 @@ class EmulatorTests {
             Check(GameLaunch.StartInfo(retro,settings).Arguments.Contains("\""+core+"\""),"Changing default core leaves existing games assigned to their original core");
             EmulatorLibrary.SaveGame(settings,"retroarch",retro.Id,"Retro game",retro.LaunchId,otherCore);
             Check(GameLaunch.StartInfo(retro,settings).Arguments=="-f -L \""+otherCore+"\" \""+retro.LaunchId+"\"","Per-game core override is quoted and used at launch");
-            Check(EmulatorLibrary.Cores(executable).Count==2,"Installed cores discovered beside executable");
+            Check(EmulatorLibrary.Cores(executable).Count==3,"Installed cores discovered beside executable");
             Reject(() => EmulatorLibrary.SaveCore(settings,executable),"Core picker rejects executables");
             var noCore=new Settings(); EmulatorLibrary.SavePath(noCore,"retroarch",executable);
             Reject(() => EmulatorLibrary.AddGames(noCore,"retroarch",new[]{retro.LaunchId}),"Adding RetroArch games requires a core");
             string scanRetro=Path.Combine(root,"Retro scan"); string gba=FileAt(scanRetro,"nested\\GBA.gba"); FileAt(scanRetro,"nested\\NES.nes");
-            FileAt(root,"Emulators and games\\info\\mgba_libretro.info","supported_extensions = \"gba|gb|gbc\"");
-            Check(EmulatorLibrary.Scan("retroarch",scanRetro,CancellationToken.None,otherCore).Paths.SequenceEqual(new[]{gba}),"RetroArch scan uses selected core's supported extensions");
+            Check(EmulatorLibrary.Scan("retroarch",scanRetro,CancellationToken.None,scanCore).Paths.SequenceEqual(new[]{gba}),"RetroArch scan uses selected core's supported extensions");
             Check(EmulatorLibrary.Scan("ppsspp",Path.Combine(root,"PSP"),CancellationToken.None).Paths.SequenceEqual(new[]{paths["ppsspp"]}),"PPSSPP recursive scan finds CHD images");
             Check(EmulatorLibrary.Scan("mgba",Path.Combine(root,"GBA"),CancellationToken.None).Paths.SequenceEqual(new[]{paths["mgba"]}),"mGBA recursive scan finds GBA ROMs");
             Check(GameLaunch.StartInfo(library.Games.First(g => g.EmulatorId=="ppsspp"),settings).Arguments.StartsWith("--fullscreen --pause-menu-exit "),"PPSSPP fullscreen and frontend exit options");
@@ -210,6 +212,19 @@ class EmulatorTests {
             File.Delete(executable); Check(EmulatorLibrary.Missing(library.Games[0],settings),"Missing emulator identified");
             Reject(() => GameLaunch.StartInfo(library.Games[0],settings),"Missing emulator launch rejected");
             Check(EmulatorLibrary.SfoTitle(FileAt(root,"invalid.sfo","broken"))==null,"Invalid metadata ignored safely");
+            var listOrderOptions=new List<Collection> {
+                new Collection {Id="all",Name="All games"},
+                new Collection {Id="source:emulator:duckstation",Name="PlayStation · DuckStation",Source="emulator"},
+                new Collection {Id="source:emulator:dolphin",Name="Wii / GameCube · Dolphin",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:gc",Name="GameCube · RetroArch",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:gb",Name="Game Boy · RetroArch",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:ps2",Name="PlayStation 2 · RetroArch",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:wii",Name="Wii · RetroArch",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:switch",Name="Switch · RetroArch",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:unknown",Name="Unknown console · RetroArch",Source="emulator"}
+            };
+            var listOrder=EmulatorLibrary.DefaultListOrder(listOrderOptions,new Library(),new Settings()).Where(item => item.Source=="emulator").Select(item => item.Name).ToList();
+            Check(listOrder.SequenceEqual(new[]{"GameCube · RetroArch","Wii / GameCube · Dolphin","Wii · RetroArch","Switch · RetroArch","Game Boy · RetroArch","PlayStation · DuckStation","PlayStation 2 · RetroArch","Unknown console · RetroArch"}),"Emulator and RetroArch playlist lists sort by maker, TV/handheld, then release year");
             Console.WriteLine(checks+" emulator checks passed");
         } finally {Directory.Delete(root,true);}
     }

@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.6.1")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.6.1")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.6.1")]
+[assembly: System.Reflection.AssemblyVersion("0.6.6.5")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.6.5")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.6.5")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -431,6 +431,9 @@ namespace PadLauncher {
         }
         static bool IsSpecialJumpList(string id) {
             return id=="favourites" || id=="recent" || id=="most-played";
+        }
+        static bool IsAutoOrderedList(string id) {
+            return id=="recent" || id=="recently-added" || id=="most-played";
         }
         List<KeyValuePair<string,string>> DefaultListChoices() {
             var choices=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("remember","Remember last list")};
@@ -997,6 +1000,7 @@ namespace PadLauncher {
             };
             var availableTip=Label("Changes save immediately. Only selected lists appear when switching lists. Select at least one. Favourites, Recently played and Most played can still be jump destinations when hidden here.",12,muted); availableTip.TextWrapping=TextWrapping.Wrap; availableTip.Margin=new Thickness(0,8,0,0); availablePanel.Children.Add(availableTip);
             availableSection.Content=availablePanel; listsLayout.Children.Add(availableSection);
+            listsLayout.Children.Add(CreateFavouriteOrderSettings(dialog));
             var listLayoutSection=new Expander {Header="Per-list layout",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),IsExpanded=listLayoutExpanded};
             listLayoutSection.Expanded+=(s,e) => listLayoutExpanded=true; listLayoutSection.Collapsed+=(s,e) => listLayoutExpanded=false;
             listLayoutSection.Content=CreateListLayoutSettings(dialog,rebuild); listsLayout.Children.Add(listLayoutSection);
@@ -2205,7 +2209,7 @@ namespace PadLauncher {
                 collectionIndex=Math.Max(0,filters.FindIndex(c => c.Id==settings.DefaultCollectionId));
                 settings.CollectionId=filters[collectionIndex].Id;
             }
-            if(!opening || previousFilter!=filters[collectionIndex].Id || visible.Count==0) FilterGames(true);
+            if(!opening || previousFilter!=filters[collectionIndex].Id || visible.Count==0 || IsAutoOrderedList(filters[collectionIndex].Id)) FilterGames(true);
         }
         void SetFilters() {
             var hidden=new HashSet<string>(settings.HiddenGameIds ?? new List<string>());
@@ -2222,7 +2226,7 @@ namespace PadLauncher {
             string oldId = remember ? settings.SelectedId : visible.Count > selected ? visible[selected].Id : null;
             string remembered;
             if(settings.SelectedGamesByList!=null && settings.SelectedGamesByList.TryGetValue(filter.Id,out remembered)) oldId=remembered;
-            if(filter.Id=="recent" || filter.Id=="recently-added" || filter.Id=="most-played") oldId=null;
+            if(IsAutoOrderedList(filter.Id)) oldId=null;
             var membership=new HashSet<string>(filter.Games ?? new List<string>());
             var hidden=new HashSet<string>(settings.HiddenGameIds ?? new List<string>());
             visible = library.Games.Where(g => !hidden.Contains(g.Id) && (filter.Id == "all" || (!filter.UnsupportedDynamic && membership.Contains(g.Id)))).ToList();
@@ -2300,7 +2304,7 @@ namespace PadLauncher {
             if(!GameSearchOpen) {
                 settings.SelectedId = current.Id;
                 if(settings.SelectedGamesByList==null) settings.SelectedGamesByList=new Dictionary<string,string>();
-                if(filters[collectionIndex].Id=="recent" || filters[collectionIndex].Id=="recently-added" || filters[collectionIndex].Id=="most-played") settings.SelectedGamesByList.Remove(filters[collectionIndex].Id);
+                if(IsAutoOrderedList(filters[collectionIndex].Id)) settings.SelectedGamesByList.Remove(filters[collectionIndex].Id);
                 else settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
             } else if(searchConsoleLabel!=null) searchConsoleLabel.Text=SearchSourceLabel(current,settings);
             string availabilityIssue=GameAvailabilityIssue(current);

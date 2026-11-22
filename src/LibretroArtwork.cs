@@ -12,6 +12,9 @@ namespace PadLauncher {
     public sealed class LibretroArtwork {
         static readonly object downloadGate=new object();
         const string Root="https://thumbnails.libretro.com/";
+        const string GitHubRoot="https://raw.githubusercontent.com/libretro-thumbnails/";
+        const string GitHubApiRoot="https://api.github.com/repos/libretro-thumbnails/";
+        static string GitHubRepo(string system) {return Uri.EscapeDataString((system ?? "").Replace(" ","_"));}
         readonly Dictionary<string,List<string>> catalogs=new Dictionary<string,List<string>>(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string,BoxartIndex> indexes=new Dictionary<string,BoxartIndex>(StringComparer.OrdinalIgnoreCase);
         readonly HashSet<string> failedCatalogs=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -151,10 +154,44 @@ namespace PadLauncher {
             if(NormalizeDatabase(system)==null || !SafeFile(file)) throw new ArgumentException("Choose a valid Libretro cover.");
             return Root+Uri.EscapeDataString(system)+"/Named_Boxarts/"+Uri.EscapeDataString(file);
         }
+        public static string GitHubImageUrl(string system,string file) {
+            if(NormalizeDatabase(system)==null || !SafeFile(file)) throw new ArgumentException("Choose a valid Libretro cover.");
+            return GitHubRoot+GitHubRepo(system)+"/master/Named_Boxarts/"+Uri.EscapeDataString(file);
+        }
+        static bool ImageData(byte[] data) {
+            if(data==null || data.Length<8) return false;
+            if(data[0]==0x89 && data[1]==0x50 && data[2]==0x4E && data[3]==0x47) return true;
+            if(data[0]==0xFF && data[1]==0xD8 && data[2]==0xFF) return true;
+            if(data[0]==0x47 && data[1]==0x49 && data[2]==0x46 && data[3]==0x38) return true;
+            return data.Length>12 && data[0]==0x52 && data[1]==0x49 && data[2]==0x46 && data[3]==0x46 && data[8]==0x57 && data[9]==0x45 && data[10]==0x42 && data[11]==0x50;
+        }
+        static string SymlinkTarget(byte[] data) {
+            if(data==null || data.Length<4 || data.Length>512) return null;
+            string name=Encoding.UTF8.GetString(data).Trim();
+            return SafeFile(name) ? name : null;
+        }
+        static byte[] FetchGitHubImage(string system,string file,CancellationToken token) {
+            string name=file;
+            for(int attempt=0;attempt<4;attempt++) {
+                byte[] data=ArtworkService.Fetch(GitHubImageUrl(system,name),null,token);
+                if(ImageData(data)) return data;
+                string target=SymlinkTarget(data);
+                if(target==null) throw new IOException("Libretro cover is not an image.");
+                name=target;
+            }
+            throw new IOException("Libretro cover link is too deep.");
+        }
+        public static byte[] FetchImage(string system,string file,CancellationToken token) {
+            byte[] data=null;
+            try {data=ArtworkService.Fetch(ImageUrl(system,file),null,token);}
+            catch(OperationCanceledException) {throw;}
+            catch(Exception) {}
+            if(ImageData(data)) return data;
+            return FetchGitHubImage(system,file,token);
+        }
         public string SaveChoice(Game game,string system,string file,CancellationToken token) {
-            string url=ImageUrl(system,file);
             if(!Catalog(system,token).Contains(file)) throw new ArgumentException("This cover is no longer listed in the selected console catalog.");
-            byte[] bytes=ArtworkService.Fetch(url,null,token);
+            byte[] bytes=FetchImage(system,file,token);
             using(var stream=new MemoryStream(bytes)) using(var image=System.Drawing.Image.FromStream(stream)) {
                 if(image.Width<64 || image.Height<64 || image.Width>8192 || image.Height>8192) throw new IOException("This cover is not a supported image.");
             }
@@ -165,27 +202,53 @@ namespace PadLauncher {
         List<string> Catalog(string system,CancellationToken token) {
             lock(catalogGate) return ReadCatalog(system,token);
         }
+        static List<string> GitHubCatalog(string system,CancellationToken token) {
+            string repo=GitHubRepo(system),sha=null;
+            string rootUrl=GitHubApiRoot+repo+"/git/trees/master";
+            var root=Storage.Json().DeserializeObject(Encoding.UTF8.GetString(ArtworkService.Fetch(rootUrl,null,token)));
+            var rootTree=Vdf.Get(root,"tree") as object[];
+            if(rootTree==null) throw new IOException("Libretro returned no repository listing for "+system+".");
+            foreach(var item in rootTree) {
+                if(String.Equals(Vdf.Str(item,"path"),"Named_Boxarts",StringComparison.OrdinalIgnoreCase) && Vdf.Str(item,"type")=="tree") {
+                    sha=Vdf.Str(item,"sha"); break;
+                }
+            }
+            if(String.IsNullOrEmpty(sha)) throw new IOException("Libretro returned no box-art folder for "+system+".");
+            string treeUrl=GitHubApiRoot+repo+"/git/trees/"+Uri.EscapeDataString(sha);
+            var tree=Storage.Json().DeserializeObject(Encoding.UTF8.GetString(ArtworkService.Fetch(treeUrl,null,token)));
+            var entries=Vdf.Get(tree,"tree") as object[];
+            if(entries==null) throw new IOException("Libretro returned no cover catalog for "+system+".");
+            var files=new List<string>();
+            foreach(var item in entries) {
+                string name=Vdf.Str(item,"path"),type=Vdf.Str(item,"type");
+                if(type=="blob" && SafeFile(name)) files.Add(name);
+            }
+            if(files.Count==0) throw new IOException("Libretro returned no covers for "+system+".");
+            return files.Distinct().ToList();
+        }
         List<string> ReadCatalog(string system,CancellationToken token) {
             if(failedCatalogs.Contains(system)) throw new IOException("Libretro catalog is temporarily unavailable.");
             List<string> files; if(catalogs.TryGetValue(system,out files)) return files;
             string relative=Path.Combine("artwork","libretro","catalogs",Hash(system)+".json"),path=Path.Combine(Storage.Root,relative);
             if(File.Exists(path) && File.GetLastWriteTimeUtc(path)>DateTime.UtcNow.AddDays(-7)) {
-                files=Storage.Read<List<string>>(relative); if(files!=null) {catalogs[system]=files; return files;}
+                files=Storage.Read<List<string>>(relative);
+                // Version 1 of the GitHub fallback only saved the first 1000 entries.
+                if(files!=null && files.Count>0 && files.Count!=1000) {catalogs[system]=files; return files;}
+                try {File.Delete(path);} catch(IOException) {} catch(UnauthorizedAccessException) {}
             }
             catalogs[system]=new List<string>();
             try {
-                string html=Encoding.UTF8.GetString(ArtworkService.Fetch(Root+Uri.EscapeDataString(system)+"/Named_Boxarts/",null,token));
-                files=new List<string>();
-                foreach(Match match in Regex.Matches(html,@"href=""([^""]+\.png)""",RegexOptions.IgnoreCase,TimeSpan.FromSeconds(2))) {
-                    string name=Uri.UnescapeDataString(WebUtility.HtmlDecode(match.Groups[1].Value));
-                    if(name.Length<512 && !name.Contains("/") && !name.Contains("\\")) files.Add(name);
-                }
-            } catch(WebException error) {
-                var response=error.Response as HttpWebResponse;
-                bool missing=response!=null && response.StatusCode==HttpStatusCode.NotFound;
-                if(response!=null) response.Dispose(); if(!missing) {failedCatalogs.Add(system); throw;}
-                files=new List<string>();
-            } catch(Exception) {failedCatalogs.Add(system); throw;}
+                try {
+                    string html=Encoding.UTF8.GetString(ArtworkService.Fetch(Root+Uri.EscapeDataString(system)+"/Named_Boxarts/",null,token));
+                    files=new List<string>();
+                    foreach(Match match in Regex.Matches(html,@"href=""([^""]+\.png)""",RegexOptions.IgnoreCase,TimeSpan.FromSeconds(2))) {
+                        string name=Uri.UnescapeDataString(WebUtility.HtmlDecode(match.Groups[1].Value));
+                        if(name.Length<512 && !name.Contains("/") && !name.Contains("\\")) files.Add(name);
+                    }
+                } catch(OperationCanceledException) {throw;} catch(Exception) {files=null;}
+                if(files==null || files.Count==0) files=GitHubCatalog(system,token);
+                if(files.Count==0) throw new IOException("Libretro returned no covers for "+system+".");
+            } catch(OperationCanceledException) {throw;} catch(Exception) {failedCatalogs.Add(system); throw;}
             Directory.CreateDirectory(Path.GetDirectoryName(path)); Storage.Write(relative,files);
             catalogs[system]=files; return files;
         }
@@ -196,24 +259,35 @@ namespace PadLauncher {
             if(!settings.LibretroArtworkEnabled || game.Source!="emulator") return false;
             string path=CachePath(game),retry=path+".retry";
             if(Usable(path)) {game.ArtworkProvider="libretro"; return true;}
-            if(File.Exists(retry) && File.GetLastWriteTimeUtc(retry)>DateTime.UtcNow.AddHours(-6)) return false;
-            var matches=new List<KeyValuePair<string,string>>();
+            var matches=new List<KeyValuePair<string,string>>(); bool catalogRead=false;
             foreach(string system in Systems(game,settings).Distinct()) {
-                token.ThrowIfCancellationRequested(); BoxartIndex index;
-                if(!indexes.TryGetValue(system,out index)) indexes[system]=index=new BoxartIndex(Catalog(system,token));
-                string file=index.Find(game);
-                if(file!=null) matches.Add(new KeyValuePair<string,string>(system,file));
+                token.ThrowIfCancellationRequested();
+                try {
+                    BoxartIndex index;
+                    if(!indexes.TryGetValue(system,out index)) indexes[system]=index=new BoxartIndex(Catalog(system,token));
+                    catalogRead=true;
+                    string file=index.Find(game);
+                    if(file!=null) matches.Add(new KeyValuePair<string,string>(system,file));
+                } catch(OperationCanceledException) {throw;} catch(Exception) { }
             }
             // A title present on two different systems needs better platform metadata.
-            if(matches.Count==1 || (matches.Count>1 && new[]{"rpcs3","azahar","melonds"}.Contains(game.EmulatorId))) {
-                string url=Root+Uri.EscapeDataString(matches[0].Key)+"/Named_Boxarts/"+Uri.EscapeDataString(matches[0].Value);
-                byte[] bytes=ArtworkService.Fetch(url,null,token);
-                using(var stream=new MemoryStream(bytes)) using(var image=System.Drawing.Image.FromStream(stream)) {
-                    if(image.Width<64 || image.Height<64 || image.Width>8192 || image.Height>8192) return false;
+            bool allowMultiple=matches.Count>1 && new[]{"rpcs3","azahar","melonds"}.Contains(game.EmulatorId);
+            if(matches.Count==1 || allowMultiple) {
+                foreach(var match in matches) {
+                    try {
+                        byte[] bytes=FetchImage(match.Key,match.Value,token);
+                        using(var stream=new MemoryStream(bytes)) using(var image=System.Drawing.Image.FromStream(stream)) {
+                            if(image.Width<64 || image.Height<64 || image.Width>8192 || image.Height>8192) break;
+                        }
+                        Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(ArtworkService.CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllBytes(path,bytes);} ArtworkService.TrackCachedArtwork(game,path); game.ArtworkProvider="libretro"; return true;
+                    } catch(OperationCanceledException) {throw;} catch(Exception) {}
+                    if(!allowMultiple) break;
                 }
-                Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(ArtworkService.CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllBytes(path,bytes);} ArtworkService.TrackCachedArtwork(game,path); game.ArtworkProvider="libretro"; return true;
             }
-            Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(ArtworkService.CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllText(retry,"");} return false;
+            if(catalogRead && (!File.Exists(retry) || File.GetLastWriteTimeUtc(retry)<=DateTime.UtcNow.AddHours(-6))) {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)); lock(ArtworkService.CacheWriteGate) {token.ThrowIfCancellationRequested(); File.WriteAllText(retry,"");}
+            }
+            return false;
         }
     }
 }

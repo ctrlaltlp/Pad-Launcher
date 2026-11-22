@@ -94,47 +94,19 @@ namespace PadLauncher {
                     var box=new TextBox {Name=fieldName,Padding=new Thickness(8)}; panel.Children.Add(box); return box;
                 };
                 var path=field("Emulator executable","EmulatorPath_"+id); path.Text=config==null ? "" : config.Path ?? "";
-                TextBox defaultCore=null, romFolder=null;
+                TextBox romFolder=null;
                 var pathActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)}; panel.Children.Add(pathActions);
                 var browse=new Button {Content="Browse…",Padding=new Thickness(12,7,12,7)};
                 var savePath=new Button {Name="EmulatorSavePath_"+id,Content="Save path",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
                 pathActions.Children.Add(browse); pathActions.Children.Add(savePath);
                 var status=Label("",12,muted); status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,8,0,0); panel.Children.Add(status);
                 savePath.Click+=(s,e) => {try {
-                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SavePath(next,id,path.Text); EmulatorLibrary.Config(next,id).RomFolder=romFolder.Text.Trim(); CommitEmulators(next,rebuild);
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SavePath(next,id,path.Text); if(romFolder!=null) EmulatorLibrary.Config(next,id).RomFolder=romFolder.Text.Trim(); CommitEmulators(next,rebuild);
                 } catch(Exception error) {status.Text=error.Message;}};
                 browse.Click+=(s,e) => {
                     var file=new Microsoft.Win32.OpenFileDialog {Filter=preset.Name+" executable|*.exe",CheckFileExists=true};
                     if(file.ShowDialog(dialog)==true) {path.Text=file.FileName; savePath.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));}
                 };
-                if(id=="retroarch") {
-                    defaultCore=field("Default core path for new games","EmulatorDefaultCore"); defaultCore.Text=config==null ? "" : config.CorePath ?? "";
-                    panel.Children.Remove(defaultCore);
-                    var corePathBox=new Grid(); corePathBox.Children.Add(defaultCore);
-                    var corePathPlaceholder=Label("Enter a RetroArch core .dll path or browse…",12,muted);
-                    corePathPlaceholder.Margin=new Thickness(19,0,9,0); corePathPlaceholder.VerticalAlignment=VerticalAlignment.Center; corePathPlaceholder.IsHitTestVisible=false;
-                    corePathBox.Children.Add(corePathPlaceholder); panel.Children.Add(corePathBox);
-                    Action updateCorePathPlaceholder=() => corePathPlaceholder.Visibility=String.IsNullOrEmpty(defaultCore.Text) ? Visibility.Visible : Visibility.Collapsed;
-                    defaultCore.TextChanged+=(s,e) => updateCorePathPlaceholder(); updateCorePathPlaceholder();
-
-                    var coreChoices=new SettingsComboBox {Name="EmulatorInstalledCores",DisplayMemberPath="Value",SelectedValuePath="Key",Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(coreChoices);
-                    panel.Children.Remove(coreChoices);
-                    var installedCoreBox=new Grid {Margin=new Thickness(0,8,0,0)}; coreChoices.Margin=new Thickness(0); installedCoreBox.Children.Add(coreChoices);
-                    var installedCorePlaceholder=Label("…or select an installed core",12,muted);
-                    installedCorePlaceholder.Margin=new Thickness(10,0,35,0); installedCorePlaceholder.VerticalAlignment=VerticalAlignment.Center; installedCorePlaceholder.IsHitTestVisible=false;
-                    installedCoreBox.Children.Add(installedCorePlaceholder); panel.Children.Add(installedCoreBox);
-                    coreChoices.SelectionChanged+=(s,e) => installedCorePlaceholder.Visibility=coreChoices.SelectedIndex<0 ? Visibility.Visible : Visibility.Collapsed;
-                    Action findCores=() => {coreChoices.ItemsSource=EmulatorLibrary.Cores(path.Text).Select(p => new KeyValuePair<string,string>(p,System.IO.Path.GetFileNameWithoutExtension(p))).ToList();}; findCores();
-                    coreChoices.SelectionChanged+=(s,e) => {if(coreChoices.SelectedValue is string) defaultCore.Text=(string)coreChoices.SelectedValue;};
-                    var coreActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)}; panel.Children.Add(coreActions);
-                    var browseCore=new Button {Content="Browse core…",Padding=new Thickness(12,7,12,7)};
-                    var findCore=new Button {Content="Find installed cores",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
-                    var saveCore=new Button {Name="EmulatorSaveCore",Content="Save core",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
-                    coreActions.Children.Add(browseCore); coreActions.Children.Add(findCore); coreActions.Children.Add(saveCore);
-                    browseCore.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="RetroArch core|*.dll",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) defaultCore.Text=file.FileName;};
-                    findCore.Click+=(s,e) => {findCores(); status.Text=coreChoices.Items.Count==0 ? "No cores found next to this executable. Browse to a core installed in RetroArch." : "Choose an installed core above.";};
-                    saveCore.Click+=(s,e) => {try {var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SavePath(next,id,path.Text); EmulatorLibrary.Config(next,id).RomFolder=romFolder.Text.Trim(); EmulatorLibrary.SaveCore(next,defaultCore.Text); CommitEmulators(next,rebuild);} catch(Exception error) {status.Text=error.Message;}};
-                }
                 var globalArguments=field("Launch arguments (all games)","EmulatorArguments_"+id);
                 globalArguments.Text=config==null || config.Arguments==null ? EmulatorLibrary.DefaultArguments(id,path.Text) : config.Arguments;
                 string argumentHelp="Use {game} for the quoted game path.";
@@ -163,8 +135,10 @@ namespace PadLauncher {
                 var gameStatus=Label("",12,muted);
                 gameStatus.TextWrapping=TextWrapping.Wrap;
                 var importLibrary=new Button {Name="ImportEmulatorLibrary_"+id,Content="Import library from emulator…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,10,0,0),HorizontalAlignment=HorizontalAlignment.Left};
-                importLibrary.Click+=(s,e) => {try {ShowEmulatorImport(dialog,preset,path.Text,defaultCore==null ? null : defaultCore.Text,rebuild);} catch(Exception error) {gameStatus.Text=error.Message;}};
-                romFolder=field(id=="vita3k" ? "Installed games folder (ux0/app)" : "ROM folder (includes subfolders)","EmulatorRomFolder_"+id); romFolder.Text=config==null ? "" : config.RomFolder ?? "";
+                importLibrary.Click+=(s,e) => {try {string fallbackCore=id=="retroarch" && config!=null ? config.CorePath : null; ShowEmulatorImport(dialog,preset,path.Text,fallbackCore,rebuild);} catch(Exception error) {gameStatus.Text=error.Message;}};
+                if(id!="retroarch") {
+                    var hint=Label(preset.Hint,12,muted); hint.TextWrapping=TextWrapping.Wrap; hint.Margin=new Thickness(0,12,0,8); hint.Cursor=System.Windows.Input.Cursors.Arrow; hint.IsHitTestVisible=false; panel.Children.Add(hint);
+                    romFolder=field(id=="vita3k" ? "Installed games folder (ux0/app)" : "ROM folder (includes subfolders)","EmulatorRomFolder_"+id); romFolder.Text=config==null ? "" : config.RomFolder ?? "";
                 var folderActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,8,0,0)}; panel.Children.Add(folderActions);
                 var browseFolder=new Button {Content="Browse folder…",Padding=new Thickness(12,7,12,7)};
                 var scan=new Button {Name="EmulatorScan_"+id,Content="Scan subfolders",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)};
@@ -184,13 +158,11 @@ namespace PadLauncher {
                         if(scanning) throw new InvalidOperationException("Please wait for the current library refresh to finish.");
                         string executable=EmulatorLibrary.Executable(path.Text),folder=EmulatorLibrary.Folder(romFolder.Text);
                         var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SavePath(next,id,executable); EmulatorLibrary.Config(next,id).RomFolder=folder;
-                        if(id=="retroarch") {EmulatorLibrary.SaveCore(next,defaultCore.Text); EmulatorLibrary.Core(defaultCore.Text); }
                         Storage.Write("settings.json",next); settings=next;
                         scanCancellation=new CancellationTokenSource(); var token=scanCancellation.Token;
                         scan.IsEnabled=false; cancelScan.Visibility=Visibility.Visible; scanStatus.Text="Scanning subfolders…";
                         scanDetails.Visibility=Visibility.Collapsed; scanErrors.Text="";
-                        string scanCore=id=="retroarch" ? defaultCore.Text : null;
-                        var result=await Task.Run(() => EmulatorLibrary.Scan(id,folder,token,scanCore)); token.ThrowIfCancellationRequested();
+                        var result=await Task.Run(() => EmulatorLibrary.Scan(id,folder,token,null)); token.ThrowIfCancellationRequested();
                         var existing=new HashSet<string>((EmulatorLibrary.Config(settings,id).Games ?? new List<EmulatorGame>()).Select(g => g.Path),StringComparer.OrdinalIgnoreCase);
                         var found=result.Paths.Where(p => !existing.Contains(p)).ToList();
                         scanErrors.Text=String.Join("\n",result.ReadErrors);
@@ -215,25 +187,83 @@ namespace PadLauncher {
                     } catch(OperationCanceledException) {scanStatus.Text="Scan cancelled.";} catch(Exception error) {scanStatus.Text=error.Message;}
                     finally {scan.IsEnabled=true; cancelScan.Visibility=Visibility.Collapsed; if(scanCancellation!=null) {scanCancellation.Dispose(); scanCancellation=null;}}
                 };
+                }
                 panel.Children.Add(importLibrary);
                 panel.Children.Add(gameStatus);
-                var hint=Label(preset.Hint,12,muted); hint.TextWrapping=TextWrapping.Wrap; hint.Margin=new Thickness(0,14,0,8); panel.Children.Add(hint);
                 var addActions=new StackPanel {Orientation=Orientation.Horizontal}; panel.Children.Add(addActions);
+                string manualListId=null;
                 Action<IEnumerable<string>> add=paths => {try {
-                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SavePath(next,id,path.Text); EmulatorLibrary.Config(next,id).RomFolder=romFolder.Text.Trim();
-                    if(id=="retroarch") EmulatorLibrary.SaveCore(next,defaultCore.Text);
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings)); EmulatorLibrary.SavePath(next,id,path.Text); if(romFolder!=null) EmulatorLibrary.Config(next,id).RomFolder=romFolder.Text.Trim();
                     int added=EmulatorLibrary.AddGames(next,id,paths); if(added==0) {gameStatus.Text="These games are already added."; return;} CommitEmulators(next,rebuild);
                 } catch(Exception error) {gameStatus.Text=error.Message;}};
                 var addFiles=new Button {Name="EmulatorAddGames_"+id,Content="Add game manually…",Padding=new Thickness(12,7,12,7)}; addActions.Children.Add(addFiles);
-                addFiles.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter=preset.Filter,Multiselect=true,CheckFileExists=true}; if(file.ShowDialog(dialog)==true) add(file.FileNames);};
+                addFiles.Click+=(s,e) => {
+                    var file=new Microsoft.Win32.OpenFileDialog {Filter=preset.Filter,Multiselect=true,CheckFileExists=true};
+                    if(file.ShowDialog(dialog)!=true) return;
+                    if(id!="retroarch") {add(file.FileNames); return;}
+                    var selection=ChooseEmulatorGames(dialog,preset,file.FileNames.ToList(),0,null,false,config==null ? null : config.CorePath,manualListId,true,EmulatorLibrary.Executable(path.Text));
+                    if(selection==null) return;
+                    try {
+                        var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                        EmulatorLibrary.SavePath(next,id,path.Text); if(romFolder!=null) EmulatorLibrary.Config(next,id).RomFolder=romFolder.Text.Trim();
+                        int added=EmulatorLibrary.AddGames(next,id,selection.Games.Keys,selection.Games,selection.CorePath);
+                        if(added==0) {gameStatus.Text="These games are already added."; return;}
+                        if(!String.IsNullOrEmpty(selection.Destination)) {
+                            var working=new Library {Games=library.Games.ToList(),Collections=library.Collections.ToList()};
+                            EmulatorLibrary.Apply(working,next);
+                            var selectedPaths=new HashSet<string>(selection.Games.Keys,StringComparer.OrdinalIgnoreCase);
+                            var gameIds=EmulatorLibrary.Config(next,id).Games.Where(game => selectedPaths.Contains(game.Path)).Select(game => game.Id).ToList();
+                            var destinationList=(next.CustomLists ?? new List<CustomList>()).FirstOrDefault(list => list.Id==selection.Destination);
+                            var playlistList=(next.RetroArchPlaylistLists ?? new List<CustomList>()).FirstOrDefault(list => list.Id==selection.Destination);
+                            if(selection.Destination!="new" && destinationList==null && playlistList==null) throw new InvalidOperationException("The selected list no longer exists.");
+                            if(playlistList!=null) playlistList.Games=(playlistList.Games ?? new List<string>()).Concat(gameIds).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                            else CustomLists.Save(next,working,destinationList==null ? null : destinationList.Id,destinationList==null ? selection.NewListName : destinationList.Name,
+                                (destinationList==null ? Enumerable.Empty<string>() : destinationList.Games ?? new List<string>()).Concat(gameIds));
+                        }
+                        CommitEmulators(next,rebuild);
+                    } catch(Exception error) {gameStatus.Text=error.Message;}
+                };
                 if(id=="rpcs3" || id=="vita3k") {
                     var addFolder=new Button {Content="Add game folder…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; addActions.Children.Add(addFolder);
                     addFolder.Click+=(s,e) => {using(var folder=new System.Windows.Forms.FolderBrowserDialog {Description="Choose one installed "+preset.Name+" game folder"}) {if(folder.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) add(new[]{folder.SelectedPath});}};
                 }
                 var games=(config==null ? new List<EmulatorGame>() : config.Games ?? new List<EmulatorGame>()).OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
-                var gameLabel=Label("Added games ("+games.Count+")",14,mint); gameLabel.Margin=new Thickness(0,20,0,8); panel.Children.Add(gameLabel);
-                if(games.Count==0) {panel.Children.Add(Label("No games added yet.",12,muted)); continue;}
-                var gamePicker=new SettingsComboBox {Name="EmulatorGames_"+id,ItemsSource=id=="retroarch" ? (System.Collections.IEnumerable)games.Select(game => new KeyValuePair<string,string>(game.Id,game.Name+" · "+GameSourceLabel(new Game {Id=game.Id,Source="emulator",EmulatorId=id,LaunchId=game.Path,ArtworkSystem=game.ArtworkSystem}))).ToList() : games,DisplayMemberPath=id=="retroarch" ? "Value" : "Name",SelectedValuePath=id=="retroarch" ? "Key" : "Id",SelectedIndex=0,Padding=new Thickness(8)}; panel.Children.Add(gamePicker);
+                if(games.Count==0) {var emptyLabel=Label("Added games (0)",14,mint); emptyLabel.Margin=new Thickness(0,20,0,8); panel.Children.Add(emptyLabel); panel.Children.Add(Label("No games added yet.",12,muted)); continue;}
+                SettingsComboBox listPicker=null;
+                var listGames=new Dictionary<string,List<EmulatorGame>>(StringComparer.OrdinalIgnoreCase);
+                var listNames=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+                List<EmulatorGame> visibleGames=games;
+                if(id=="retroarch") {
+                    var registered=new HashSet<string>(games.Select(game => game.Id),StringComparer.OrdinalIgnoreCase);
+                    var gamesById=games.GroupBy(game => game.Id).ToDictionary(group => group.Key,group => group.First(),StringComparer.OrdinalIgnoreCase);
+                    var listChoices=new List<KeyValuePair<string,string>>();
+                    foreach(var collection in EmulatorLibrary.DefaultListOrder(CombinedCollections.Options(library,settings),library,settings)) {
+                        if(collection==null || String.IsNullOrEmpty(collection.Id) || collection.Id=="all" || collection.Id=="unavailable-collections" ||
+                            collection.Id=="recent" || collection.Id=="recently-added" || collection.Id=="most-played") continue;
+                        var matching=(collection.Games ?? new List<string>()).Where(registered.Contains).Distinct(StringComparer.OrdinalIgnoreCase)
+                            .Select(gameId => gamesById[gameId]).OrderBy(game => game.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
+                        if(matching.Count==0) continue;
+                        string count=matching.Count==1 ? "1 game" : matching.Count+" games";
+                        listChoices.Add(new KeyValuePair<string,string>(collection.Id,collection.Name+" ("+count+")"));
+                        listGames[collection.Id]=matching;
+                        listNames[collection.Id]=collection.Name;
+                    }
+                    if(listChoices.Count==0) {
+                        listChoices.Add(new KeyValuePair<string,string>("","All RetroArch games ("+games.Count+" games)"));
+                        listGames[""]=games;
+                        listNames[""]="All RetroArch games";
+                    }
+                    var listLabel=Label("List",14,mint); listLabel.Name="EmulatorGameListLabel_"+id; listLabel.Margin=new Thickness(0,20,0,8); panel.Children.Add(listLabel);
+                    int selectedList=listChoices.FindIndex(choice => String.Equals(choice.Key,settings.CollectionId,StringComparison.OrdinalIgnoreCase));
+                    if(selectedList<0) selectedList=0;
+                    listPicker=new SettingsComboBox {Name="EmulatorGameList_"+id,ItemsSource=listChoices,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=selectedList,Padding=new Thickness(8)};
+                    panel.Children.Add(listPicker);
+                    manualListId=listPicker.SelectedValue as string;
+                    List<EmulatorGame> selected;
+                    if(listPicker.SelectedValue is string && listGames.TryGetValue((string)listPicker.SelectedValue,out selected)) visibleGames=selected;
+                }
+                var gameLabel=Label((id=="retroarch" ? "Games in list ("+visibleGames.Count+")" : "Added games ("+games.Count+")"),14,mint); gameLabel.Name="EmulatorGamesLabel_"+id; gameLabel.Margin=new Thickness(0,id=="retroarch" ? 12 : 20,0,8); panel.Children.Add(gameLabel);
+                var gamePicker=new SettingsComboBox {Name="EmulatorGames_"+id,ItemsSource=id=="retroarch" ? (System.Collections.IEnumerable)visibleGames.Select(game => new KeyValuePair<string,string>(game.Id,game.Name+" · "+GameSourceLabel(new Game {Id=game.Id,Source="emulator",EmulatorId=id,LaunchId=game.Path,ArtworkSystem=game.ArtworkSystem}))).ToList() : visibleGames,DisplayMemberPath=id=="retroarch" ? "Value" : "Name",SelectedValuePath=id=="retroarch" ? "Key" : "Id",SelectedIndex=0,Padding=new Thickness(8)}; panel.Children.Add(gamePicker);
                 var name=field("Game name","EmulatorGameName_"+id); name.MaxLength=120;
                 var target=field(id=="vita3k" ? "Installed title folder" : "Game path","EmulatorGamePath_"+id);
                 var arguments=field("Launch arguments (optional)", "EmulatorGameArguments_"+id);
@@ -245,21 +275,41 @@ namespace PadLauncher {
                     browseGameCore.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="RetroArch core|*.dll",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) gameCore.Text=file.FileName;};
                 }
                 var missing=Label("",12,muted); missing.TextWrapping=TextWrapping.Wrap; missing.Margin=new Thickness(0,8,0,0); panel.Children.Add(missing);
-                Action load=() => {var game=games.FirstOrDefault(g => g.Id==(string)gamePicker.SelectedValue); name.Text=game==null ? "" : game.Name; target.Text=game==null ? "" : game.Path; arguments.Text=game==null ? "" : game.Arguments ?? ""; if(gameCore!=null) gameCore.Text=game==null ? "" : game.CorePath ?? config.CorePath ?? ""; missing.Text=EmulatorLibrary.MissingReason(new Game {Id=game==null ? null : game.Id,Source="emulator",EmulatorId=id,LaunchId=target.Text},settings) ?? "";};
+                Action load=() => {var game=visibleGames.FirstOrDefault(g => g.Id==(string)gamePicker.SelectedValue); name.Text=game==null ? "" : game.Name; target.Text=game==null ? "" : game.Path; arguments.Text=game==null ? "" : game.Arguments ?? ""; if(gameCore!=null) gameCore.Text=game==null ? "" : game.CorePath ?? config.CorePath ?? ""; missing.Text=EmulatorLibrary.MissingReason(new Game {Id=game==null ? null : game.Id,Source="emulator",EmulatorId=id,LaunchId=target.Text},settings) ?? "";};
                 gamePicker.SelectionChanged+=(s,e) => load(); load();
+                if(listPicker!=null) listPicker.SelectionChanged+=(s,e) => {
+                    if(!(listPicker.SelectedValue is string)) return;
+                    List<EmulatorGame> selected;
+                    if(!listGames.TryGetValue((string)listPicker.SelectedValue,out selected)) selected=games;
+                    visibleGames=selected;
+                    manualListId=listPicker.SelectedValue as string;
+                    gameLabel.Text="Games in list ("+visibleGames.Count+")";
+                    gamePicker.ItemsSource=visibleGames.Select(game => new KeyValuePair<string,string>(game.Id,game.Name+" · "+GameSourceLabel(new Game {Id=game.Id,Source="emulator",EmulatorId=id,LaunchId=game.Path,ArtworkSystem=game.ArtworkSystem}))).ToList();
+                    gamePicker.SelectedIndex=visibleGames.Count==0 ? -1 : 0;
+                    load();
+                };
                 var editActions=new Grid {Margin=new Thickness(0,12,0,0)}; panel.Children.Add(editActions);
                 editActions.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto});
                 editActions.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto});
                 var saveGame=new Button {Name="EmulatorSaveGame_"+id,Content="Save changes",Padding=new Thickness(12,7,12,7)};
                 var remove=new Button {Name="EmulatorRemoveGame_"+id,Content="Remove game",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; editActions.Children.Add(saveGame); editActions.Children.Add(remove);
                 Grid.SetColumn(remove,1);
-                var removeAll=new Button {Name="EmulatorRemoveAllGames_"+id,Content="Remove all registered games…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(16,0,0,0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center,Foreground=new SolidColorBrush(Color.FromRgb(255,110,110))}; editActions.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(1,GridUnitType.Star)}); Grid.SetColumn(removeAll,2); editActions.Children.Add(removeAll);
+                var removeAll=new Button {Name="EmulatorRemoveAllGames_"+id,Content=id=="retroarch" ? "Remove all registered games in list…" : "Remove all registered games…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(16,0,0,0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center,Foreground=new SolidColorBrush(Color.FromRgb(255,110,110))}; editActions.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(1,GridUnitType.Star)}); Grid.SetColumn(removeAll,2); editActions.Children.Add(removeAll);
                 removeAll.Click+=(s,e) => {
-                    if(!ConfirmEmulatorRemoval(dialog,"Remove emulator games","Remove all "+preset.Name+" games?","All "+games.Count+" registered games for this emulator will be removed from every Pad Launcher list. Game files, emulator files and artwork stay on disk. You can import the games again later.","Remove all registered games")) return;
+                    var removeGames=id=="retroarch" ? visibleGames : games;
+                    string listName=null;
+                    if(id=="retroarch" && listPicker!=null && listPicker.SelectedValue is string) listNames.TryGetValue((string)listPicker.SelectedValue,out listName);
+                    string listPhrase=String.IsNullOrWhiteSpace(listName) ? "this list" : listName;
+                    string headingText=id=="retroarch" ? "Remove all "+preset.Name+" games in "+listPhrase+"?" : "Remove all "+preset.Name+" games?";
+                    string countText=removeGames.Count==1 ? "1 registered game" : removeGames.Count+" registered games";
+                    string message=id=="retroarch" ? "All "+countText+" in "+listPhrase+" will be removed from every Pad Launcher list. Game files, emulator files and artwork stay on disk. You can import the games again later." : "All "+countText+" for this emulator will be removed from every Pad Launcher list. Game files, emulator files and artwork stay on disk. You can import the games again later.";
+                    string action=id=="retroarch" ? "Remove all registered games in list" : "Remove all registered games";
+                    if(!ConfirmEmulatorRemoval(dialog,"Remove emulator games",headingText,message,action)) return;
                     try {
-                        foreach(var cachedGame in library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==id)) {ArtworkService.ListCachePath(cachedGame,"sgdb"); LibretroArtwork.CachePath(cachedGame);}
+                        var removedIds=new HashSet<string>(removeGames.Select(entry => entry.Id),StringComparer.OrdinalIgnoreCase);
+                        foreach(var cachedGame in library.Games.Where(g => g.Source=="emulator" && g.EmulatorId==id && removedIds.Contains(g.Id))) {ArtworkService.ListCachePath(cachedGame,"sgdb"); LibretroArtwork.CachePath(cachedGame);}
                         var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                        foreach(var entry in games) EmulatorLibrary.RemoveGame(next,id,entry.Id);
+                        foreach(var entry in removeGames) EmulatorLibrary.RemoveGame(next,id,entry.Id);
                         CommitEmulators(next,rebuild);
                     } catch(Exception error) {missing.Text=error.Message;}
                 };
@@ -339,11 +389,23 @@ namespace PadLauncher {
             };
             dialog.ShowDialog();
         }
+        sealed class EmulatorGameSelection {
+            public Dictionary<string,string> Games;
+            public string Destination;
+            public string NewListName;
+            public string CorePath;
+        }
         Dictionary<string,string> ChooseEmulatorGames(Window owner,EmulatorPreset preset,List<string> paths,int unreadableFolders,out string destination,out string newListName,List<string> readErrors=null,bool orphaned=false) {
+            var choice=ChooseEmulatorGames(owner,preset,paths,unreadableFolders,readErrors,orphaned,null,null,false,null);
+            destination=choice==null ? null : choice.Destination;
+            newListName=choice==null ? "" : choice.NewListName;
+            return choice==null ? null : choice.Games;
+        }
+        EmulatorGameSelection ChooseEmulatorGames(Window owner,EmulatorPreset preset,List<string> paths,int unreadableFolders,List<string> readErrors,bool orphaned,string defaultCore,string defaultDestination,bool chooseCore,string executable) {
             var dialog=new Window {Title="Add "+preset.Name+" games",Owner=owner,Width=760,Height=650,MinWidth=500,MinHeight=400,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,Topmost=true}; dialog.Resources.MergedDictionaries.Add(owner.Resources);
             var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
-            var heading=Label(paths.Count+(orphaned ? " orphaned games" : " new games found"),22,white); heading.Margin=new Thickness(0,0,0,12); DockPanel.SetDock(heading,Dock.Top); root.Children.Add(heading);
-            var note=Label("Review the detected files before adding."+(preset.Id=="eden" ? " Deselect updates and DLC; only add base games." : "")+(unreadableFolders>0 ? " "+unreadableFolders+" folders could not be read." : ""),12,muted); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,12); DockPanel.SetDock(note,Dock.Top); root.Children.Add(note);
+            var heading=Label(paths.Count+(orphaned ? " orphaned " : " new ")+(paths.Count==1 ? "game" : "games")+(orphaned ? "" : " found"),22,white); heading.Margin=new Thickness(0,0,0,12); DockPanel.SetDock(heading,Dock.Top); root.Children.Add(heading);
+            var note=Label((chooseCore ? "Choose a core and a destination list before adding." : "Review the detected files before adding.")+(preset.Id=="eden" ? " Deselect updates and DLC; only add base games." : "")+(unreadableFolders>0 ? " "+unreadableFolders+" folders could not be read." : ""),12,muted); note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,0,0,12); DockPanel.SetDock(note,Dock.Top); root.Children.Add(note);
             var topActions=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,12)}; DockPanel.SetDock(topActions,Dock.Top); root.Children.Add(topActions);
             if(readErrors!=null && readErrors.Count>0) {
                 var details=new Button {Content="View unreadable folders…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0)};
@@ -352,9 +414,27 @@ namespace PadLauncher {
             }
             var all=new Button {Content="Select all",Padding=new Thickness(12,7,12,7)}; topActions.Children.Add(all);
             var bottom=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,14,0,0)}; DockPanel.SetDock(bottom,Dock.Bottom); root.Children.Add(bottom);
-            var add=new Button {Content="Add selected",Padding=new Thickness(12,7,12,7)}; var cancel=new Button {Content="Cancel",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; bottom.Children.Add(add); bottom.Children.Add(cancel);
+            var add=new Button {Name="EmulatorAddSelected",Content="Add selected",Padding=new Thickness(12,7,12,7)}; var cancel=new Button {Content="Cancel",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; bottom.Children.Add(add); bottom.Children.Add(cancel);
             var listPanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             DockPanel.SetDock(listPanel,Dock.Bottom); root.Children.Add(listPanel);
+            SettingsComboBox corePicker=null;
+            if(chooseCore) {
+                listPanel.Children.Add(Label("Core",12,mint));
+                var coreOptions=new List<KeyValuePair<string,string>>();
+                var seenCores=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach(string core in EmulatorLibrary.Cores(executable)) {
+                    if(!seenCores.Add(core)) continue;
+                    coreOptions.Add(new KeyValuePair<string,string>(core,Path.GetFileNameWithoutExtension(core)));
+                }
+                if(!String.IsNullOrWhiteSpace(defaultCore) && !seenCores.Contains(defaultCore)) {
+                    try {EmulatorLibrary.Core(defaultCore); coreOptions.Insert(0,new KeyValuePair<string,string>(defaultCore,Path.GetFileNameWithoutExtension(defaultCore)+" (current)")); seenCores.Add(defaultCore);} catch(ArgumentException) {}
+                }
+                if(coreOptions.Count==0) coreOptions.Add(new KeyValuePair<string,string>("","No installed cores found"));
+                int selectedCore=coreOptions.FindIndex(option => String.Equals(option.Key,defaultCore,StringComparison.OrdinalIgnoreCase));
+                if(selectedCore<0) selectedCore=0;
+                corePicker=new SettingsComboBox {Name="EmulatorAddCore",ItemsSource=coreOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=selectedCore,Padding=new Thickness(8),Margin=new Thickness(0,8,0,12)};
+                listPanel.Children.Add(corePicker);
+            }
             listPanel.Children.Add(Label("Add to list",12,mint));
             var listOptions=new List<KeyValuePair<string,string>> {
                 new KeyValuePair<string,string>("","Only the "+preset.Name+" emulator list"),
@@ -362,9 +442,16 @@ namespace PadLauncher {
             };
             if(orphaned) listOptions.RemoveAt(0);
             foreach(var list in settings.CustomLists ?? new List<CustomList>()) listOptions.Add(new KeyValuePair<string,string>(list.Id,list.Name));
-            var listPicker=new SettingsComboBox {ItemsSource=listOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
+            if(chooseCore) foreach(var list in settings.RetroArchPlaylistLists ?? new List<CustomList>())
+                if(!listOptions.Any(option => String.Equals(option.Key,list.Id,StringComparison.OrdinalIgnoreCase))) listOptions.Add(new KeyValuePair<string,string>(list.Id,list.Name));
+            int selectedList=0;
+            if(!String.IsNullOrWhiteSpace(defaultDestination)) {
+                int match=listOptions.FindIndex(option => String.Equals(option.Key,defaultDestination,StringComparison.OrdinalIgnoreCase));
+                if(match>=0) selectedList=match;
+            }
+            var listPicker=new SettingsComboBox {Name="EmulatorAddList",ItemsSource=listOptions,DisplayMemberPath="Value",SelectedValuePath="Key",SelectedIndex=selectedList,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0)};
             listPanel.Children.Add(listPicker);
-            var listName=new TextBox {Text=preset.Name+" games",MaxLength=80,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0),Visibility=Visibility.Collapsed,ToolTip="New list name"};
+            var listName=new TextBox {Name="EmulatorAddListName",Text=preset.Name+" games",MaxLength=80,Padding=new Thickness(8),Margin=new Thickness(0,8,0,0),Visibility=(listPicker.SelectedValue as string)=="new" ? Visibility.Visible : Visibility.Collapsed,ToolTip="New list name"};
             if(orphaned) listName.Visibility=Visibility.Visible;
             listPanel.Children.Add(listName);
             listPicker.SelectionChanged+=(s,e) => listName.Visibility=(string)listPicker.SelectedValue=="new" ? Visibility.Visible : Visibility.Collapsed;
@@ -387,13 +474,21 @@ namespace PadLauncher {
                 entries.Children.Add(box);
             }
             BindSelectionToggle(all,() => boxes.Values);
-            Dictionary<string,string> result=null;
+            EmulatorGameSelection result=null;
             add.Click+=(s,e) => {
+                string corePath=corePicker==null ? null : corePicker.SelectedValue as string;
+                if(corePicker!=null && String.IsNullOrWhiteSpace(corePath)) {note.Text="Choose an installed core before adding."; corePicker.Focus(); return;}
                 if((string)listPicker.SelectedValue=="new" && String.IsNullOrWhiteSpace(listName.Text)) {listName.Focus(); return;}
-                result=boxes.Where(p => p.Value.IsChecked==true).ToDictionary(p => p.Key,p => names[p.Key].Text,StringComparer.OrdinalIgnoreCase); dialog.DialogResult=true;
+                result=new EmulatorGameSelection {
+                    Games=boxes.Where(p => p.Value.IsChecked==true).ToDictionary(p => p.Key,p => names[p.Key].Text,StringComparer.OrdinalIgnoreCase),
+                    Destination=listPicker.SelectedValue as string,
+                    NewListName=listName.Text.Trim(),
+                    CorePath=corePath
+                };
+                dialog.DialogResult=true;
             }; cancel.Click+=(s,e) => dialog.Close();
             root.Children.Add(new ScrollViewer {Content=entries,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
-            dialog.ShowDialog(); destination=listPicker.SelectedValue as string; newListName=listName.Text.Trim(); return result;
+            dialog.ShowDialog(); return result;
         }
     }
 }

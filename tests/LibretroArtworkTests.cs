@@ -48,6 +48,44 @@ class LibretroArtworkTests {
             Check(requests==before,"Cached covers do not trigger another download");
             var other=Psx("other","Other Game"); new LibretroArtwork().Download(other,enabled,CancellationToken.None);
             Check(requests==before+1,"New artwork batches reuse console catalogs saved on disk");
+            var catalogFetch=ArtworkService.Fetch; int emptyRequests=0;
+            ArtworkService.Fetch=(url,key,token) => {emptyRequests++; return Encoding.UTF8.GetBytes("<html></html>");};
+            var emptyGame=new Game {Id="empty-catalog",Name="Empty",Source="emulator",EmulatorId="pcsx2",LaunchId="empty.iso"};
+            Check(!new LibretroArtwork().Download(emptyGame,enabled,CancellationToken.None) && emptyRequests>0,"Empty Libretro catalogs are rejected instead of cached");
+            int firstEmpty=emptyRequests;
+            Check(!new LibretroArtwork().Download(emptyGame,enabled,CancellationToken.None) && emptyRequests>firstEmpty,"Rejected empty catalogs are retried rather than reused");
+            ArtworkService.Fetch=(url,key,token) => {
+                if(url.EndsWith("/git/trees/master")) return Encoding.UTF8.GetBytes("{\"tree\":[{\"path\":\"Named_Boxarts\",\"type\":\"tree\",\"sha\":\"catalog\"}]}");
+                if(url.Contains("/git/trees/catalog")) return Encoding.UTF8.GetBytes("{\"tree\":[{\"path\":\"Game (USA).png\",\"type\":\"blob\"}]}");
+                if(url.StartsWith("https://raw.githubusercontent.com/")) return square;
+                if(url.EndsWith("/")) return Encoding.UTF8.GetBytes("<html></html>");
+                throw new WebException("Not found");
+            };
+            var githubGame=new Game {Id="github-fallback",Name="Game",Source="emulator",EmulatorId="retroarch",ArtworkSystem="Nintendo - GameCube",LaunchId="Game.rvz"};
+            Check(new LibretroArtwork().Download(githubGame,enabled,CancellationToken.None) && githubGame.ArtworkProvider=="libretro","GitHub catalog and cover fallback works when the thumbnail host is down");
+            var many=new StringBuilder("{\"tree\":[");
+            for(int i=0;i<1000;i++) many.Append("{\"path\":\"Filler ").Append(i).Append(".png\",\"type\":\"blob\"},");
+            many.Append("{\"path\":\"Zelda Game (USA).png\",\"type\":\"blob\"}]}");
+            ArtworkService.Fetch=(url,key,token) => {
+                if(url.EndsWith("/git/trees/master")) return Encoding.UTF8.GetBytes("{\"tree\":[{\"path\":\"Named_Boxarts\",\"type\":\"tree\",\"sha\":\"catalog\"}]}");
+                if(url.Contains("/git/trees/catalog")) return Encoding.UTF8.GetBytes(many.ToString());
+                if(url.StartsWith("https://raw.githubusercontent.com/")) return square;
+                if(url.EndsWith("/")) return Encoding.UTF8.GetBytes("<html></html>");
+                throw new WebException("Not found");
+            };
+            var zelda=new Game {Id="github-full",Name="Zelda Game",Source="emulator",EmulatorId="retroarch",ArtworkSystem="Nintendo - Nintendo 64",LaunchId="Zelda Game.z64"};
+            Check(new LibretroArtwork().Download(zelda,enabled,CancellationToken.None),"GitHub catalogs include entries beyond the first 1000 files");
+            ArtworkService.Fetch=(url,key,token) => {
+                if(url.EndsWith("/git/trees/master")) return Encoding.UTF8.GetBytes("{\"tree\":[{\"path\":\"Named_Boxarts\",\"type\":\"tree\",\"sha\":\"catalog\"}]}");
+                if(url.Contains("/git/trees/catalog")) return Encoding.UTF8.GetBytes("{\"tree\":[{\"path\":\"Linked Game (USA) (Disc 1).png\",\"type\":\"blob\"}]}");
+                if(url.EndsWith("Linked%20Game%20(USA)%20(Disc%201).png")) return Encoding.UTF8.GetBytes("Linked Game (USA).png");
+                if(url.EndsWith("Linked%20Game%20(USA).png")) return square;
+                if(url.StartsWith("https://thumbnails.libretro.com/")) throw new WebException("Not found");
+                throw new WebException("Not found");
+            };
+            var linked=new Game {Id="github-link",Name="Linked Game (Disc 1)",Source="emulator",EmulatorId="retroarch",ArtworkSystem="Nintendo - Game Boy Advance",LaunchId="Linked Game (Disc 1).rvz"};
+            Check(new LibretroArtwork().Download(linked,enabled,CancellationToken.None),"GitHub symlink covers resolve to their real image");
+            ArtworkService.Fetch=catalogFetch;
             var chosen=Psx("chosen","Crash Bandicoot"); chosen.Art=crash.Art; chosen.ArtworkProvider="chosen";
             before=requests; ArtworkService.Fill(new[]{chosen},enabled,CancellationToken.None,(game,path) => {},message => {});
             Check(requests==before,"Explicit local artwork is preserved even when square");

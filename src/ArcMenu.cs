@@ -34,6 +34,23 @@ namespace PadLauncher {
         readonly Brush arcSelectedText=new SolidColorBrush(Color.FromRgb(13,25,34));
         readonly Brush arcTextBackdrop=new SolidColorBrush(Color.FromArgb(218,21,36,46));
         const double ArcCenterY=270,ArcStep=63;
+        const int ArcBlurDelay=50;
+        bool ArcBlurListGateApplies() {
+            if(arcSlots==null) return false;
+            foreach(var slot in arcSlots) {
+                if(slot==null) continue;
+                if(slot.Kind=="list" && slot.Target==settings.CollectionId) return true;
+                if(slot.Kind=="tag" && !String.IsNullOrWhiteSpace(slot.Target) && "arcPopup-tag:"+slot.Target==settings.CollectionId) return true;
+            }
+            return false;
+        }
+        bool ArcBlurHighlightedListIsCurrent() {
+            if(arcSlots==null || arcSelectedIndex<0 || arcSelectedIndex>=arcSlots.Count) return false;
+            var slot=arcSlots[arcSelectedIndex];
+            string highlighted=slot==null ? null : slot.Kind=="list" ? slot.Target :
+                slot.Kind=="tag" && !String.IsNullOrWhiteSpace(slot.Target) ? "arcPopup-tag:"+slot.Target : null;
+            return highlighted!=null && highlighted==settings.CollectionId;
+        }
 
         [System.Diagnostics.Conditional("FOCUS_DIAGNOSTICS")]
         void TraceArc(string reason) {
@@ -65,7 +82,7 @@ namespace PadLauncher {
                 bool dpadHeld=direction!=0;
                 if(!dpadHeld && arcInput==1 && arcBlurTimer!=null && arcBlurTimer.IsEnabled) {
                     arcBlurTimer.Stop();
-                    arcBlurTimer.Interval=TimeSpan.FromMilliseconds(175);
+                    arcBlurTimer.Interval=TimeSpan.FromMilliseconds(ArcBlurDelay);
                     arcBlurTimer.Start();
                 }
                 if(dpadHeld || arcPendingReleaseInput!=1) arcDpadReleasedAt=-1;
@@ -314,22 +331,21 @@ namespace PadLauncher {
         void LayoutArc(int direction) {
             if(direction!=0 && IsVisible && (UseDesktopArcSettings ? settings.DesktopArcBlurEnabled : settings.OverlayArcBlurEnabled)) {
                 if(arcBlurTimer==null) {
-                    arcBlurTimer=new System.Windows.Threading.DispatcherTimer {Interval=TimeSpan.FromMilliseconds(150)};
+                    arcBlurTimer=new System.Windows.Threading.DispatcherTimer {Interval=TimeSpan.FromMilliseconds(ArcBlurDelay)};
                     arcBlurTimer.Tick+=(sender,args) => {
-                        if(arcInput==1 && arcDirection!=0) return;
-                        if(arcPopup!=null && !arcOnly && !settings.QuickSelectActivateOnRelease) {
-                            var slot=arcSlots[arcSelectedIndex];
-                            string highlightedList=slot==null ? null : slot.Kind=="list" ? slot.Target :
-                                slot.Kind=="tag" && !String.IsNullOrWhiteSpace(slot.Target) ? "arcPopup-tag:"+slot.Target : null;
-                            if(highlightedList==null || highlightedList!=settings.CollectionId) return;
-                        }
+                        if(arcDirection!=0) return;
+                        // Keep the blur while cycling until the highlighted list is the
+                        // one already selected. Both the overlay and desktop Arc use
+                        // this same rule; if the current list is not in the Arc at all,
+                        // clear after navigation stops instead of leaving it blurred.
+                        if(ArcBlurListGateApplies() && !ArcBlurHighlightedListIsCurrent()) return;
                         arcBlurTimer.Stop();
                         if(scene.Effect==arcOverlayBlur) scene.Effect=null;
                     };
                 }
                 scene.Effect=arcOverlayBlur;
                 arcBlurTimer.Stop();
-                arcBlurTimer.Interval=TimeSpan.FromMilliseconds(150);
+                arcBlurTimer.Interval=TimeSpan.FromMilliseconds(ArcBlurDelay);
                 arcBlurTimer.Start();
             }
             int count=arcCards.Count;
@@ -795,6 +811,7 @@ namespace PadLauncher {
                     filters.Add(list); index=filters.Count-1;
                 }
                 if(index!=collectionIndex) ChangeCollection(index-collectionIndex,animate:!arcOnly);
+                else if(IsAutoOrderedList(slot.Target)) FilterGames(true);
                 RevealArcOnlyList();
             }
             if(slot.Kind=="tag" && settings.ListTags!=null) {

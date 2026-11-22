@@ -98,6 +98,17 @@ class EmulatorImportTests {
             var batch=EmulatorImport.Read("retroarch",retro,new[]{snes},null,token);
             Check(batch.Games.Count==1 && batch.Games[0].Path==rom && batch.Games[0].Name=="Game One" && batch.Games[0].CorePath==core && batch.Warnings.Count==1,"JSON playlist preserves labels/core defaults and skips missing files");
             Check(batch.Games[0].ArtworkSystem=="Nintendo - Super Nintendo Entertainment System" && batch.Games[0].ArtworkTitle=="Game One","RetroArch playlist database and original label are retained for box-art matching");
+            string gcCore=Write(retroRoot,"cores\\dolphin_libretro.dll");
+            Write(retroRoot,"cores\\dolphin_libretro.info","corename = \"Dolphin\"\ndatabase = \"Nintendo - GameCube\"\nsupported_extensions = \"iso|gcm|rvz\"");
+            string rvzOne=Write(retroRoot,"roms\\GameCube\\Disc 1.rvz"),rvzTwo=Write(retroRoot,"roms\\GameCube\\Disc 2.rvz");
+            string rvzPlaylist=Write(retroRoot,"playlists\\GameCube.lpl",Storage.Json().Serialize(new {default_core_path=gcCore,items=new[]{new {path=rvzOne,label="Disc 1",core_path="DETECT",db_name="Nintendo - GameCube.lpl"},new {path=rvzTwo,label="Disc 2",core_path="DETECT",db_name="Nintendo - GameCube.lpl"}}}));
+            var gcSource=new EmulatorImportSource {Id="playlist:GameCube",Name="Nintendo - GameCube",Kind="playlist",Path=rvzPlaylist};
+            var gcBatch=EmulatorImport.Read("retroarch",retro,new[]{gcSource},null,token);
+            Check(gcBatch.Games.Count==2 && gcBatch.Warnings.Count==0 && gcBatch.Games.All(item => item.Path.EndsWith(".rvz",StringComparison.OrdinalIgnoreCase) && item.CorePath==gcCore),"RetroArch playlists import every .rvz disc when the selected core supports the format");
+            var rvzSettings=new Settings(); EmulatorLibrary.SavePath(rvzSettings,"retroarch",retro); EmulatorLibrary.SaveCore(rvzSettings,gcCore);
+            Check(EmulatorLibrary.AddGames(rvzSettings,"retroarch",new[]{rvzOne,rvzTwo})==2,"RetroArch accepts .rvz files from the core's supported extensions in manual file selection");
+            string rvzArchive=Write(retroRoot,"roms\\GameCube archive.zip");
+            Check(EmulatorLibrary.GamePath("retroarch",rvzArchive+"#folder/Disc 1.rvz",gcCore,retro).EndsWith("#folder/Disc 1.rvz",StringComparison.OrdinalIgnoreCase),"RetroArch archive members use the selected core's extension list");
             var oldFormat=EmulatorImport.Read("retroarch",retro,new[]{favorites},null,token);
             Check(oldFormat.Games.Single().CorePath==otherCore,"Legacy six-line playlist preserves assigned core");
             var settings=new Settings {EnabledCollectionIds=new List<string>{"all"}}; var library=new Library {Games=new List<Game>{new Game {Id="steam-one",Name="Steam game"}}};

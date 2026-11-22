@@ -58,7 +58,7 @@ namespace PadLauncher {
                 previewCancellation=CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token); var token=previewCancellation.Token;
                 status.Text="Loading cover preview…";
                 try {
-                    byte[] bytes=await Task.Run(() => ArtworkService.Fetch(LibretroArtwork.ImageUrl(system,file),null,token));
+                    byte[] bytes=await Task.Run(() => LibretroArtwork.FetchImage(system,file,token));
                     token.ThrowIfCancellationRequested();
                     using(var stream=new MemoryStream(bytes)) {
                         var image=new BitmapImage(); image.BeginInit(); image.CacheOption=BitmapCacheOption.OnLoad; image.DecodePixelWidth=320; image.StreamSource=stream; image.EndInit(); image.Freeze(); preview.Source=image;
