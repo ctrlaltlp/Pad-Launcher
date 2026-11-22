@@ -126,11 +126,6 @@ class ListTransitionTests {
                     favouritesSection.IsExpanded=true; help.UpdateLayout();
                     var favouritePicker=(SettingsComboBox)Find(help,"FavouriteOrderPicker");
                     Check(favouritePicker!=null && favouritePicker.Items.Count==2,"Favourites order lists every favourite");
-                    var jumpStart=(CheckBox)Find(help,"JumpListStartAtBeginning");
-                    Check(jumpStart!=null && jumpStart.IsChecked==false,"Lists shows a Jump to list start-at-beginning setting");
-                    jumpStart.IsChecked=true;
-                    jumpStart.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-                    Check(savedSettings.JumpListStartAtBeginning,"Jump to list start-at-beginning setting saves immediately");
                     favouritePicker.SelectedValue="two";
                     ((Button)Find(help,"FavouriteMoveTop")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     var favouriteOrder=Storage.Read<Settings>("settings.json").FavouriteGameIds;

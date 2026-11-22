@@ -88,7 +88,7 @@ Preconfigured lists:
 - **Recently played:** Games ordered by their latest launch in Pad Launcher or Steam/other launcher play history, newest first.
 - **Most played:** Games ranked by how often you launch them through Pad Launcher. Counting starts with version 0.5.5.
 
-**Favourites**, **Recently played**, and **Most played** can be selected under **Lists → Jump to list** even when disabled in **Overlay lists**. Those choices are marked **(not in overlay)**. Use the assigned Jump to list button to open it. Regular list cycling skips it after you switch away. Enable **Start from the beginning of the list when Jump to list is pressed** to reset the jump destination to its first game; other list changes keep the highlighted game.
+**Favourites**, **Recently played**, and **Most played** can be selected under **Lists → Jump to list** even when disabled in **Overlay lists**. Those choices are marked **(not in overlay)**. Use the assigned Jump to list button to open it. Regular list cycling skips it after you switch away.
 
 Open **Settings → Lists → List editor** to manage your lists.
 

@@ -505,7 +505,6 @@ namespace PadLauncher {
         public List<string> OverlayListOrder {get;set;}
         public string JumpListButton {get;set;}
         public string JumpListId {get;set;}
-        public bool JumpListStartAtBeginning {get;set;}
         public bool RemoveMissingEmulatorGames {get;set;}
         public bool BattleNetEnabled {get;set;}
         public bool XboxEnabled {get;set;}

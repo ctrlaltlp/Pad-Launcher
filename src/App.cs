@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.1")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.1")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.1")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.2")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.2")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.2")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -888,9 +888,7 @@ namespace PadLauncher {
                 if(restoringJump || jumpDestination.SelectedValue==null) return;
                 settings.JumpListId=jumpDestination.SelectedValue as string; QueueSave();
             };
-            var jumpStartAtBeginning=new CheckBox {Name="JumpListStartAtBeginning",Content="Start from the beginning of the list when Jump to list is pressed",IsChecked=settings.JumpListStartAtBeginning,FontSize=14,Foreground=white,Margin=new Thickness(0,8,0,0)};
-            jumpStartAtBeginning.Click+=(s,e) => {settings.JumpListStartAtBeginning=jumpStartAtBeginning.IsChecked==true; QueueSave();};
-            var jumpNote=Label("Other list changes keep the highlighted game. Assign Jump to configured list in Show/Change controls, then choose its destination here.",12,muted);
+            var jumpNote=Label("Assign Jump to configured list in Show/Change controls, then choose its destination here.",12,muted);
             jumpNote.TextWrapping=TextWrapping.Wrap; jumpNote.Margin=new Thickness(0,8,0,0);
             var availableSection=new Expander {Name="AvailableListsSection",Header="Overlay lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0)};
             var availablePanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
@@ -1254,7 +1252,7 @@ namespace PadLauncher {
             }
             refreshEditor(); customListSection.Content=editorPanel; listsLayout.Children.Add(customListSection);
             listsLayout.Children.Add(CreateHiddenGamesSettings(rebuild));
-            listsLayout.Children.Add(jumpCaption); listsLayout.Children.Add(jumpDestination); listsLayout.Children.Add(jumpStartAtBeginning); listsLayout.Children.Add(jumpNote);
+            listsLayout.Children.Add(jumpCaption); listsLayout.Children.Add(jumpDestination); listsLayout.Children.Add(jumpNote);
             listsLayout.Children.Add(defaultCaption); listsLayout.Children.Add(defaultPicker);
             layout.Children.Add(skipEmpty);
             var removeMissing=new CheckBox {Content="Remove missing emulator and custom games on refresh",IsChecked=settings.RemoveMissingEmulatorGames,FontSize=14,Foreground=white,Margin=new Thickness(0,0,0,8)};
@@ -2778,10 +2776,7 @@ namespace PadLauncher {
             if(launching) return;
             int target=IncludeJumpList();
             if(target<0) ShowNotice("Choose an available jump list in Settings → Lists.");
-            else if(target!=collectionIndex) {
-                ChangeCollection(target-collectionIndex);
-                if(settings.JumpListStartAtBeginning && visible.Count>0) {selected=0; Render(true);}
-            }
+            else if(target!=collectionIndex) ChangeCollection(target-collectionIndex);
         }
         internal bool TryControllerNavigationKey(System.Windows.Input.Key key,PadState pad) {
             bool fast,grid=ActiveLayout=="grid";
