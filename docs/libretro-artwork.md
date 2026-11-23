@@ -57,7 +57,9 @@ Missing Libretro artwork uses console-specific placeholder proportions, with reg
 
 Libretro reads public `Named_Boxarts` catalogues over HTTPS. Catalogues are cached for seven days under `PadLauncher.Data/artwork/libretro/catalogs`; images and six-hour missing-match markers live under `artwork/libretro`. Filename indexes are scoped to an artwork batch. Downloaded disk caches are separate from the [bounded decoded-image RAM cache](artwork-performance.md).
 
-**System → Clear unused cached artwork…** asks for confirmation and deletes only downloaded images with a known owner that is no longer registered. Both provider caches are kept for registered games, including when Only Libretro or Only SteamGridDB is selected. Manual images, shared catalogues and older files whose ownership cannot be established are preserved. Cache ownership is recorded in `artwork/cache-owners.jsonl`. Removing emulator game registrations does not delete artwork or game files.
+**Artwork → Clean up cached artwork.** offers two choices. **Remove unused cached artwork** asks for confirmation and deletes only downloaded images with a known owner that is no longer registered. Both provider caches are kept for registered games, including when Only Libretro or Only SteamGridDB is selected. Manual images, shared catalogues and older files whose ownership cannot be established are preserved. Cache ownership is recorded in `artwork/cache-owners.jsonl`. Removing emulator game registrations does not delete artwork or game files.
+
+**Remove missing games' artwork** asks for Yes/No confirmation before deleting downloaded artwork for missing emulator and custom games, plus cached artwork left by games that are no longer registered. It warns that keeping the data can help when those games are reimported. Artwork for registered games, local images and manually chosen images stays on disk.
 
 The measurement tools are `tools/sample-libretro-covers.py` and `tools/build-libretro-placeholder-profiles.py`. Sample downloads remain under ignored `bin/libretro-cover-samples/`; they are not bundled with the app.
 

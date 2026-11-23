@@ -346,7 +346,15 @@ public static class OverlayTests {
             var slimBar=(System.Windows.Controls.Primitives.ScrollBar)settingsPage.Template.FindName("PART_VerticalScrollBar",settingsPage);
             slimBar.ApplyTemplate();
             var mintThumb=(System.Windows.Controls.Primitives.Thumb)slimBar.Template.FindName("MintThumb",slimBar);
-            Check(slimBar.ActualWidth<=6.1 && ((SolidColorBrush)mintThumb.Background).Color==Color.FromRgb(163,240,205),"Scrollbar is six pixels wide and matches the mint selection colour");
+            Check(slimBar.ActualWidth<=6.1 && ((SolidColorBrush)mintThumb.Background).Color==Color.FromRgb(163,240,205),"Scrollbar keeps a six-pixel width and the mint selection colour");
+            Check(ScrollBarThumbSize.GetMinimum(slimBar)>=64,"Scrollbar uses a 64-pixel minimum thumb size");
+            var longBar=new System.Windows.Controls.Primitives.ScrollBar {Style=(Style)helpDialog.Resources[typeof(System.Windows.Controls.Primitives.ScrollBar)],Orientation=Orientation.Vertical,Minimum=0,Maximum=100000,ViewportSize=10,Height=300};
+            var longBarHost=new Window {Width=40,Height=330,Content=longBar,ShowInTaskbar=false,WindowStyle=WindowStyle.None,ShowActivated=false,Left=-2000,Top=-2000};
+            longBarHost.Show();
+            for(int i=0;i<3;i++) {longBarHost.UpdateLayout(); longBar.ApplyTemplate();}
+            var longThumb=(System.Windows.Controls.Primitives.Thumb)longBar.Template.FindName("MintThumb",longBar);
+            Check(longThumb!=null && longThumb.ActualHeight>=63.5,"Scrollbar thumb stays usable in very long lists");
+            longBarHost.Close();
             Check(FindElement((FrameworkElement)helpPage.Content,"ButtonStyleChoices")==null,"Button style lives inside the control editor");
             var settingLayoutPicker=(ComboBox)FindElement((FrameworkElement)settingsPage.Content,"CarouselLayoutSetting");
             settingLayoutPicker.SelectedValue="rectangular";

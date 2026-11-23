@@ -267,7 +267,7 @@ namespace PadLauncher {
                 if(!target.StartsWith(root,StringComparison.OrdinalIgnoreCase) || !File.Exists(target)) continue;
                 string launch=ns+":"+itemId+":"+app,id="epic:"+launch;
                 if(games.Any(g => g.Id==id)) continue;
-                var game=new Game {Id=id,LaunchId=launch,Source="epic",Name=Regex.Replace(name,@"\s+"," ").Trim()};
+                var game=new Game {Id=id,LaunchId=launch,Source="epic",Name=Regex.Replace(name,@"\s+"," ").Trim(),WorkingDirectory=Path.GetFullPath(install)};
                 object metadata;
                 if(catalog.TryGetValue(ns+":"+itemId,out metadata)) game.ArtworkUrl=SelectArtwork(Entries(Vdf.Get(metadata,"keyImages")));
                 games.Add(game);

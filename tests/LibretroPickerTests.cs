@@ -93,6 +93,10 @@ class LibretroPickerTests {
             Find<ComboBox>(chooser,"LibretroConsolePicker").SelectedItem="Sony - PlayStation";
             Wait(() => Find<Button>(chooser,"LibretroUseImage").IsEnabled);
             Check(Find<Image>(chooser,"LibretroCoverPreview").Source!=null,"Selected cover is previewed before applying");
+            var coverPicker=Find<ComboBox>(chooser,"LibretroCoverPicker");
+            coverPicker.ApplyTemplate();
+            var selectionPresenter=(ContentPresenter)coverPicker.Template.FindName("SelectionPresenter",coverPicker);
+            Check(selectionPresenter!=null && selectionPresenter.Content==coverPicker.SelectedItem,"The closed dropdown displays the actually selected cover");
             Find<Button>(chooser,"LibretroUseImage").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Wait(() => !chooser.IsVisible);
             var saved=Storage.Read<Settings>("settings.json");

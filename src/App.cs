@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.7")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.7")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.7")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.8")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.8")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.8")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -25,8 +25,71 @@ namespace PadLauncher {
     static class ThemedMessage {
         public static void Show(string message,string title) {Show(null,message,title);}
         public static void Show(Window owner,string message,string title) {
+            StackPanel panel;
+            var dialog=CreateDialog(owner,message,title,out panel);
+            var close=new Button {Content="Close",IsDefault=true,IsCancel=true,Padding=new Thickness(16,8,16,8),HorizontalAlignment=HorizontalAlignment.Right};
+            close.Click+=(s,e) => dialog.Close(); panel.Children.Add(close);
+            dialog.Content=panel;
+            dialog.ShowDialog();
+        }
+        public static bool? Ask(Window owner,string message,string title) {
+            StackPanel panel;
+            var dialog=CreateDialog(owner,message,title,out panel);
+            bool? answer=null;
+            var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,0,0,0)};
+            var yes=new Button {Name="ThemedMessageYes",Content="Yes",Padding=new Thickness(16,8,16,8),Margin=new Thickness(0,0,8,0)};
+            var no=new Button {Name="ThemedMessageNo",Content="No",Padding=new Thickness(16,8,16,8),Margin=new Thickness(0,0,8,0)};
+            var cancel=new Button {Name="ThemedMessageCancel",Content="Cancel",IsCancel=true,IsDefault=true,Padding=new Thickness(16,8,16,8)};
+            yes.Click+=(s,e) => {answer=true; dialog.Close();};
+            no.Click+=(s,e) => {answer=false; dialog.Close();};
+            cancel.Click+=(s,e) => {answer=null; dialog.Close();};
+            actions.Children.Add(yes); actions.Children.Add(no); actions.Children.Add(cancel);
+            panel.Children.Add(actions);
+            dialog.Content=panel;
+            dialog.ShowDialog();
+            return answer;
+        }
+        public static bool Confirm(Window owner,string message,string title) {
+            StackPanel panel;
+            var dialog=CreateDialog(owner,message,title,out panel);
+            bool answer=false;
+            var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,0,0,0)};
+            var yes=new Button {Name="ThemedMessageYes",Content="Yes",Padding=new Thickness(16,8,16,8),Margin=new Thickness(0,0,8,0)};
+            var no=new Button {Name="ThemedMessageNo",Content="No",IsCancel=true,IsDefault=true,Padding=new Thickness(16,8,16,8)};
+            yes.Click+=(s,e) => {answer=true; dialog.Close();};
+            no.Click+=(s,e) => {answer=false; dialog.Close();};
+            actions.Children.Add(yes); actions.Children.Add(no);
+            panel.Children.Add(actions);
+            dialog.Content=panel;
+            dialog.ShowDialog();
+            return answer;
+        }
+        public static int Choose(Window owner,string message,string title,string first,string firstNote,string second,string secondNote) {
+            StackPanel panel;
+            var dialog=CreateDialog(owner,message,title,out panel);
+            int answer=0;
+            var actions=new StackPanel {Orientation=Orientation.Vertical,Margin=new Thickness(0,0,0,0)};
+            var firstGroup=new StackPanel {Margin=new Thickness(0,0,0,10)};
+            var one=new Button {Name="ThemedMessageChoiceOne",Content=first,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Left,Padding=new Thickness(16,10,16,10)};
+            var oneNote=new TextBlock {Name="ThemedMessageChoiceOneNote",Text=firstNote,FontSize=12,Foreground=new SolidColorBrush(Color.FromRgb(155,179,191)),TextWrapping=TextWrapping.Wrap,Margin=new Thickness(16,5,16,0)};
+            firstGroup.Children.Add(one); firstGroup.Children.Add(oneNote);
+            var secondGroup=new StackPanel {Margin=new Thickness(0,0,0,10)};
+            var two=new Button {Name="ThemedMessageChoiceTwo",Content=second,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Left,Padding=new Thickness(16,10,16,10)};
+            var twoNote=new TextBlock {Name="ThemedMessageChoiceTwoNote",Text=secondNote,FontSize=12,Foreground=new SolidColorBrush(Color.FromRgb(155,179,191)),TextWrapping=TextWrapping.Wrap,Margin=new Thickness(16,5,16,0)};
+            secondGroup.Children.Add(two); secondGroup.Children.Add(twoNote);
+            var cancel=new Button {Name="ThemedMessageCancel",Content="Cancel",IsCancel=true,IsDefault=true,HorizontalAlignment=HorizontalAlignment.Right,Padding=new Thickness(16,8,16,8)};
+            one.Click+=(s,e) => {answer=1; dialog.Close();};
+            two.Click+=(s,e) => {answer=2; dialog.Close();};
+            cancel.Click+=(s,e) => {answer=0; dialog.Close();};
+            actions.Children.Add(firstGroup); actions.Children.Add(secondGroup); actions.Children.Add(cancel);
+            panel.Children.Add(actions);
+            dialog.Content=panel;
+            dialog.ShowDialog();
+            return answer;
+        }
+        static Window CreateDialog(Window owner,string message,string title,out StackPanel panel) {
             var dialog=new Window {
-                Title=title,Width=440,SizeToContent=SizeToContent.Height,MaxHeight=600,
+                Title=title,Width=460,SizeToContent=SizeToContent.Height,MaxHeight=600,
                 ResizeMode=ResizeMode.NoResize,ShowInTaskbar=false,
                 Background=new SolidColorBrush(Color.FromRgb(13,25,34)),
                 Foreground=new SolidColorBrush(Color.FromRgb(236,243,242)),
@@ -35,14 +98,11 @@ namespace PadLauncher {
             if(owner!=null && owner.IsVisible) dialog.Owner=owner;
             using(var stream=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("SettingsTheme.xaml"))
                 dialog.Resources.MergedDictionaries.Add((ResourceDictionary)System.Windows.Markup.XamlReader.Load(stream));
-            var panel=new StackPanel {Margin=new Thickness(24)};
+            panel=new StackPanel {Margin=new Thickness(24)};
             panel.Children.Add(new TextBlock {Text=title,FontSize=20,Foreground=dialog.Foreground,TextWrapping=TextWrapping.Wrap});
-            var detail=new TextBlock {Text=message,FontSize=13,Foreground=new SolidColorBrush(Color.FromRgb(155,179,191)),TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,12,0,20)};
+            var detail=new TextBlock {Name="ThemedMessageDetail",Text=message,FontSize=13,Foreground=new SolidColorBrush(Color.FromRgb(155,179,191)),TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,12,0,20)};
             panel.Children.Add(new ScrollViewer {Content=detail,MaxHeight=400,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
-            var close=new Button {Content="Close",IsDefault=true,IsCancel=true,Padding=new Thickness(16,8,16,8),HorizontalAlignment=HorizontalAlignment.Right};
-            close.Click+=(s,e) => dialog.Close(); panel.Children.Add(close);
-            dialog.Content=panel;
-            dialog.ShowDialog();
+            return dialog;
         }
     }
     public sealed class SettingsComboBox : ComboBox {
@@ -288,7 +348,11 @@ namespace PadLauncher {
             demo = demoMode; preview = renderPreview;
             freshProfile=!File.Exists(System.IO.Path.Combine(Storage.Root,"settings.json")) && !File.Exists(System.IO.Path.Combine(Storage.Root,"library.json"));
             settings = Storage.Read<Settings>("settings.json") ?? new Settings();
-            if(!demo && !renderPreview && PlayTimeTracker.Consume(settings,Storage.Root)) Storage.Write("settings.json",settings);
+            if(!demo && !renderPreview) {
+                bool playTime=PlayTimeTracker.Consume(settings,Storage.Root);
+                if(PlayTimeTracker.ConsumeSteam(settings)) playTime=true;
+                if(playTime) Storage.Write("settings.json",settings);
+            }
             if(settings.DesktopArcSide==null) settings.DesktopArcSide=settings.QuickSelectSide ?? "right";
             if(settings.DesktopArcMode==null) {
                 settings.DesktopArcMode=settings.QuickSelectMode ?? "custom";
@@ -904,6 +968,37 @@ namespace PadLauncher {
             jumpStartAtBeginning.Click+=(s,e) => {settings.JumpListStartAtBeginning=jumpStartAtBeginning.IsChecked==true; QueueSave();};
             var jumpNote=Label("Assign Jump to configured list in Show/Change controls, then choose its destination here.",12,muted);
             jumpNote.TextWrapping=TextWrapping.Wrap; jumpNote.Margin=new Thickness(0,8,0,0);
+            var removeMissing=new CheckBox {Name="RemoveMissingEmulatorGamesOnRefresh",Content="Remove missing emulator and custom games on refresh",IsChecked=settings.RemoveMissingEmulatorGames,FontSize=14,Foreground=white,Margin=new Thickness(0,14,0,8)};
+            removeMissing.Click+=(s,e) => {
+                bool previous=settings.RemoveMissingEmulatorGames;
+                try {settings.RemoveMissingEmulatorGames=removeMissing.IsChecked==true; Storage.Write("settings.json",settings);}
+                catch(Exception error) {settings.RemoveMissingEmulatorGames=previous; removeMissing.IsChecked=previous; ThemedMessage.Show(dialog,error.Message,"Overlay");}
+            };
+            var removeMissingStatus=Label("",12,muted); removeMissingStatus.Name="RemoveMissingGamesStatus"; removeMissingStatus.TextWrapping=TextWrapping.Wrap; removeMissingStatus.Margin=new Thickness(0,6,0,0); removeMissingStatus.Visibility=Visibility.Collapsed;
+            var removeMissingNow=new Button {Name="RemoveMissingGamesNow",Content="Remove missing games…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,8,0,0)};
+            removeMissingNow.Click+=(s,e) => {
+                if(scanning) {removeMissingStatus.Text="A library refresh is running. Try again when it finishes."; removeMissingStatus.Visibility=Visibility.Visible; return;}
+                try {
+                    var candidates=FindMissingGameEntries(settings);
+                    if(candidates.Count==0) {removeMissingStatus.Text="No missing emulator or custom games were found."; removeMissingStatus.Visibility=Visibility.Visible; return;}
+                    bool? removeArtwork=ThemedMessage.Ask(dialog,"Do you also want to remove the artwork data for "+candidates.Count+" game"+(candidates.Count==1 ? "" : "s")+"?","Remove missing games");
+                    if(removeArtwork==null) {removeMissingStatus.Text="Missing-game removal cancelled."; removeMissingStatus.Visibility=Visibility.Visible; return;}
+                    var cleaned=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    var next=Storage.Json().Deserialize<Library>(Storage.Json().Serialize(library));
+                    var removed=RemoveMissingGameEntries(cleaned,next,candidates,removeArtwork.Value);
+                    if(removed.Count==0) {removeMissingStatus.Text="No missing emulator or custom games were found."; removeMissingStatus.Visibility=Visibility.Visible; return;}
+                    Storage.Write("settings.json",cleaned);
+                    Storage.Write("library.json",next);
+                    settings=cleaned; library=next;
+                    ApplyLibrary();
+                    RefreshMissingArtworkList();
+                    string removedList=String.Join(", ",removed.Take(6))+(removed.Count>6 ? ", …" : "");
+                    removeMissingStatus.Text=(removed.Count==1 ? "Removed missing game: " : "Removed "+removed.Count+" missing games: ")+removedList;
+                    removeMissingStatus.Visibility=Visibility.Visible;
+                } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Lists");}
+            };
+            var missingNote=Label("Removes emulator and custom game entries when their game file or folder has been deleted. Disconnected drives and inaccessible folders are skipped.",12,muted);
+            missingNote.TextWrapping=TextWrapping.Wrap;
             var availableSection=new Expander {Name="AvailableListsSection",Header="Overlay lists",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0)};
             var availablePanel=new StackPanel {Margin=new Thickness(0,12,0,0)};
             var allCollections=new CheckBox {Content="Include all lists (including new ones)",Foreground=white,IsChecked=settings.EnabledCollectionIds==null,Margin=new Thickness(0,0,0,10)};
@@ -1267,17 +1362,9 @@ namespace PadLauncher {
             refreshEditor(); customListSection.Content=editorPanel; listsLayout.Children.Add(customListSection);
             listsLayout.Children.Add(CreateHiddenGamesSettings(rebuild));
             listsLayout.Children.Add(jumpCaption); listsLayout.Children.Add(jumpDestination); listsLayout.Children.Add(jumpStartAtBeginning); listsLayout.Children.Add(jumpNote);
+            listsLayout.Children.Add(removeMissing); listsLayout.Children.Add(removeMissingNow); listsLayout.Children.Add(removeMissingStatus); listsLayout.Children.Add(missingNote);
             listsLayout.Children.Add(defaultCaption); listsLayout.Children.Add(defaultPicker);
             layout.Children.Add(skipEmpty);
-            var removeMissing=new CheckBox {Content="Remove missing emulator and custom games on refresh",IsChecked=settings.RemoveMissingEmulatorGames,FontSize=14,Foreground=white,Margin=new Thickness(0,0,0,8)};
-            removeMissing.Click+=(s,e) => {
-                bool previous=settings.RemoveMissingEmulatorGames;
-                try {settings.RemoveMissingEmulatorGames=removeMissing.IsChecked==true; Storage.Write("settings.json",settings);}
-                catch(Exception error) {settings.RemoveMissingEmulatorGames=previous; removeMissing.IsChecked=previous; ThemedMessage.Show(dialog,error.Message,"Overlay");}
-            };
-            layout.Children.Add(removeMissing);
-            var missingNote=Label("Removes emulator and custom game entries when their game file or folder has been deleted. Disconnected drives and inaccessible folders are skipped.",12,muted);
-            missingNote.TextWrapping=TextWrapping.Wrap; layout.Children.Add(missingNote);
             var monitorCaption=Label("Open on monitor",14,mint); monitorCaption.Margin=new Thickness(0,14,0,10); layout.Children.Add(monitorCaption);
             var monitorOptions=new List<KeyValuePair<string,string>> {new KeyValuePair<string,string>("cursor","Cursor's monitor")};
             var displays=System.Windows.Forms.Screen.AllScreens.OrderBy(s => s.DeviceName,StringComparer.Ordinal).ToArray();
@@ -1372,6 +1459,25 @@ namespace PadLauncher {
             layout.Children.Add(gapPicker);
             var listArtworkSection=new Expander {Name="PerListArtworkSection",Header="Per-list artwork",Foreground=white,FontSize=14,Margin=new Thickness(0,16,0,0),Content=CreateListLayoutSettings(dialog,rebuild,false,true)}; artworkLayout.Children.Add(listArtworkSection);
             artworkLayout.Children.Add(CreateEmulatorArtworkSettings(dialog,rebuild));
+            var cleanUpCachedArtwork=new Button {Name="CleanUpCachedArtwork",Content="Clean up cached artwork…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,10,0,0)};
+            cleanUpCachedArtwork.Click+=(s,e) => {
+                if(scanning) {ThemedMessage.Show(dialog,"Please wait for the current refresh to finish.","Cached artwork"); return;}
+                int choice=ThemedMessage.Choose(dialog,"Choose which downloaded artwork to clean up. You will be asked to confirm.","Clean up cached artwork","Remove unused cached artwork","Deletes downloaded covers for games that are no longer registered. Artwork for registered games, local images and manually chosen covers is kept.","Remove missing games' artwork","Deletes downloaded covers for games whose ROM or executable is missing. Keep this artwork if you may reimport those games.");
+                if(choice==1) {
+                    string note="Only deletes downloaded artwork for unregistered games. Registered games keep both SteamGridDB and Libretro artwork, regardless of their source preference. Local images and unidentified older cache files are kept.";
+                    if(!ConfirmEmulatorRemoval(dialog,"Clear unused cached artwork","Clear artwork for unregistered games?",note,"Clear unused cached artwork")) return;
+                    try {int removed=ArtworkService.ClearUnusedCachedArtwork(library.Games,settings); ThemedMessage.Show(dialog,removed+" unused cached artwork files deleted. Registered games’ artwork was kept.","Cached artwork");}
+                    catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Cached artwork");}
+                } else if(choice==2) {
+                    if(!ThemedMessage.Confirm(dialog,"Are you sure?\n\nNote: If you're planning to reimport these games you may want to keep this artwork data.","Remove missing games' artwork from disk")) return;
+                    try {
+                        var missingIds=FindMissingGameEntries(settings).Select(candidate => candidate.Item2).Distinct().ToList();
+                        int removed=ArtworkService.ClearMissingCachedArtwork(library.Games,settings,missingIds);
+                        ThemedMessage.Show(dialog,removed==0 ? "No missing-game artwork was found on disk." : "Removed "+removed+" missing-game artwork file"+(removed==1 ? "" : "s")+" from disk.","Missing game artwork");
+                    } catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Missing game artwork");}
+                }
+            };
+            artworkLayout.Children.Add(cleanUpCachedArtwork);
             var artworkCaption=Label("Game artwork",14,mint); artworkCaption.Margin=new Thickness(0,16,0,8); artworkLayout.Children.Add(artworkCaption);
             var artworkGames=new SettingsComboBox {Name="ArtworkGamePicker",ItemsSource=library.Games.Select(game => new KeyValuePair<string,string>(game.Id,game.Name+" · "+GameSourceLabel(game))).ToList(),DisplayMemberPath="Value",SelectedValuePath="Key",SelectedValue=settings.SelectedId,Padding=new Thickness(8)};
             artworkLayout.Children.Add(artworkGames);
@@ -1609,16 +1715,6 @@ namespace PadLauncher {
             systemLayout.Children.Add(repairPaths);
             var restartSetup=new Button {Name="RestartSetupWizard",Content="Restart setup…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,20,0,8)};
             restartSetup.Click+=(s,e) => ShowSetupWizard(true); systemLayout.Children.Add(restartSetup);
-            var clearUnusedArtwork=new Button {Name="ClearUnusedCachedArtwork",Content="Clear unused cached artwork…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,18,0,0),HorizontalAlignment=HorizontalAlignment.Left};
-            systemLayout.Children.Add(clearUnusedArtwork);
-            var unusedArtworkNote=Label("Only deletes downloaded artwork for unregistered games. Registered games keep both SteamGridDB and Libretro artwork, regardless of their source preference. Local images and unidentified older cache files are kept.",12,muted);
-            unusedArtworkNote.TextWrapping=TextWrapping.Wrap; unusedArtworkNote.Margin=new Thickness(0,8,0,8); systemLayout.Children.Add(unusedArtworkNote);
-            clearUnusedArtwork.Click+=(s,e) => {
-                if(scanning) {ThemedMessage.Show(dialog,"Please wait for the library refresh to finish.","Cached artwork"); return;}
-                if(!ConfirmEmulatorRemoval(dialog,"Clear unused cached artwork","Clear artwork for unregistered games?",unusedArtworkNote.Text,"Clear unused cached artwork")) return;
-                try {int removed=ArtworkService.ClearUnusedCachedArtwork(library.Games,settings); ThemedMessage.Show(dialog,removed+" unused cached artwork files deleted. Registered games’ artwork was kept.","Cached artwork");}
-                catch(Exception error) {ThemedMessage.Show(dialog,error.Message,"Cached artwork");}
-            };
             AddUpdateSettings(systemLayout);
             };
             rebuild();
@@ -1659,6 +1755,7 @@ namespace PadLauncher {
             var searchHint=Label("Broad searches return limited suggestions. Use a more specific title for more accurate results; the current game's match is included when relevant.",12,muted); searchHint.TextWrapping=TextWrapping.Wrap; searchHint.Margin=new Thickness(0,0,0,10); DockPanel.SetDock(searchHint,Dock.Top); root.Children.Add(searchHint);
             var matchRow=new DockPanel {Margin=new Thickness(0,0,0,12),Visibility=Visibility.Collapsed};
             var useMatch=new Button {Content="Show covers",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(useMatch,Dock.Right); matchRow.Children.Add(useMatch);
+            var renameMatch=new Button {Name="RenameGameToArtworkTitle",Content="Rename game to this title",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; DockPanel.SetDock(renameMatch,Dock.Right); matchRow.Children.Add(renameMatch);
             var matchPicker=new SettingsComboBox {DisplayMemberPath="Name",Padding=new Thickness(8)}; matchRow.Children.Add(matchPicker); DockPanel.SetDock(matchRow,Dock.Top); root.Children.Add(matchRow);
             var covers=new WrapPanel(); root.Children.Add(new ScrollViewer {Content=covers,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled}); chooser.Content=root;
             var cancellation=new CancellationTokenSource(); chooser.Closed+=(s,e) => cancellation.Cancel(); chooser.Show();
@@ -1728,8 +1825,43 @@ namespace PadLauncher {
                 finally {searchButton.IsEnabled=true;}
             };
             useMatch.Click+=async (s,e) => {var match=matchPicker.SelectedItem as ArtworkGameMatch; if(match!=null) await loadCovers(match.Id);};
+            renameMatch.Click+=(s,e) => {
+                var match=matchPicker.SelectedItem as ArtworkGameMatch;
+                if(match==null || String.IsNullOrWhiteSpace(match.Name)) {status.Text="Find and select the correct game title first."; return;}
+                if(!RenameArtworkGame(game,match.Name,status)) return;
+                chooser.Title="Artwork · "+game.Name;
+                searchText.Text=ArtworkService.SearchQuery(game.Name);
+                status.Text="Game renamed. Choose a cover or search again.";
+            };
             searchText.KeyDown+=(s,e) => {if(e.Key==System.Windows.Input.Key.Enter && searchButton.IsEnabled) {searchButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); e.Handled=true;}};
             await loadCovers(0);
+        }
+        bool RenameArtworkGame(Game game,string title,TextBlock status) {
+            title=(title ?? "").Trim();
+            if(game==null || title.Length==0) {status.Text="Choose a game title first."; return false;}
+            if(String.Equals(game.Name,title,StringComparison.Ordinal)) return true;
+            var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+            if(game.Source=="emulator" && !String.IsNullOrEmpty(game.EmulatorId)) {
+                var config=EmulatorLibrary.Config(next,game.EmulatorId);
+                var item=config==null || config.Games==null ? null : config.Games.FirstOrDefault(entry => entry.Id==game.Id);
+                if(item==null) {status.Text="This game is no longer in the emulator library."; return false;}
+                item.Name=title; item.ArtworkTitle=title;
+            } else if(game.Source=="custom") {
+                var item=(next.CustomGames ?? new List<CustomGame>()).FirstOrDefault(entry => entry.Id==game.Id);
+                if(item==null) {status.Text="This custom game is no longer available."; return false;}
+                item.Name=title;
+            } else {
+                status.Text="Renaming from the artwork picker is available for emulator and custom games.";
+                return false;
+            }
+            Storage.Write("settings.json",next); settings=next; game.Name=title;
+            if(game.Source=="emulator") game.ArtworkTitle=title;
+            if(library!=null && library.Games!=null) foreach(var entry in library.Games.Where(entry => entry.Id==game.Id)) {
+                entry.Name=title;
+                if(game.Source=="emulator") entry.ArtworkTitle=title;
+            }
+            RefreshArtworkPresentation();
+            return true;
         }
         void AddLauncherReimport(StackPanel panel,string source,string name,Func<bool> enabled) {
             var result=Label("",12,muted); result.TextWrapping=TextWrapping.Wrap;
@@ -2096,6 +2228,52 @@ namespace PadLauncher {
             pendingLibraryRefreshFeedback=false;
             RefreshLibrary(feedback);
         }
+        static List<Tuple<string,string,string,string>> FindMissingGameEntries(Settings source) {
+            var missingCandidates=new List<Tuple<string,string,string,string>>();
+            foreach(var preset in EmulatorLibrary.Presets) {
+                var config=EmulatorLibrary.Config(source,preset.Id);
+                if(config==null) continue;
+                foreach(var game in config.Games ?? new List<EmulatorGame>())
+                    if(EmulatorLibrary.ConfirmMissingRom(game.Path)) missingCandidates.Add(Tuple.Create(preset.Id,game.Id,game.Path,game.Name));
+            }
+            foreach(var game in source.CustomGames ?? new List<CustomGame>())
+                if(CustomGameLibrary.MissingTarget(game)) missingCandidates.Add(Tuple.Create("custom",game.Id,game.Target,game.Name));
+            return missingCandidates;
+        }
+        static List<string> RemoveMissingGameEntries(Settings cleaned,Library next,IEnumerable<Tuple<string,string,string,string>> candidates,bool removeArtwork=true) {
+            var removedNames=new List<string>();
+            foreach(var candidate in candidates) {
+                if(candidate.Item1=="custom") {
+                    var game=(cleaned.CustomGames ?? new List<CustomGame>()).FirstOrDefault(entry => entry.Id==candidate.Item2 && entry.Target==candidate.Item3);
+                    if(game==null || !CustomGameLibrary.MissingTarget(game)) continue;
+                    string missingId=game.Id;
+                    cleaned.CustomGames.Remove(game);
+                    foreach(var list in cleaned.CustomLists ?? new List<CustomList>()) if(list.Games!=null) list.Games.RemoveAll(id => id==missingId);
+                    foreach(var list in cleaned.RetroArchPlaylistLists ?? new List<CustomList>()) if(list.Games!=null) list.Games.RemoveAll(id => id==missingId);
+                    foreach(var list in cleaned.CombinedCollections ?? new List<CombinedCollection>()) {
+                        if(list.AddedGames!=null) list.AddedGames.RemoveAll(id => id==missingId);
+                        if(list.ExcludedGames!=null) list.ExcludedGames.RemoveAll(id => id==missingId);
+                    }
+                    foreach(var import in cleaned.EmulatorImports ?? new List<EmulatorImportDefinition>()) if(import.ImportedGames!=null) import.ImportedGames.Remove(missingId);
+                    foreach(var additions in (cleaned.ListGameAdditions ?? new Dictionary<string,List<string>>()).Values) if(additions!=null) additions.RemoveAll(id => id==missingId);
+                    if(cleaned.FavouriteGameIds!=null) cleaned.FavouriteGameIds.RemoveAll(id => id==missingId);
+                    if(cleaned.HiddenGameIds!=null) cleaned.HiddenGameIds.RemoveAll(id => id==missingId);
+                    if(cleaned.ArtworkOverrides!=null && removeArtwork) cleaned.ArtworkOverrides.Remove(missingId);
+                    if(cleaned.LaunchHistory!=null) cleaned.LaunchHistory.Remove(missingId);
+                    if(cleaned.LaunchCounts!=null) cleaned.LaunchCounts.Remove(missingId);
+                    if(cleaned.SelectedGamesByList!=null) foreach(string listId in cleaned.SelectedGamesByList.Where(pair => pair.Value==missingId).Select(pair => pair.Key).ToArray()) cleaned.SelectedGamesByList.Remove(listId);
+                    if(cleaned.SelectedId==missingId) cleaned.SelectedId=null;
+                } else {
+                    var config=EmulatorLibrary.Config(cleaned,candidate.Item1);
+                    if(config==null || config.Games==null || !config.Games.Any(game => game.Id==candidate.Item2 && game.Path==candidate.Item3) || !EmulatorLibrary.ConfirmMissingRom(candidate.Item3)) continue;
+                    EmulatorLibrary.RemoveGame(cleaned,candidate.Item1,candidate.Item2,removeArtwork);
+                }
+                if(next.Games!=null) next.Games.RemoveAll(game => game.Id==candidate.Item2);
+                foreach(var list in next.Collections ?? new List<Collection>()) if(list.Games!=null) list.Games.Remove(candidate.Item2);
+                removedNames.Add(candidate.Item4);
+            }
+            return removedNames;
+        }
         async void RefreshLibrary(bool feedback = false) {
             if(setupWindow!=null) return;
             if(setupTemplateOnly) {if(!feedback) return; setupTemplateOnly=false;}
@@ -2114,16 +2292,7 @@ namespace PadLauncher {
                 var missingCandidates=new List<Tuple<string,string,string,string>>();
                 var previous=library;
                 var refreshed = await Task.Run(() => {
-                    if(scanSettings.RemoveMissingEmulatorGames) {
-                        foreach(var preset in EmulatorLibrary.Presets) {
-                            var config=EmulatorLibrary.Config(scanSettings,preset.Id);
-                            if(config==null) continue;
-                            foreach(var game in config.Games ?? new List<EmulatorGame>())
-                                if(EmulatorLibrary.ConfirmMissingRom(game.Path)) missingCandidates.Add(Tuple.Create(preset.Id,game.Id,game.Path,game.Name));
-                        }
-                        foreach(var game in scanSettings.CustomGames ?? new List<CustomGame>())
-                            if(CustomGameLibrary.MissingTarget(game)) missingCandidates.Add(Tuple.Create("custom",game.Id,game.Target,game.Name));
-                    }
+                    if(scanSettings.RemoveMissingEmulatorGames) missingCandidates=FindMissingGameEntries(scanSettings);
                     var result=LauncherLibrary.Scan(scanSettings);
                     bool changed=Storage.Json().Serialize(previous)!=Storage.Json().Serialize(result);
                     return Tuple.Create(result,changed);
@@ -2142,28 +2311,11 @@ namespace PadLauncher {
                 var removedNames=new List<string>();
                 if(settings.RemoveMissingEmulatorGames && missingCandidates.Count>0) {
                     var cleaned=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                    foreach(var candidate in missingCandidates) {
-                        if(candidate.Item1=="custom") {
-                            var game=(cleaned.CustomGames ?? new List<CustomGame>()).FirstOrDefault(entry => entry.Id==candidate.Item2 && entry.Target==candidate.Item3);
-                            if(game==null || !CustomGameLibrary.MissingTarget(game)) continue;
-                            cleaned.CustomGames.Remove(game);
-                            foreach(var list in cleaned.CustomLists ?? new List<CustomList>()) if(list.Games!=null) list.Games.RemoveAll(id => id==game.Id);
-                            foreach(var list in cleaned.CombinedCollections ?? new List<CombinedCollection>()) {
-                                if(list.AddedGames!=null) list.AddedGames.RemoveAll(id => id==game.Id);
-                                if(list.ExcludedGames!=null) list.ExcludedGames.RemoveAll(id => id==game.Id);
-                            }
-                            if(cleaned.ArtworkOverrides!=null) cleaned.ArtworkOverrides.Remove(game.Id);
-                        } else {
-                            var config=EmulatorLibrary.Config(cleaned,candidate.Item1);
-                            if(config==null || config.Games==null || !config.Games.Any(game => game.Id==candidate.Item2 && game.Path==candidate.Item3) || !EmulatorLibrary.ConfirmMissingRom(candidate.Item3)) continue;
-                            EmulatorLibrary.RemoveGame(cleaned,candidate.Item1,candidate.Item2);
-                        }
-                        next.Games.RemoveAll(game => game.Id==candidate.Item2);
-                        foreach(var list in next.Collections) if(list.Games!=null) list.Games.Remove(candidate.Item2);
-                        removedNames.Add(candidate.Item4);
+                    removedNames=RemoveMissingGameEntries(cleaned,next,missingCandidates);
+                    if(removedNames.Count>0) {
+                        Storage.Write("settings.json",cleaned); settings=cleaned;
+                        Storage.Write("library.json",next);
                     }
-                    Storage.Write("settings.json",cleaned); settings=cleaned;
-                    Storage.Write("library.json",next);
                 }
                 SteamShortcutIdentity.Reconcile(next,settings);
                 library = next; settings.SteamPath = next.SteamPath;
@@ -2574,6 +2726,8 @@ namespace PadLauncher {
             if(emulatorIssue!=null) {ShowNotice(emulatorIssue+". Check Settings → Emulators."); return;}
             launching=true;
             try {
+                PlayTimeTracker.ConsumeSteam(settings);
+                PlayTimeTracker.CaptureSteamPlayTime(settings,game);
                 Save();
                 long started=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var process=Process.Start(GameLaunch.StartInfo(game,settings));
@@ -2582,16 +2736,22 @@ namespace PadLauncher {
                 if(settings.LaunchCounts==null) settings.LaunchCounts=new Dictionary<string,long>();
                 settings.LaunchCounts[game.Id]=CombinedCollections.LaunchCount(settings,game)+1;
                 Save();
-                bool track=process!=null && !process.HasExited && (game.EmulatorId!=null || game.DirectLaunchShortcut || game.Source=="custom" || (game.Shortcut && game.ShortcutDirectSupported && !String.IsNullOrEmpty(game.ShortcutTarget)));
-                if(track) {
+                bool track=false;
+                try { track=process!=null && !process.HasExited && (game.EmulatorId!=null || game.DirectLaunchShortcut || (game.Source=="custom" && String.IsNullOrEmpty(game.SteamLaunchId)) || (game.Shortcut && game.ShortcutDirectSupported && !String.IsNullOrEmpty(game.ShortcutTarget))); } catch(Exception) {}
+                string tracker=track ? "--pid "+process.Id : null;
+                if(tracker==null) {
+                    string watch=PlayTimeTracker.DirectoryToWatch(game);
+                    if(watch!=null) tracker="--dir \""+watch+"\"";
+                }
+                if(tracker!=null) {
                     try {
                         var helper=new ProcessStartInfo(System.Reflection.Assembly.GetExecutingAssembly().Location,
-                            "--track-playtime --data \""+Storage.Root+"\" --game \""+game.Id+"\" --pid "+process.Id+" --start "+started) {UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden};
+                            "--track-playtime --data \""+Storage.Root+"\" --game \""+game.Id+"\" --start "+started+" "+tracker) {UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden};
                         Process.Start(helper);
                     } catch(Exception) {}
                 }
                 Close();
-            } catch (Exception e) { launching=false; ShowNotice("Game could not be opened: "+e.Message); }
+            } catch (Exception e) { launching=false; if(settings!=null && settings.SteamPlayTimeAtLaunch!=null) settings.SteamPlayTimeAtLaunch.Remove(game.Id); ShowNotice("Game could not be opened: "+e.Message); }
 #endif
         }
         bool GameFileMissing(Game game) {

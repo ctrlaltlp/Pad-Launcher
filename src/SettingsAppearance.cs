@@ -107,17 +107,47 @@ namespace PadLauncher {
             var passwordStyle=(Style)System.Windows.Markup.XamlReader.Parse(inputStyle.Replace("INPUT","PasswordBox"));
             passwordStyle.Setters.Add(new Setter(FrameworkElement.ContextMenuProperty,dialog.FindResource("PadPasswordMenu")));
             dialog.Resources.Add(typeof(PasswordBox),passwordStyle);
-            dialog.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar),System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type ScrollBar}'>
+            var scrollStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type ScrollBar}'>
                 <Setter Property='ContextMenuService.IsEnabled' Value='False'/>
                 <Setter Property='Width' Value='6'/><Setter Property='MinWidth' Value='6'/><Setter Property='Background' Value='Transparent'/>
                 <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type ScrollBar}'>
                     <Grid Background='Transparent'><Track x:Name='PART_Track' IsDirectionReversed='True' Orientation='Vertical' Minimum='{TemplateBinding Minimum}' Maximum='{TemplateBinding Maximum}' Value='{TemplateBinding Value}' ViewportSize='{TemplateBinding ViewportSize}'>
                         <Track.DecreaseRepeatButton><RepeatButton Command='{x:Static ScrollBar.PageUpCommand}' Opacity='0' Focusable='False'/></Track.DecreaseRepeatButton>
-                        <Track.Thumb><Thumb x:Name='MintThumb' Background='#A3F0CD' MinHeight='24'><Thumb.Template><ControlTemplate TargetType='{x:Type Thumb}'><Border Background='{TemplateBinding Background}' CornerRadius='3'/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                        <Track.Thumb><Thumb x:Name='MintThumb' Background='#A3F0CD'><Thumb.Template><ControlTemplate TargetType='{x:Type Thumb}'><Border Background='{TemplateBinding Background}' CornerRadius='4'/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
                         <Track.IncreaseRepeatButton><RepeatButton Command='{x:Static ScrollBar.PageDownCommand}' Opacity='0' Focusable='False'/></Track.IncreaseRepeatButton>
                     </Track></Grid>
                 </ControlTemplate></Setter.Value></Setter>
-            </Style>"));
+            </Style>");
+            scrollStyle.Setters.Add(new Setter(ScrollBarThumbSize.MinimumProperty,64.0));
+            dialog.Resources.Add(typeof(System.Windows.Controls.Primitives.ScrollBar),scrollStyle);
+        }
+    }
+    public static class ScrollBarThumbSize {
+        public static readonly DependencyProperty MinimumProperty=DependencyProperty.RegisterAttached("Minimum",typeof(double),typeof(ScrollBarThumbSize),new PropertyMetadata(0.0,OnMinimumChanged));
+        public static double GetMinimum(DependencyObject element) {return (double)element.GetValue(MinimumProperty);}
+        public static void SetMinimum(DependencyObject element,double value) {element.SetValue(MinimumProperty,value);}
+        static void OnMinimumChanged(DependencyObject element,DependencyPropertyChangedEventArgs e) {
+            var bar=element as System.Windows.Controls.Primitives.ScrollBar; if(bar==null) return;
+            bar.Loaded-=Attach; bar.Loaded+=Attach;
+            if(bar.IsLoaded) Attach(bar,null);
+        }
+        static void Attach(object sender,RoutedEventArgs e) {
+            var bar=sender as System.Windows.Controls.Primitives.ScrollBar; if(bar==null) return;
+            bar.LayoutUpdated-=Update; bar.LayoutUpdated+=Update;
+            Update(bar,null);
+        }
+        static void Update(object sender,EventArgs e) {
+            var bar=sender as System.Windows.Controls.Primitives.ScrollBar; if(bar==null) return;
+            var track=bar.Template==null ? null : bar.Template.FindName("PART_Track",bar) as System.Windows.Controls.Primitives.Track;
+            if(track==null) return;
+            double minimum=GetMinimum(bar);
+            double range=bar.Maximum-bar.Minimum;
+            double length=bar.Orientation==Orientation.Vertical ? bar.ActualHeight : bar.ActualWidth;
+            double viewport=bar.ViewportSize;
+            if(minimum<=0 || range<=0 || viewport<=0 || length<=minimum) return;
+            double minimumViewport=minimum*range/Math.Max(1,length-minimum);
+            double target=Math.Max(viewport,minimumViewport);
+            if(Math.Abs(track.ViewportSize-target)>0.5) track.ViewportSize=target;
         }
     }
 }

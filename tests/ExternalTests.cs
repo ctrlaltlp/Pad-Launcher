@@ -167,6 +167,31 @@ class ExternalTests {
             File.WriteAllText(Path.Combine(Storage.Root,PlayTimeTracker.SessionFile), "epic:one\t1000\t1060\r\nsteam:one\t1000\t1025\r\n");
             bool consumed=PlayTimeTracker.Consume(featureSettings,Storage.Root);
             Check(consumed && featureSettings.PlayTimeSeconds["epic:one"]==150 && featureSettings.PlayTimeSeconds["steam:one"]==25 && PlayTimeTracker.Total(featureSettings,featureLibrary.Games.Single(g => g.Id=="epic:one"))==180,"Playtime sessions accumulate and add imported Steam playtime");
+            string steamRoot=Path.Combine(root,"steam-time");
+            string steamConfig=Path.Combine(steamRoot,"userdata","123","config");
+            Directory.CreateDirectory(steamConfig);
+            string localConfig=Path.Combine(steamConfig,"localconfig.vdf");
+            string steamVdf="\"UserLocalConfigStore\"\n{\n\"Software\"\n{\n\"Valve\"\n{\n\"Steam\"\n{\n\"apps\"\n{\n\"100\"\n{\n\"Playtime\" \"10\"\n}\n}\n}\n}\n}\n}\n";
+            File.WriteAllText(localConfig,steamVdf);
+            var steamTimeSettings=new Settings {SteamPath=steamRoot,UserId="123"};
+            var steamGame=new Game {Id="100",Name="Steam game"};
+            Check(PlayTimeTracker.SteamPlayTimeSeconds(steamTimeSettings,"100")==600 && PlayTimeTracker.CaptureSteamPlayTime(steamTimeSettings,steamGame),"Steam playtime baseline reads Steam's own play time");
+            File.WriteAllText(localConfig,steamVdf.Replace("\"Playtime\" \"10\"","\"Playtime\" \"14\""));
+            Check(PlayTimeTracker.ConsumeSteam(steamTimeSettings) && steamTimeSettings.PlayTimeSeconds["100"]==240 && steamTimeSettings.SteamPlayTimeAtLaunch.Count==0,"Steam sessions record the play time gained since Pad Launcher launched the game");
+            var shortTimeSettings=new Settings {PlayTimeSeconds=new Dictionary<string,long>{{"short",900},{"long",5400}}};
+            Check(PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="short"})=="15m" && PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="long"}).EndsWith("h") && PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="none"})=="0m","Play time shows minutes below an hour and hours above it");
+            string watchRoot=Path.Combine(root,"ea-game"); Directory.CreateDirectory(watchRoot);
+            var eaGame=new Game {Id="ea:test",Source="ea",WorkingDirectory=watchRoot};
+            Check(PlayTimeTracker.DirectoryToWatch(eaGame)==watchRoot && PlayTimeTracker.DirectoryToWatch(new Game {Source="xbox",WorkingDirectory=watchRoot})==watchRoot && PlayTimeTracker.DirectoryToWatch(new Game {Source="steam",WorkingDirectory=watchRoot})==null && PlayTimeTracker.DirectoryToWatch(new Game {Source="custom",WorkingDirectory=watchRoot})==null,"Launcher and Xbox games with an install folder are watched without double-counting Steam or custom launches");
+            string copiedCommand=Path.Combine(watchRoot,"cmd.exe"); File.Copy(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"cmd.exe"),copiedCommand,true);
+            long watchStart=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            using(var watched=System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(copiedCommand,"/c ping -n 3 127.0.0.1 >nul") {UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=watchRoot})) {
+                PlayTimeTracker.Run(new[]{"--track-playtime","--data",root,"--game","ea:test","--dir",watchRoot,"--start",watchStart.ToString(),"--grace","1","--wait","10"});
+            }
+            string[] watchedSessions=File.Exists(Path.Combine(root,PlayTimeTracker.SessionFile)) ? File.ReadAllLines(Path.Combine(root,PlayTimeTracker.SessionFile)) : new string[0];
+            string[] watchedParts=watchedSessions.Select(line => line.Split('\t')).FirstOrDefault(parts => parts.Length>=3 && Uri.UnescapeDataString(parts[0])=="ea:test");
+            long watchedEnd=0;
+            Check(watchedParts!=null && Int64.TryParse(watchedParts[2],out watchedEnd) && watchedEnd>watchStart,"Launcher sessions start when the game executable appears and stop when it exits");
             Check(featureSettings.RightStickSpeed==5,"Settings without a saved speed default to 5x right stick speed");
             Check(StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).StartsWith("\"") && StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).EndsWith("\""),"Windows startup executable path is quoted");
             byte[] coverBytes;
@@ -178,7 +203,7 @@ class ExternalTests {
             Check(selectedGame.Art==Path.Combine(Storage.Root,relativeCover) && selectedGame.ArtworkProvider=="chosen" && !Path.IsPathRooted(relativeCover),"Explicit artwork selection overrides existing art and stores a portable relative path");
             Check(File.Exists(steamArt),"Selecting artwork preserves original image");
             featureSettings.ArtworkOverrides.Clear(); selectedGame.Art=steamArt; ArtworkService.ApplyCached(selectedGame,featureSettings); Check(selectedGame.Art==steamArt,"Reset returns priority to original artwork");
-            Console.WriteLine("6 launcher feature checks passed");
+            Console.WriteLine("11 launcher feature checks passed");
             Check(ArtworkService.OriginalGrid(new Game {Id="10"},null,CancellationToken.None)==ArtworkService.OriginalSteamUrl(10),"Native Steam original artwork works without an API key");
             Check(ArtworkService.OriginalGrid(new Game {Id="epic:test",Source="epic",ArtworkUrl="https://cdn1.epicgames.com/original.jpg"},null,CancellationToken.None).Contains("epicgames.com"),"Epic original cover uses catalog source");
             ArtworkService.Fetch=(url,bearer,token) => Encoding.UTF8.GetBytes(url.Contains("autocomplete") ? "{\"success\":true,\"data\":[{\"id\":42,\"name\":\"Standalone\"}]}" : "{\"success\":true,\"data\":{\"external_platform_data\":{\"steam\":[{\"id\":10}]}}}");

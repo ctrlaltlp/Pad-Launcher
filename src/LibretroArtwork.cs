@@ -21,6 +21,33 @@ namespace PadLauncher {
         readonly object catalogGate=new object();
         static string Hash(string value) {using(var sha=SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(value ?? ""))).Replace("-","");}
         public static string CachePath(Game game) {return ArtworkService.TrackCachedArtwork(game,Path.Combine(Storage.Root,"artwork","libretro",Hash(game.Id+"|"+game.Name+"|"+game.ArtworkSystem+"|"+game.ArtworkTitle)+".img"));}
+        static List<string> ReuseVariants(string value) {
+            var variants=new List<string>();
+            Action<string> add=text => {if(text!=null && !variants.Contains(text)) variants.Add(text);};
+            add(value);
+            if(value!=null) {
+                string clean=EmulatorTitleTags.Clean(value); add(clean);
+                string normal=EmulatorTitleTags.Normalise(value); add(normal);
+                add(EmulatorTitleTags.Normalise(clean));
+                add(EmulatorTitleTags.Clean(normal));
+            }
+            if(variants.Count==0) variants.Add("");
+            return variants;
+        }
+        public static string FindExistingCache(Game game,IEnumerable<string> oldGameIds,ISet<string> cachedNames) {
+            if(game==null || oldGameIds==null || cachedNames==null || cachedNames.Count==0) return null;
+            var ids=oldGameIds.Where(id => !String.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).ToList();
+            if(ids.Count==0) return null;
+            var names=ReuseVariants(game.Name); names.AddRange(ReuseVariants(game.ArtworkTitle));
+            var titles=ReuseVariants(game.ArtworkTitle); titles.AddRange(ReuseVariants(game.Name));
+            foreach(string name in names.Distinct(StringComparer.Ordinal))
+                foreach(string title in titles.Distinct(StringComparer.Ordinal))
+                    foreach(string id in ids) {
+                        string hash=Hash(id+"|"+name+"|"+game.ArtworkSystem+"|"+title);
+                        if(cachedNames.Contains(hash)) return Path.Combine(Storage.Root,"artwork","libretro",hash+".img");
+                    }
+            return null;
+        }
         public static void ClearCatalogCaches(IEnumerable<Game> games,Settings settings,CancellationToken token) {
             var systems=games.SelectMany(game => Systems(game,settings)).Distinct().ToList();
             lock(downloadGate) lock(ArtworkService.CacheWriteGate) foreach(string system in systems) {

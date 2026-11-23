@@ -29,6 +29,10 @@ class ArtworkCacheCleanupTests {
             string outside=Path.Combine(root,"outside.img"); File.WriteAllText(outside,"original");
             File.AppendAllText(Path.Combine(root,"artwork","cache-owners.jsonl"),Storage.Json().Serialize(new ArtworkService.CacheOwner {Path=outside,GameId="gone"})+Environment.NewLine+"bad record"+Environment.NewLine);
             Check(ArtworkService.ClearUnusedCachedArtwork(new[]{live},settings)==0 && File.Exists(outside),"Invalid records and paths outside downloaded cache never deleted");
+            var missingLive=new Game {Id="missing-live",Name="Missing Live",Source="emulator",EmulatorId="duckstation"};
+            string missingSgdb=Cache(missingLive,"sgdb"),missingRetro=Cache(missingLive,"libretro");
+            Check(ArtworkService.ClearMissingCachedArtwork(new[]{live,missingLive},settings,new[]{"missing-live"})==2,"Missing registered games lose their downloaded artwork");
+            Check(!File.Exists(missingSgdb) && !File.Exists(missingRetro) && File.Exists(sgdb) && File.Exists(retro),"Missing-game cleanup keeps artwork for live games");
             var config=new EmulatorConfig {Id="duckstation",Games=new List<EmulatorGame>{new EmulatorGame {Id="one"},new EmulatorGame {Id="two"}}}; settings.Emulators=new List<EmulatorConfig>{config};
             settings.CustomLists=new List<CustomList>{new CustomList {Id="list",Games=new List<string>{"one","other"}}};
             settings.FavouriteGameIds=new List<string>{"one","other"}; settings.HiddenGameIds=new List<string>{"one"}; settings.ListGameAdditions=new Dictionary<string,List<string>>{{"pc",new List<string>{"one","other"}}};

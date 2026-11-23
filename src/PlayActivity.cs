@@ -22,7 +22,8 @@ namespace PadLauncher {
                 long launched=0;
                 if(settings.LaunchHistory!=null) settings.LaunchHistory.TryGetValue(game.Id,out launched);
                 LastValue=Math.Max(game.LastPlayed,launched);
-                PlaySeconds=PlayTimeTracker.Local(settings,game)+(includeImportedPlayTime ? Math.Max(0,game.ImportedPlayTimeSeconds) : 0);
+                PlaySeconds=PlayTimeTracker.Local(settings,game);
+                if(includeImportedPlayTime) PlaySeconds=Math.Max(PlaySeconds,Math.Max(0,game.ImportedPlayTimeSeconds));
                 LaunchValue=CombinedCollections.LaunchCount(settings,game);
                 LastLaunched=LastValue>0 ? DateTimeOffset.FromUnixTimeSeconds(LastValue).ToLocalTime().ToString("g") : "Never";
                 PlayTime=FormatPlayTime(PlaySeconds);
@@ -37,9 +38,10 @@ namespace PadLauncher {
         FrameworkElement CreatePlayActivityPanel(Window dialog) {
             var root=new StackPanel();
             var heading=Label("Activity",26,white); heading.FontWeight=FontWeights.SemiBold; root.Children.Add(heading);
-            var note=Label("Last launched and play time for games with recorded activity. Play time includes launches through Pad Launcher and its emulators. Enable the checkbox to add imported Steam play time.",12,muted);
+            var note=Label("Last launched and play time for games with recorded activity. Play time includes Pad Launcher launches and tracked Steam sessions. Enable the checkbox to show Steam's total imported play time.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,8,0,14); root.Children.Add(note);
             bool changed=PlayTimeTracker.Consume(settings,Storage.Root);
+            if(PlayTimeTracker.ConsumeSteam(settings)) changed=true;
             if(changed) try {Storage.Write("settings.json",settings);} catch(Exception) {}
             var controlRow=new Grid {Margin=new Thickness(0,0,0,10)};
             controlRow.ColumnDefinitions.Add(new ColumnDefinition {Width=new GridLength(1,GridUnitType.Star)});
@@ -127,7 +129,7 @@ namespace PadLauncher {
                 try {Storage.Write("settings.json",settings);} catch(Exception) {}
                 render();
             };
-            refresh.Click+=(s,e) => {PlayTimeTracker.Consume(settings,Storage.Root); render();};
+            refresh.Click+=(s,e) => {bool consumedTime=PlayTimeTracker.Consume(settings,Storage.Root); if(PlayTimeTracker.ConsumeSteam(settings)) consumedTime=true; if(consumedTime) try {Storage.Write("settings.json",settings);} catch(Exception) {} render();};
             render();
             return root;
         }

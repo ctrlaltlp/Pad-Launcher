@@ -67,6 +67,69 @@ namespace PadLauncher {
             string path=Path.GetFullPath(Path.Combine(Storage.Root,value));
             return path.StartsWith(root,StringComparison.OrdinalIgnoreCase) && File.Exists(path);
         }
+        static List<string> ReuseNameVariants(string value) {
+            var variants=new List<string>();
+            Action<string> add=text => {if(text!=null && !variants.Contains(text)) variants.Add(text);};
+            add(value);
+            if(value!=null) {
+                string clean=EmulatorTitleTags.Clean(value); add(clean);
+                string normal=EmulatorTitleTags.Normalise(value); add(normal);
+                add(EmulatorTitleTags.Normalise(clean));
+                add(EmulatorTitleTags.Clean(normal));
+            }
+            return variants;
+        }
+        public static bool ReuseTitleMatches(string left,string right) {
+            foreach(string a in ReuseNameVariants(left)) foreach(string b in ReuseNameVariants(right))
+                if(String.Equals(a,b,StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+        static string FullLaunchPath(string path) {
+            try {return String.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);} catch(ArgumentException) {return null;} catch(NotSupportedException) {return null;}
+        }
+        static bool SameLaunchPath(string left,string right) {
+            if(String.IsNullOrWhiteSpace(left) || String.IsNullOrWhiteSpace(right)) return false;
+            if(String.Equals(left,right,StringComparison.OrdinalIgnoreCase)) return true;
+            string a=FullLaunchPath(left),b=FullLaunchPath(right);
+            return a!=null && b!=null && String.Equals(a,b,StringComparison.OrdinalIgnoreCase);
+        }
+        static string LaunchFileName(string path) {
+            if(String.IsNullOrWhiteSpace(path)) return null;
+            int member=path.IndexOf('#');
+            if(member>=0 && member<path.Length-1) path=path.Substring(member+1);
+            try {return Path.GetFileName(path);} catch(ArgumentException) {return null;}
+        }
+        static bool SameLaunchFile(string left,string right) {
+            string leftName=LaunchFileName(left),rightName=LaunchFileName(right);
+            return !String.IsNullOrWhiteSpace(leftName) && !String.IsNullOrWhiteSpace(rightName) &&
+                String.Equals(leftName,rightName,StringComparison.OrdinalIgnoreCase);
+        }
+        static string ExistingArtworkPath(Game old,Settings settings) {
+            string path=null;
+            if(settings!=null && settings.ArtworkOverrides!=null) settings.ArtworkOverrides.TryGetValue(old.Id,out path);
+            if(!String.IsNullOrWhiteSpace(path)) {
+                string chosen=Path.IsPathRooted(path) ? path : Path.Combine(Storage.Root,path);
+                try {if(File.Exists(chosen)) return Path.GetFullPath(chosen);} catch(ArgumentException) {}
+            }
+            if(String.IsNullOrWhiteSpace(old.Art)) return null;
+            string art=Path.IsPathRooted(old.Art) ? old.Art : Path.Combine(Storage.Root,old.Art);
+            try {return File.Exists(art) ? Path.GetFullPath(art) : null;} catch(ArgumentException) {return null;}
+        }
+        public static string ExistingLibraryArtwork(Game game,IEnumerable<Game> existingGames,Settings settings) {
+            if(game==null || existingGames==null) return null;
+            foreach(Game old in existingGames) {
+                if(old==null || old.Id==game.Id) continue;
+                bool bothSystems=!String.IsNullOrWhiteSpace(old.ArtworkSystem) && !String.IsNullOrWhiteSpace(game.ArtworkSystem);
+                if(bothSystems && !String.Equals(old.ArtworkSystem,game.ArtworkSystem,StringComparison.OrdinalIgnoreCase)) continue;
+                if(!bothSystems && !String.Equals(old.EmulatorId,game.EmulatorId,StringComparison.OrdinalIgnoreCase)) continue;
+                bool sameLaunch=SameLaunchPath(old.LaunchId,game.LaunchId);
+                bool sameFile=!sameLaunch && SameLaunchFile(old.LaunchId,game.LaunchId);
+                if(!sameLaunch && !sameFile && !ReuseTitleMatches(old.Name,game.Name) && !ReuseTitleMatches(old.ArtworkTitle,game.ArtworkTitle)) continue;
+                string path=ExistingArtworkPath(old,settings);
+                if(path!=null) return path;
+            }
+            return null;
+        }
         public static string ListCachePath(Game game,string source) {
             if(source=="libretro") return LibretroArtwork.CachePath(game);
             using(var hash=SHA256.Create()) {

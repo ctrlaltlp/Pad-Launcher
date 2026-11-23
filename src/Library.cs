@@ -529,6 +529,7 @@ namespace PadLauncher {
         public string DefaultCustomGameListId {get;set;}
         public List<string> OverlayListOrder {get;set;}
         public Dictionary<string,long> PlayTimeSeconds {get;set;}
+        public Dictionary<string,string> SteamPlayTimeAtLaunch {get;set;}
         public bool IncludeImportedPlayTime {get;set;}
         public string JumpListButton {get;set;}
         public string JumpListId {get;set;}

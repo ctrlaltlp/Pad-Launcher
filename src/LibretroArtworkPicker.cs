@@ -31,6 +31,7 @@ namespace PadLauncher {
             var actions=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right}; footer.Children.Add(actions);
             var close=new Button {Content="Close",IsCancel=true,Padding=new Thickness(14,8,14,8)}; actions.Children.Add(close);
             var use=new Button {Name="LibretroUseImage",Content="Use image",Padding=new Thickness(14,8,14,8),Margin=new Thickness(8,0,0,0),Background=mint,Foreground=Brushes.Black,IsEnabled=false}; actions.Children.Add(use);
+            var rename=new Button {Name="LibretroRenameGame",Content="Rename game to this title",Padding=new Thickness(14,8,14,8),Margin=new Thickness(8,0,0,0),IsEnabled=false}; actions.Children.Add(rename);
             var preview=new Image {Name="LibretroCoverPreview",Stretch=Stretch.Uniform,Margin=new Thickness(12)};
             root.Children.Add(new Border {Background=new SolidColorBrush(Color.FromRgb(21,36,46)),CornerRadius=new CornerRadius(8),Child=preview});
             var resolver=new LibretroArtwork(); var cancellation=new CancellationTokenSource(); CancellationTokenSource previewCancellation=null;
@@ -40,7 +41,7 @@ namespace PadLauncher {
             Func<Task> search=async () => {
                 string system=platforms.SelectedItem as string; if(system==null) {status.Text="Choose a console first."; return;}
                 int current=++revision; if(previewCancellation!=null) previewCancellation.Cancel();
-                use.IsEnabled=false; preview.Source=null; choices.ItemsSource=null; find.IsEnabled=false; status.Text="Finding covers…";
+                use.IsEnabled=false; rename.IsEnabled=false; preview.Source=null; choices.ItemsSource=null; find.IsEnabled=false; status.Text="Finding covers…";
                 try {
                     string text=query.Text;
                     var files=await Task.Run(() => resolver.Search(system,text,cancellation.Token));
@@ -54,7 +55,7 @@ namespace PadLauncher {
             choices.SelectionChanged+=async (s,e) => {
                 string file=choices.SelectedValue as string,system=platforms.SelectedItem as string;
                 if(previewCancellation!=null) previewCancellation.Cancel();
-                use.IsEnabled=false; preview.Source=null; if(file==null || system==null) return;
+                use.IsEnabled=false; rename.IsEnabled=false; preview.Source=null; if(file==null || system==null) return;
                 previewCancellation=CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token); var token=previewCancellation.Token;
                 status.Text="Loading cover preview…";
                 try {
@@ -63,12 +64,21 @@ namespace PadLauncher {
                     using(var stream=new MemoryStream(bytes)) {
                         var image=new BitmapImage(); image.BeginInit(); image.CacheOption=BitmapCacheOption.OnLoad; image.DecodePixelWidth=320; image.StreamSource=stream; image.EndInit(); image.Freeze(); preview.Source=image;
                     }
-                    use.IsEnabled=true; status.Text=Path.GetFileNameWithoutExtension(file);
+                    use.IsEnabled=true; rename.IsEnabled=true; status.Text=Path.GetFileNameWithoutExtension(file);
                 } catch(Exception error) {if(!token.IsCancellationRequested) status.Text="Preview unavailable. "+error.Message;}
             };
             platforms.SelectionChanged+=async (s,e) => {if(platforms.SelectedItem!=null) await search();};
             find.Click+=async (s,e) => await search();
             query.KeyDown+=async (s,e) => {if(e.Key==System.Windows.Input.Key.Enter && find.IsEnabled) {e.Handled=true; await search();}};
+            rename.Click+=(s,e) => {
+                string file=choices.SelectedValue as string; if(file==null) return;
+                string raw=Path.GetFileNameWithoutExtension(file),title=EmulatorTitleTags.Clean(raw);
+                if(String.IsNullOrWhiteSpace(title)) title=raw;
+                if(!RenameArtworkGame(game,title,status)) return;
+                chooser.Title="Libretro artwork · "+game.Name;
+                query.Text=game.Name;
+                status.Text="Game renamed. Choose a cover or search again.";
+            };
             use.Click+=async (s,e) => {
                 if(saving) return;
                 if(scanning) {status.Text="Please wait for the library refresh to finish."; return;}
@@ -89,7 +99,7 @@ namespace PadLauncher {
                     }
                     chooser.Close();
                 } catch(Exception error) {if(!cancellation.IsCancellationRequested) status.Text="Could not use this cover. "+error.Message;}
-                finally {saving=false; if(!cancellation.IsCancellationRequested) {header.IsEnabled=true; use.IsEnabled=preview.Source!=null;}}
+                finally {saving=false; if(!cancellation.IsCancellationRequested) {header.IsEnabled=true; use.IsEnabled=preview.Source!=null; rename.IsEnabled=choices.SelectedValue!=null;}}
             };
             chooser.Show();
             try {

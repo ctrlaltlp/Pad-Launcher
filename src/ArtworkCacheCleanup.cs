@@ -44,14 +44,38 @@ namespace PadLauncher {
             }
             return path;
         }
+        public static HashSet<string> CachedArtworkGameIds() {
+            var ids=new HashSet<string>(StringComparer.Ordinal);
+            lock(ownershipGate) {
+                try {
+                    if(!File.Exists(OwnershipFile)) return ids;
+                    foreach(string line in File.ReadLines(OwnershipFile)) {
+                        try {
+                            var owner=Storage.Json().Deserialize<CacheOwner>(line);
+                            if(owner!=null && !String.IsNullOrEmpty(owner.GameId)) ids.Add(owner.GameId);
+                        } catch(ArgumentException) {} catch(InvalidOperationException) {}
+                    }
+                } catch(IOException) {} catch(UnauthorizedAccessException) {}
+            }
+            return ids;
+        }
         public static int ClearUnusedCachedArtwork(IEnumerable<Game> registeredGames,Settings settings) {
+            return ClearCachedArtwork(registeredGames,settings,null);
+        }
+        public static int ClearMissingCachedArtwork(IEnumerable<Game> registeredGames,Settings settings,IEnumerable<string> missingGameIds) {
+            return ClearCachedArtwork(registeredGames,settings,new HashSet<string>(missingGameIds ?? new List<string>(),StringComparer.Ordinal));
+        }
+        static int ClearCachedArtwork(IEnumerable<Game> registeredGames,Settings settings,ICollection<string> missingGameIds) {
             var games=registeredGames.ToList();
             var ids=new HashSet<string>(games.Select(g => g.Id),StringComparer.Ordinal);
             foreach(var game in settings.CustomGames ?? new List<CustomGame>()) ids.Add(game.Id);
             foreach(var emulator in settings.Emulators ?? new List<EmulatorConfig>()) foreach(var game in emulator.Games ?? new List<EmulatorGame>()) ids.Add(game.Id);
             var protectedPaths=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             Action<string> protect=path => {if(!String.IsNullOrWhiteSpace(path)) {try {protectedPaths.Add(System.IO.Path.GetFullPath(System.IO.Path.IsPathRooted(path) ? path : System.IO.Path.Combine(Storage.Root,path)));} catch(ArgumentException) {}}};
-            foreach(var game in games) {protect(game.Art); protect(Cache(game)); protect(ListCachePath(game,"sgdb")); protect(LibretroArtwork.CachePath(game));}
+            foreach(var game in games) {
+                if(missingGameIds!=null && missingGameIds.Contains(game.Id)) continue;
+                protect(game.Art); protect(Cache(game)); protect(ListCachePath(game,"sgdb")); protect(LibretroArtwork.CachePath(game));
+            }
             foreach(var path in (settings.ArtworkOverrides ?? new Dictionary<string,string>()).Values) protect(path);
             lock(CacheWriteGate) lock(ownershipGate) {
                 if(!File.Exists(OwnershipFile)) return 0;
@@ -62,8 +86,16 @@ namespace PadLauncher {
                 int removed=0;
                 foreach(var group in owners.GroupBy(owner => owner.Path,StringComparer.OrdinalIgnoreCase)) {
                     string path=group.Key;
-                    if(group.Any(owner => ids.Contains(owner.GameId)) || protectedPaths.Contains(path) || !DownloadedCachePath(path)) continue;
-                    try {if(File.Exists(path)) {File.Delete(path); removed++;}} catch(IOException) {} catch(UnauthorizedAccessException) {}
+                    bool live=group.Any(owner => ids.Contains(owner.GameId) && (missingGameIds==null || !missingGameIds.Contains(owner.GameId)));
+                    if(live || protectedPaths.Contains(path) || !DownloadedCachePath(path)) continue;
+                    try {
+                        bool deleted=false;
+                        if(File.Exists(path)) {File.Delete(path); removed++; deleted=true;}
+                        string folder=System.IO.Path.GetDirectoryName(path);
+                        if(deleted && Directory.Exists(folder)) foreach(string retry in Directory.GetFiles(folder,System.IO.Path.GetFileName(path)+"*.retry")) {
+                            try {File.Delete(retry);} catch(IOException) {} catch(UnauthorizedAccessException) {}
+                        }
+                    } catch(IOException) {} catch(UnauthorizedAccessException) {}
                 }
                 return removed;
             }

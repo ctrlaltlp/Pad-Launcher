@@ -53,6 +53,84 @@ namespace PadLauncher {
             confirmation.Loaded+=(sender,args) => cancel.Focus();
             return confirmation.ShowDialog()==true;
         }
+        void ShowRelocateGames(Window owner,EmulatorPreset preset,string id,Action rebuild) {
+            var config=EmulatorLibrary.Config(settings,id);
+            var games=config==null || config.Games==null ? new List<EmulatorGame>() : config.Games.Where(game => game!=null).ToList();
+            if(games.Count==0) {ThemedMessage.Show(owner,"There are no saved games to relocate.","Relocate games"); return;}
+            var dialog=new Window {Title="Relocate "+preset.Name+" games",Owner=owner,Width=920,Height=700,MinWidth=680,MinHeight=520,Background=owner.Background,Foreground=white,FontFamily=FontFamily,WindowStartupLocation=WindowStartupLocation.CenterOwner,ShowInTaskbar=false};
+            dialog.Resources.MergedDictionaries.Add(owner.Resources);
+            var root=new DockPanel {Margin=new Thickness(24)}; dialog.Content=root;
+            var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
+            header.Children.Add(Label("Relocate "+preset.Name+" games",22,white));
+            var explanation=Label("Update saved game paths after moving or renaming a folder. Game names, per-game cores, lists, favourites, artwork and play history stay attached.",12,muted);
+            explanation.TextWrapping=TextWrapping.Wrap; explanation.Margin=new Thickness(0,10,0,16); header.Children.Add(explanation);
+            var oldCaption=Label("Old games folder",12,mint); oldCaption.Margin=new Thickness(0,0,0,6); header.Children.Add(oldCaption);
+            var oldRoot=new TextBox {Name="RelocateGamesOldRoot",Padding=new Thickness(8)};
+            var broken=games.Where(game => EmulatorLibrary.ConfirmMissingRom(game.Path)).ToList();
+            oldRoot.Text=EmulatorLibrary.SuggestedRelocationRoot(broken.Count>0 ? broken : games);
+            header.Children.Add(oldRoot);
+            var newCaption=Label("New games folder",12,mint); newCaption.Margin=new Thickness(0,12,0,6); header.Children.Add(newCaption);
+            var newRow=new Grid(); newRow.ColumnDefinitions.Add(new ColumnDefinition()); newRow.ColumnDefinitions.Add(new ColumnDefinition {Width=GridLength.Auto}); header.Children.Add(newRow);
+            var newRoot=new TextBox {Name="RelocateGamesNewRoot",Padding=new Thickness(8)}; newRow.Children.Add(newRoot);
+            var browse=new Button {Name="RelocateGamesBrowse",Content="Browse…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; Grid.SetColumn(browse,1); newRow.Children.Add(browse);
+            browse.Click+=(s,e) => {using(var folder=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the new "+preset.Name+" games folder",SelectedPath=Directory.Exists(newRoot.Text) ? newRoot.Text : ""}) {if(folder.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) newRoot.Text=folder.SelectedPath;}};
+            var previewRow=new StackPanel {Orientation=Orientation.Horizontal,Margin=new Thickness(0,14,0,8)};
+            var preview=new Button {Name="RelocateGamesPreview",Content="Preview paths",Padding=new Thickness(12,7,12,7)}; previewRow.Children.Add(preview);
+            var selectAll=new Button {Name="RelocateGamesSelectAll",Content="Select all",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; previewRow.Children.Add(selectAll);
+            var selectNone=new Button {Name="RelocateGamesSelectNone",Content="Select none",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; previewRow.Children.Add(selectNone);
+            var count=Label("",12,muted); count.Margin=new Thickness(12,7,0,0); previewRow.Children.Add(count);
+            header.Children.Add(previewRow);
+            var status=Label("Choose the old and new folders, then preview the paths.",12,muted); status.Name="RelocateGamesStatus"; status.TextWrapping=TextWrapping.Wrap; status.Margin=new Thickness(0,0,0,8); header.Children.Add(status);
+            var rowsPanel=new StackPanel(); var scroll=new ScrollViewer {Content=rowsPanel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Margin=new Thickness(0,4,0,0)};
+            var footer=new StackPanel {Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0)};
+            DockPanel.SetDock(footer,Dock.Bottom); root.Children.Add(footer);
+            root.Children.Add(scroll);
+            var boxes=new List<KeyValuePair<CheckBox,EmulatorRelocation>>();
+            Action refreshCount=() => {
+                int selected=boxes.Count(pair => pair.Key.IsChecked==true && pair.Key.IsEnabled);
+                int found=boxes.Count(pair => pair.Value.Status=="Found");
+                count.Text=selected+" selected · "+found+" ready";
+            };
+            Action<IEnumerable<EmulatorRelocation>> showRows=rows => {
+                rowsPanel.Children.Clear(); boxes.Clear();
+                foreach(EmulatorRelocation row in rows) {
+                    var box=new CheckBox {Name="RelocateGame_"+boxes.Count,IsChecked=row.Status=="Found",IsEnabled=row.Status=="Found",Margin=new Thickness(0,0,0,10)};
+                    var text=new StackPanel();
+                    var title=Label(row.Game.Name+"  ·  "+row.Status,13,row.Status=="Found" ? mint : row.Status=="Collision" ? new SolidColorBrush(Color.FromRgb(255,110,110)) : muted);
+                    title.TextWrapping=TextWrapping.Wrap; text.Children.Add(title);
+                    var detail=Label((String.IsNullOrWhiteSpace(row.RelativePath) ? row.OldPath : row.RelativePath)+"  →  "+(row.NewPath ?? "not found"),11,muted);
+                    detail.TextWrapping=TextWrapping.Wrap; detail.Margin=new Thickness(0,3,0,0); detail.IsHitTestVisible=false; text.Children.Add(detail);
+                    box.Content=text; box.Checked+=(s,e) => refreshCount(); box.Unchecked+=(s,e) => refreshCount();
+                    rowsPanel.Children.Add(box); boxes.Add(new KeyValuePair<CheckBox,EmulatorRelocation>(box,row));
+                }
+                refreshCount();
+            };
+            preview.Click+=(s,e) => {
+                try {
+                    if(String.IsNullOrWhiteSpace(oldRoot.Text) || String.IsNullOrWhiteSpace(newRoot.Text)) throw new ArgumentException("Choose both the old and new game folders.");
+                    var rows=EmulatorLibrary.RelocationPreview(settings,id,oldRoot.Text,newRoot.Text);
+                    showRows(rows);
+                    int found=rows.Count(row => row.Status=="Found");
+                    status.Text=rows.Count==0 ? "No saved games were found for this emulator." : found==0 ? "No games match a valid file in the new folder. Check both folder paths." : "Review the new paths, then apply the selected games.";
+                } catch(Exception error) {status.Text=error.Message;}
+            };
+            selectAll.Click+=(s,e) => {foreach(var pair in boxes) if(pair.Key.IsEnabled) pair.Key.IsChecked=true; refreshCount();};
+            selectNone.Click+=(s,e) => {foreach(var pair in boxes) pair.Key.IsChecked=false; refreshCount();};
+            var cancel=new Button {Content="Cancel",IsCancel=true,Padding=new Thickness(14,7,14,7)}; footer.Children.Add(cancel);
+            var apply=new Button {Name="RelocateGamesApply",Content="Apply relocation",IsDefault=true,Padding=new Thickness(14,7,14,7),Margin=new Thickness(8,0,0,0)}; footer.Children.Add(apply);
+            apply.Click+=(s,e) => {
+                try {
+                    var selected=boxes.Where(pair => pair.Key.IsChecked==true && pair.Key.IsEnabled).Select(pair => pair.Value).ToList();
+                    if(selected.Count==0) throw new ArgumentException("Select at least one game with a valid new path.");
+                    var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
+                    EmulatorLibrary.ApplyRelocations(next,id,selected,oldRoot.Text,newRoot.Text);
+                    CommitEmulators(next,rebuild);
+                    dialog.Close();
+                } catch(Exception error) {status.Text=error.Message;}
+            };
+            dialog.Loaded+=(s,e) => {if(!String.IsNullOrWhiteSpace(oldRoot.Text) && !String.IsNullOrWhiteSpace(newRoot.Text)) preview.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));};
+            dialog.ShowDialog();
+        }
         StackPanel CreateEmulatorsPanel(Window dialog,Action rebuild) {
             var root=new StackPanel();
             var heading=Label("Emulators",26,white); heading.FontWeight=FontWeights.SemiBold; root.Children.Add(heading);
@@ -135,7 +213,7 @@ namespace PadLauncher {
                 var gameStatus=Label("",12,muted);
                 gameStatus.TextWrapping=TextWrapping.Wrap;
                 var importLibrary=new Button {Name="ImportEmulatorLibrary_"+id,Content="Import library from emulator…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,10,0,0),HorizontalAlignment=HorizontalAlignment.Left};
-                importLibrary.Click+=(s,e) => {try {string fallbackCore=id=="retroarch" && config!=null ? config.CorePath : null; ShowEmulatorImport(dialog,preset,path.Text,fallbackCore,rebuild);} catch(Exception error) {gameStatus.Text=error.Message;}};
+                importLibrary.Click+=(s,e) => {try {string fallbackCore=id=="retroarch" ? null : config==null ? null : config.CorePath; ShowEmulatorImport(dialog,preset,path.Text,fallbackCore,rebuild);} catch(Exception error) {gameStatus.Text=error.Message;}};
                 if(id!="retroarch") {
                     var hint=Label(preset.Hint,12,muted); hint.TextWrapping=TextWrapping.Wrap; hint.Margin=new Thickness(0,12,0,8); hint.Cursor=System.Windows.Input.Cursors.Arrow; hint.IsHitTestVisible=false; panel.Children.Add(hint);
                     romFolder=field(id=="vita3k" ? "Installed games folder (ux0/app)" : "ROM folder (includes subfolders)","EmulatorRomFolder_"+id); romFolder.Text=config==null ? "" : config.RomFolder ?? "";
@@ -197,6 +275,8 @@ namespace PadLauncher {
                     int added=EmulatorLibrary.AddGames(next,id,paths); if(added==0) {gameStatus.Text="These games are already added."; return;} CommitEmulators(next,rebuild);
                 } catch(Exception error) {gameStatus.Text=error.Message;}};
                 var addFiles=new Button {Name="EmulatorAddGames_"+id,Content="Add game manually…",Padding=new Thickness(12,7,12,7)}; addActions.Children.Add(addFiles);
+                var relocateGames=new Button {Name="EmulatorRelocateGames_"+id,Content="Relocate games' directory…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(8,0,0,0)}; addActions.Children.Add(relocateGames);
+                relocateGames.Click+=(s,e) => {try {ShowRelocateGames(dialog,preset,id,rebuild);} catch(Exception error) {gameStatus.Text=error.Message;}};
                 addFiles.Click+=(s,e) => {
                     var file=new Microsoft.Win32.OpenFileDialog {Filter=preset.Filter,Multiselect=true,CheckFileExists=true};
                     if(file.ShowDialog(dialog)!=true) return;
@@ -275,6 +355,21 @@ namespace PadLauncher {
                     browseGameCore.Click+=(s,e) => {var file=new Microsoft.Win32.OpenFileDialog {Filter="RetroArch core|*.dll",CheckFileExists=true}; if(file.ShowDialog(dialog)==true) gameCore.Text=file.FileName;};
                 }
                 var missing=Label("",12,muted); missing.TextWrapping=TextWrapping.Wrap; missing.Margin=new Thickness(0,8,0,0); panel.Children.Add(missing);
+                var locateGame=new Button {Name="EmulatorLocateGame_"+id,Content="Locate game file…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,8,0,0)}; panel.Children.Add(locateGame);
+                locateGame.Click+=(s,e) => {
+                    string chosen=null;
+                    if(id=="vita3k" || id=="rpcs3" || id=="shadps4") {
+                        using(var folder=new System.Windows.Forms.FolderBrowserDialog {Description="Choose the new "+preset.Name+" game folder",SelectedPath=Directory.Exists(target.Text) ? target.Text : ""})
+                            if(folder.ShowDialog(new DialogOwner(new System.Windows.Interop.WindowInteropHelper(dialog).Handle))==System.Windows.Forms.DialogResult.OK) chosen=folder.SelectedPath;
+                    } else {
+                        var file=new Microsoft.Win32.OpenFileDialog {Filter=preset.Filter,CheckFileExists=true};
+                        if(file.ShowDialog(dialog)==true) chosen=file.FileName;
+                    }
+                    if(String.IsNullOrWhiteSpace(chosen)) return;
+                    target.Text=chosen;
+                    try {target.Text=EmulatorLibrary.GamePath(id,chosen,gameCore==null ? null : gameCore.Text,EmulatorLibrary.Executable(path.Text)); missing.Text="Selected a new path. Click Save changes to apply.";}
+                    catch(Exception error) {missing.Text=error.Message;}
+                };
                 Action load=() => {var game=visibleGames.FirstOrDefault(g => g.Id==(string)gamePicker.SelectedValue); name.Text=game==null ? "" : game.Name; target.Text=game==null ? "" : game.Path; arguments.Text=game==null ? "" : game.Arguments ?? ""; if(gameCore!=null) gameCore.Text=game==null ? "" : game.CorePath ?? config.CorePath ?? ""; missing.Text=EmulatorLibrary.MissingReason(new Game {Id=game==null ? null : game.Id,Source="emulator",EmulatorId=id,LaunchId=target.Text},settings) ?? "";};
                 gamePicker.SelectionChanged+=(s,e) => load(); load();
                 if(listPicker!=null) listPicker.SelectionChanged+=(s,e) => {

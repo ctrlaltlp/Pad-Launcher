@@ -386,13 +386,13 @@ namespace PadLauncher {
             var ids=new List<string>();
             var byPath=config.Games.Where(g => !String.IsNullOrEmpty(g.Path)).GroupBy(g => g.Path,StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key,g => g.First(),StringComparer.OrdinalIgnoreCase);
             foreach(var item in entries) {
-                string selectedCore=emulator=="retroarch" ? item.CorePath ?? config.CorePath : null;
+                string selectedCore=emulator=="retroarch" ? item.CorePath : null;
                 string path=EmulatorLibrary.GamePath(emulator,item.Path,selectedCore,executable);
                 EmulatorGame existing; byPath.TryGetValue(path,out existing);
-                string core=emulator=="retroarch" && existing==null ? EmulatorLibrary.Core(item.CorePath ?? config.CorePath) : null;
+                string core=emulator=="retroarch" && existing==null ? EmulatorLibrary.Core(item.CorePath) : null;
                 if(existing==null) {existing=new EmulatorGame {Id="emulator:"+emulator+":"+Guid.NewGuid().ToString("N"),Path=path,Name=String.IsNullOrWhiteSpace(item.Name) ? EmulatorLibrary.SuggestedName(emulator,path) : item.Name.Trim().Substring(0,Math.Min(120,item.Name.Trim().Length)),CorePath=core}; config.Games.Add(existing); byPath[path]=existing;}
                 else if(item.RenameExisting && !String.IsNullOrWhiteSpace(item.Name)) existing.Name=item.Name.Trim().Substring(0,Math.Min(120,item.Name.Trim().Length));
-                if(emulator=="retroarch" && !CoreAvailable(existing.CorePath ?? config.CorePath) && CoreAvailable(item.CorePath)) existing.CorePath=item.CorePath;
+                if(emulator=="retroarch" && !CoreAvailable(existing.CorePath) && CoreAvailable(item.CorePath)) existing.CorePath=item.CorePath;
                 if(!String.IsNullOrWhiteSpace(item.ArtworkSystem)) existing.ArtworkSystem=item.ArtworkSystem;
                 if(!String.IsNullOrWhiteSpace(item.ArtworkTitle) && (!String.IsNullOrWhiteSpace(item.ArtworkSystem) || String.IsNullOrWhiteSpace(existing.ArtworkTitle))) existing.ArtworkTitle=item.ArtworkTitle;
                 ids.Add(existing.Id);

@@ -25,6 +25,13 @@ namespace PadLauncher {
     public class OrphanedEmulatorGame {
         public string EmulatorId,Id,Name,Path,Reason;
     }
+    public class EmulatorRelocation {
+        public EmulatorGame Game;
+        public string OldPath;
+        public string NewPath;
+        public string RelativePath;
+        public string Status;
+    }
     public class EmulatorConfig {
         public string ListName {get;set;}
         public string Arguments {get;set;}
@@ -256,6 +263,114 @@ namespace PadLauncher {
             if(config.Games.Any(g => g.Id!=gameId && String.Equals(g.Path,normalized,StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("That game file is already added to this emulator.");
             game.Name=name; game.Path=normalized; game.CorePath=core; if(arguments!=null) game.Arguments=arguments.Trim();
         }
+        static string FullRelocationPath(string value) {
+            if(String.IsNullOrWhiteSpace(value)) return null;
+            try {return Path.GetFullPath(Environment.ExpandEnvironmentVariables(value.Trim().Trim('"'))).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);}
+            catch(ArgumentException) {return null;} catch(NotSupportedException) {return null;}
+        }
+        static string GameDirectory(string value) {
+            string archive,member;
+            if(SplitRetroArchArchive(value,out archive,out member)) value=archive;
+            string full=FullRelocationPath(value);
+            if(full==null) return null;
+            try {return Path.GetDirectoryName(full);} catch(ArgumentException) {return null;}
+        }
+        static bool UnderRoot(string value,string root) {
+            string path=FullRelocationPath(value),parent=FullRelocationPath(root);
+            if(path==null || parent==null) return false;
+            return String.Equals(path,parent,StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith(parent+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith(parent+Path.AltDirectorySeparatorChar,StringComparison.OrdinalIgnoreCase);
+        }
+        static string RelativeToRoot(string value,string root) {
+            string path=FullRelocationPath(value),parent=FullRelocationPath(root);
+            if(path==null || parent==null) return null;
+            if(String.Equals(path,parent,StringComparison.OrdinalIgnoreCase)) return "";
+            if(!path.StartsWith(parent+Path.DirectorySeparatorChar,StringComparison.OrdinalIgnoreCase) &&
+                !path.StartsWith(parent+Path.AltDirectorySeparatorChar,StringComparison.OrdinalIgnoreCase)) return null;
+            return path.Substring(parent.Length+1);
+        }
+        public static string SuggestedRelocationRoot(IEnumerable<EmulatorGame> games) {
+            var directories=(games ?? Enumerable.Empty<EmulatorGame>()).Where(game => game!=null).Select(game => GameDirectory(game.Path)).Where(directory => !String.IsNullOrWhiteSpace(directory)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if(directories.Count==0) return "";
+            string common=directories[0];
+            for(int i=1;i<directories.Count;i++) {
+                while(!UnderRoot(directories[i],common)) {
+                    var parent=Path.GetDirectoryName(common);
+                    if(String.IsNullOrWhiteSpace(parent) || parent==common) break;
+                    common=parent;
+                }
+            }
+            return common;
+        }
+        public static string RelocatePath(string value,string oldRoot,string newRoot) {
+            string archive,member;
+            if(SplitRetroArchArchive(value,out archive,out member)) {
+                string relative=RelativeToRoot(archive,oldRoot);
+                if(relative==null) return null;
+                return Path.Combine(FullRelocationPath(newRoot) ?? newRoot,relative)+"#"+member;
+            }
+            string pathRelative=RelativeToRoot(value,oldRoot);
+            return pathRelative==null ? null : Path.Combine(FullRelocationPath(newRoot) ?? newRoot,pathRelative);
+        }
+        public static List<EmulatorRelocation> RelocationPreview(Settings settings,string id,string oldRoot,string newRoot) {
+            var config=Config(settings,id); var result=new List<EmulatorRelocation>();
+            if(config==null) return result;
+            string oldFull=FullRelocationPath(oldRoot),newFull=FullRelocationPath(newRoot);
+            foreach(EmulatorGame game in config.Games ?? new List<EmulatorGame>()) {
+                if(game==null) continue;
+                var row=new EmulatorRelocation {Game=game,OldPath=game.Path,Status="Outside folder"};
+                if(oldFull==null || newFull==null) {result.Add(row); continue;}
+                string relative=RelativeToRoot(SplitArchivePath(game.Path),oldFull);
+                row.RelativePath=relative;
+                if(relative==null) {result.Add(row); continue;}
+                string candidate=RelocatePath(game.Path,oldFull,newFull);
+                row.NewPath=candidate;
+                if(String.Equals(game.Path,candidate,StringComparison.OrdinalIgnoreCase)) {row.Status="Already there"; result.Add(row); continue;}
+                try {
+                    row.NewPath=GamePath(id,candidate,game.CorePath,config.Path);
+                    row.Status="Found";
+                } catch(FileNotFoundException) {row.Status="Missing";}
+                catch(DirectoryNotFoundException) {row.Status="Missing";}
+                catch(ArgumentException) {row.Status="Unsupported";}
+                catch(IOException) {row.Status="Missing";}
+                result.Add(row);
+            }
+            foreach(var group in result.Where(row => row.Status=="Found" || row.Status=="Already there").GroupBy(row => row.NewPath ?? "",StringComparer.OrdinalIgnoreCase).Where(group => group.Count()>1))
+                foreach(EmulatorRelocation row in group) row.Status="Collision";
+            return result;
+        }
+        static string SplitArchivePath(string value) {
+            string archive,member;
+            return SplitRetroArchArchive(value,out archive,out member) ? archive : value;
+        }
+        public static int ApplyRelocations(Settings settings,string id,IEnumerable<EmulatorRelocation> relocations,string oldRoot,string newRoot) {
+            var config=Config(settings,id); if(config==null) return 0;
+            string oldFull=FullRelocationPath(oldRoot),newFull=FullRelocationPath(newRoot);
+            if(oldFull==null || newFull==null) throw new ArgumentException("Choose both the old and new game folders.");
+            if(!Directory.Exists(newFull)) throw new DirectoryNotFoundException("The new game folder could not be found: "+newFull);
+            var selected=(relocations ?? Enumerable.Empty<EmulatorRelocation>()).Where(row => row!=null && row.Game!=null && row.Status=="Found").ToList();
+            if(selected.Count==0) throw new ArgumentException("Select at least one game with a valid new path.");
+            var planned=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+            foreach(EmulatorRelocation row in selected) {
+                string candidate=RelocatePath(row.OldPath,oldFull,newFull);
+                string normalized=GamePath(id,candidate,row.Game.CorePath,config.Path);
+                if(config.Games.Any(game => game.Id!=row.Game.Id && String.Equals(game.Path,normalized,StringComparison.OrdinalIgnoreCase))) throw new ArgumentException("Two games would use the same path: "+normalized);
+                if(planned.ContainsKey(normalized)) throw new ArgumentException("Two games would use the same path: "+normalized);
+                planned[normalized]=row.Game.Id;
+            }
+            int applied=0;
+            foreach(var pair in planned) {
+                var game=config.Games.FirstOrDefault(item => item.Id==pair.Value);
+                if(game==null) throw new ArgumentException("This emulator game no longer exists.");
+                game.Path=pair.Key; applied++;
+            }
+            if(!String.IsNullOrWhiteSpace(config.RomFolder)) {
+                string rebased=RelocatePath(config.RomFolder,oldFull,newFull);
+                if(rebased!=null) config.RomFolder=rebased;
+            }
+            return applied;
+        }
         public static bool ConfirmMissingRom(string path) {
             try {
                 if(String.IsNullOrWhiteSpace(path)) return false;
@@ -300,7 +415,7 @@ namespace PadLauncher {
                             if(sources.Count!=savedSources.Count) throw new IOException("One or more imported library sources are unavailable.");
                         }
                         if(sources.Count==0) throw new IOException("No library sources were found.");
-                        var batch=EmulatorImport.Read(preset.Id,config.Path,sources,config.CorePath,token);
+                        var batch=EmulatorImport.Read(preset.Id,config.Path,sources,preset.Id=="retroarch" ? null : config.CorePath,token);
                         if(batch.Warnings.Count>0 || batch.Games.Any(game => !String.IsNullOrEmpty(game.Problem)))
                             throw new IOException("Library detection was incomplete.");
                         detected=new HashSet<string>(batch.Games.Select(game => game.Path),StringComparer.OrdinalIgnoreCase);
@@ -331,7 +446,7 @@ namespace PadLauncher {
             }
             return result;
         }
-        public static void RemoveGame(Settings settings,string id,string gameId) {
+        public static void RemoveGame(Settings settings,string id,string gameId,bool removeArtwork=true) {
             var config=Config(settings,id);
             if(config==null || config.Games==null || config.Games.RemoveAll(g => g.Id==gameId)==0) return;
             foreach(var list in settings.CustomLists ?? new List<CustomList>())
@@ -346,7 +461,7 @@ namespace PadLauncher {
             foreach(var additions in (settings.ListGameAdditions ?? new Dictionary<string,List<string>>()).Values) if(additions!=null) additions.RemoveAll(value => value==gameId);
             if(settings.FavouriteGameIds!=null) settings.FavouriteGameIds.RemoveAll(value => value==gameId);
             if(settings.HiddenGameIds!=null) settings.HiddenGameIds.RemoveAll(value => value==gameId);
-            if(settings.ArtworkOverrides!=null) settings.ArtworkOverrides.Remove(gameId);
+            if(settings.ArtworkOverrides!=null && removeArtwork) settings.ArtworkOverrides.Remove(gameId);
             if(settings.LaunchHistory!=null) settings.LaunchHistory.Remove(gameId);
             if(settings.LaunchCounts!=null) settings.LaunchCounts.Remove(gameId);
             if(settings.SelectedGamesByList!=null) foreach(string listId in settings.SelectedGamesByList.Where(pair => pair.Value==gameId).Select(pair => pair.Key).ToArray()) settings.SelectedGamesByList.Remove(listId);
