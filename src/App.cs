@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.6")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.6")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.6")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.7")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.7")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.7")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -2241,7 +2241,6 @@ namespace PadLauncher {
             string oldId = remember ? settings.SelectedId : visible.Count > selected ? visible[selected].Id : null;
             string remembered;
             if(settings.SelectedGamesByList!=null && settings.SelectedGamesByList.TryGetValue(filter.Id,out remembered)) oldId=remembered;
-            if(IsAutoOrderedList(filter.Id)) oldId=null;
             var membership=new HashSet<string>(filter.Games ?? new List<string>());
             var hidden=new HashSet<string>(settings.HiddenGameIds ?? new List<string>());
             visible = library.Games.Where(g => !hidden.Contains(g.Id) && (filter.Id == "all" || (!filter.UnsupportedDynamic && membership.Contains(g.Id)))).ToList();
@@ -2320,8 +2319,7 @@ namespace PadLauncher {
             if(!GameSearchOpen) {
                 settings.SelectedId = current.Id;
                 if(settings.SelectedGamesByList==null) settings.SelectedGamesByList=new Dictionary<string,string>();
-                if(IsAutoOrderedList(filters[collectionIndex].Id)) settings.SelectedGamesByList.Remove(filters[collectionIndex].Id);
-                else settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
+                settings.SelectedGamesByList[filters[collectionIndex].Id]=current.Id;
             } else if(searchConsoleLabel!=null) searchConsoleLabel.Text=SearchSourceLabel(current,settings);
             string availabilityIssue=GameAvailabilityIssue(current);
             if(!GameSearchOpen && (filters[collectionIndex].Id=="most-played" || filters[collectionIndex].Id=="most-played-lately")) {
