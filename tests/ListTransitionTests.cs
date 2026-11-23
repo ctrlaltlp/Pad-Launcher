@@ -51,7 +51,7 @@ class ListTransitionTests {
             var translation=(TranslateTransform)live.RenderTransform;
             Check(!window.ListTransitionActive && viewport.Children.Count==1 && live.Opacity==1 && translation.X==0 && translation.Y==0,"Completion removes outgoing panels and restores exact opacity and position");
             window.NavigateController(new PadState()); window.NavigateController(new PadState {Buttons=1});
-            Check(label.Text==before && (!SystemParameters.ClientAreaAnimation || window.ListTransitionVertical),"Up/down list changes use a vertical transition");
+            Check(label.Text==before && (!SystemParameters.ClientAreaAnimation || (window.ListTransitionVertical && window.ListTransitionDirection==-1)),"Up selects the next list while keeping the original slide direction");
             Key(window,System.Windows.Input.Key.Right);
             Check(!window.ListTransitionActive && live.Opacity==1,"Game browsing can interrupt a transition immediately");
             Key(window,System.Windows.Input.Key.PageDown); window.Close();

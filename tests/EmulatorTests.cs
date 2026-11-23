@@ -221,10 +221,15 @@ class EmulatorTests {
                 new Collection {Id="source:retroarch-playlist:ps2",Name="PlayStation 2 · RetroArch",Source="emulator"},
                 new Collection {Id="source:retroarch-playlist:wii",Name="Wii · RetroArch",Source="emulator"},
                 new Collection {Id="source:retroarch-playlist:switch",Name="Switch · RetroArch",Source="emulator"},
+                new Collection {Id="source:emulator:xemu",Name="Xbox · xemu",Source="emulator"},
+                new Collection {Id="source:emulator:xenia",Name="Xbox 360 · Xenia",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:genesis",Name="Genesis · RetroArch",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:dreamcast",Name="Dreamcast · RetroArch",Source="emulator"},
+                new Collection {Id="source:retroarch-playlist:atari",Name="Atari 2600 · RetroArch",Source="emulator"},
                 new Collection {Id="source:retroarch-playlist:unknown",Name="Unknown console · RetroArch",Source="emulator"}
             };
             var listOrder=EmulatorLibrary.DefaultListOrder(listOrderOptions,new Library(),new Settings()).Where(item => item.Source=="emulator").Select(item => item.Name).ToList();
-            Check(listOrder.SequenceEqual(new[]{"GameCube · RetroArch","Wii / GameCube · Dolphin","Wii · RetroArch","Switch · RetroArch","Game Boy · RetroArch","PlayStation · DuckStation","PlayStation 2 · RetroArch","Unknown console · RetroArch"}),"Emulator and RetroArch playlist lists sort by maker, TV/handheld, then release year");
+            Check(listOrder.SequenceEqual(new[]{"PlayStation · DuckStation","PlayStation 2 · RetroArch","Xbox · xemu","Xbox 360 · Xenia","GameCube · RetroArch","Wii / GameCube · Dolphin","Wii · RetroArch","Switch · RetroArch","Game Boy · RetroArch","Genesis · RetroArch","Dreamcast · RetroArch","Atari 2600 · RetroArch","Unknown console · RetroArch"}),"Emulator and RetroArch playlist lists sort by PlayStation, Xbox, Nintendo, Sega, then other makers, with TV/handheld and release year inside each");
             Console.WriteLine(checks+" emulator checks passed");
         } finally {Directory.Delete(root,true);}
     }

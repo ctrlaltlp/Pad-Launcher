@@ -63,9 +63,9 @@
   <Style TargetType="CheckBox">
     <Setter Property="Foreground" Value="#ECF3F2"/><Setter Property="Cursor" Value="Hand"/>
     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
-      <Grid Background="Transparent"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Border x:Name="Box" Width="19" Height="19" CornerRadius="5" Background="#1C303D" BorderBrush="#55727D" BorderThickness="1" VerticalAlignment="Center"><Path x:Name="Check" Data="M 4,9 L 8,13 L 15,5" Stroke="#0D1922" StrokeThickness="2" Visibility="Collapsed"/></Border>
-        <ContentPresenter Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+        <ContentPresenter Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Left" RecognizesAccessKey="True"/>
       </Grid>
       <ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#A3F0CD"/><Setter TargetName="Box" Property="BorderBrush" Value="#A3F0CD"/><Setter TargetName="Check" Property="Visibility" Value="Visible"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#A3F0CD"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="#ECF3F2"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers>
     </ControlTemplate></Setter.Value></Setter>

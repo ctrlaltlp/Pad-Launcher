@@ -498,8 +498,20 @@ namespace PadLauncher {
             }
             return false;
         }
+        static int MakerRank(string maker) {
+            switch((maker ?? "").Trim().ToLowerInvariant()) {
+                case "sony": return 0;
+                case "microsoft": return 1;
+                case "nintendo": return 2;
+                case "sega": return 3;
+                default: return 4;
+            }
+        }
         static string ConsoleSortKey(ConsoleInfo info) {
-            return info==null ? "~|2|9999" : info.Maker.ToLowerInvariant()+"|"+(info.Handheld ? "1" : "0")+"|"+info.Year.ToString("D4");
+            if(info==null) return "~|2|9999";
+            int rank=MakerRank(info.Maker);
+            string maker=rank==4 ? info.Maker.ToLowerInvariant() : "";
+            return rank.ToString("D2")+"|"+maker+"|"+(info.Handheld ? "1" : "0")+"|"+info.Year.ToString("D4");
         }
         static string ConsoleSortKey(string value) {
             ConsoleInfo info; return TryConsoleInfo(value,out info) ? ConsoleSortKey(info) : "~|2|9999";

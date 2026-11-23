@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.5")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.5")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.5")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.6")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.6")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.6")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -748,9 +748,9 @@ namespace PadLauncher {
             tabs.ItemContainerStyle=(Style)System.Windows.Markup.XamlReader.Parse(@"<Style xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='{x:Type TabItem}'>
                 <Setter Property='Background' Value='#22333F'/><Setter Property='Foreground' Value='#ECF3F2'/><Setter Property='FontSize' Value='14'/>
                 <Setter Property='HorizontalContentAlignment' Value='Stretch'/><Setter Property='VerticalContentAlignment' Value='Stretch'/>
-                <Setter Property='MinWidth' Value='64'/><Setter Property='Cursor' Value='Hand'/>
+                <Setter Property='MinWidth' Value='64'/>
                 <Setter Property='Template'><Setter.Value><ControlTemplate TargetType='{x:Type TabItem}'>
-                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='8,10' Margin='0,0,3,0' HorizontalAlignment='Stretch' VerticalAlignment='Stretch'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
+                    <Border x:Name='TabBorder' Background='{TemplateBinding Background}' CornerRadius='6,6,0,0' Padding='8,10' Margin='0,0,3,0' HorizontalAlignment='Stretch' VerticalAlignment='Stretch' Cursor='Hand'><ContentPresenter ContentSource='Header' HorizontalAlignment='Center'/></Border>
                     <ControlTemplate.Triggers><Trigger Property='IsSelected' Value='True'><Setter TargetName='TabBorder' Property='Background' Value='#A3F0CD'/><Setter Property='Foreground' Value='#0D1922'/></Trigger></ControlTemplate.Triggers>
                 </ControlTemplate></Setter.Value></Setter>
             </Style>");
@@ -2255,7 +2255,7 @@ namespace PadLauncher {
             cards.Clear(); carousel.Children.Clear(); ApplyCarouselScale(); Render(false);
             DownloadListArtwork();
         }
-        void ChangeCollection(int delta,bool vertical=false,bool animate=true) {
+        void ChangeCollection(int delta,bool vertical=false,bool animate=true,int? animationDirection=null) {
             if (launching || filters.Count < 2) return;
             int next=(collectionIndex+delta+filters.Count)%filters.Count;
             if(next==collectionIndex) return;
@@ -2269,7 +2269,7 @@ namespace PadLauncher {
             try {
                 settings.CollectionId = filters[collectionIndex].Id; FilterGames(false);
                 navigationSaveTimer.Stop(); if(!demo) navigationSaveTimer.Start();
-                if(animate) AnimateListSwitch(oldList,delta,vertical);
+                if(animate) AnimateListSwitch(oldList,animationDirection ?? delta,vertical);
             }
             catch {StopListTransition(); throw;}
             if (filters[collectionIndex].UnsupportedDynamic) ShowNotice(filters[collectionIndex].UnsupportedReason ?? "This dynamic list uses a rule that is not supported yet.");
@@ -2819,7 +2819,8 @@ namespace PadLauncher {
             int direction=ControllerNavigation.InputDirection(pad,settings,GridColumns,out fast,ActiveLayout);
             double now=Stopwatch.GetTimestamp()*1000.0/Stopwatch.Frequency;
             if (navigation.Update(direction,fast,now,settings.RightStickSpeed,Math.Abs(direction)==ControllerNavigation.ListStep ? 1 : ControllerNavigation.NormalSpeed(pad,direction,gridLayout,GridColumns,settings))) {
-                if(Math.Abs(direction)==ControllerNavigation.ListStep) ChangeCollection(Math.Sign(direction),true);
+                // List targets follow the swapped Up/Down controls, but the slide animation keeps its original direction.
+                if(Math.Abs(direction)==ControllerNavigation.ListStep) ChangeCollection(Math.Sign(direction),true,true,-Math.Sign(direction));
                 else if(gridLayout && Math.Abs(direction)==GridColumns) MoveGridRow(Math.Sign(direction)); else Move(direction);
                 // Artwork decoding/layout can take longer on the first move.
                 // Begin the repeat delay after that work, never catch up missed ticks.
@@ -2904,8 +2905,8 @@ namespace PadLauncher {
         public static int ListDirection(PadState pad,Settings settings,string layout=null) {
             if(!ListSwitchEnabled(settings,layout)) return 0;
 
-            if((pad.Buttons&0x0003)!=0) return (pad.Buttons&0x0003)==0x0001 ? -1 : (pad.Buttons&0x0003)==0x0002 ? 1 : 0;
-            return pad.LY>16000 ? -1 : pad.LY < -16000 ? 1 : 0;
+            if((pad.Buttons&0x0003)!=0) return (pad.Buttons&0x0003)==0x0001 ? 1 : (pad.Buttons&0x0003)==0x0002 ? -1 : 0;
+            return pad.LY>16000 ? 1 : pad.LY < -16000 ? -1 : 0;
         }
         public static int InputDirection(PadState pad,Settings settings,int columns,out bool fast,string layout=null) {
             int direction=Direction(pad,(layout ?? settings.CarouselLayout)=="grid",columns,out fast);
@@ -2921,9 +2922,9 @@ namespace PadLauncher {
             if(key==System.Windows.Input.Key.Left) return -1;
             if(key==System.Windows.Input.Key.Right) return 1;
             if(grid && key==System.Windows.Input.Key.Up) return -columns;
-            if(!grid && lists && key==System.Windows.Input.Key.Up) return -ListStep;
+            if(!grid && lists && key==System.Windows.Input.Key.Up) return ListStep;
             if(grid && key==System.Windows.Input.Key.Down) return columns;
-            if(!grid && lists && key==System.Windows.Input.Key.Down) return ListStep;
+            if(!grid && lists && key==System.Windows.Input.Key.Down) return -ListStep;
             return 0;
         }
         public static int Direction(PadState pad,bool grid,int columns,out bool fast) {

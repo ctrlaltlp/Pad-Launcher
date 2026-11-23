@@ -13,6 +13,7 @@ namespace PadLauncher {
         int listTransitionGeneration;
         internal bool ListTransitionActive {get {return outgoingList!=null;}}
         internal bool ListTransitionVertical {get;private set;}
+        internal int ListTransitionDirection {get;private set;}
         void StopListTransition() {
             listTransitionGeneration++;
             listTranslation.BeginAnimation(TranslateTransform.XProperty,null);
@@ -40,7 +41,7 @@ namespace PadLauncher {
         }
         void AnimateListSwitch(Grid oldList,int delta,bool vertical) {
             if(oldList==null) return;
-            int generation=listTransitionGeneration; ListTransitionVertical=vertical;
+            int generation=listTransitionGeneration; ListTransitionVertical=vertical; ListTransitionDirection=Math.Sign(delta);
             double distance=(vertical ? 105 : 140)*Math.Sign(delta);
             var axis=vertical ? TranslateTransform.YProperty : TranslateTransform.XProperty;
             var duration=TimeSpan.FromMilliseconds(240);
