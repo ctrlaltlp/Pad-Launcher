@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.8")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.8")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.8")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.9")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.9")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.9")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -466,6 +466,7 @@ namespace PadLauncher {
         void ShowOverlay(bool keepPreparedList) {
             if (exiting) return;
             if (IsVisible) { FocusOverlayInput(); return; }
+            if(!preview && !demo && PlayTimeTracker.Consume(settings,Storage.Root)) Save();
             launching=false; controllerWaitForForegroundRelease=false; exitButton.Reset(); previousButtons=0; navigation.Reset();
             suppressSearchRelease=false; bindingLeftTriggerDown=bindingRightTriggerDown=false; layoutToggleDown=false;
             if(!keepPreparedList) ApplyLibrary(true);
@@ -2726,6 +2727,7 @@ namespace PadLauncher {
             if(emulatorIssue!=null) {ShowNotice(emulatorIssue+". Check Settings → Emulators."); return;}
             launching=true;
             try {
+                PlayTimeTracker.Consume(settings,Storage.Root);
                 PlayTimeTracker.ConsumeSteam(settings);
                 PlayTimeTracker.CaptureSteamPlayTime(settings,game);
                 Save();
