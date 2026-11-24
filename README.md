@@ -95,7 +95,7 @@ Preconfigured lists:
 
 **Remove missing emulator and custom games on refresh** can also be run on demand with **Remove missing games…** under **Lists**. It removes emulator and custom game entries whose game file or folder has been deleted, including their list memberships. Before removing anything it asks whether to also delete their artwork data; choose **No** if you plan to reimport the games. Disconnected drives and inaccessible folders are skipped.
 
-**Settings → Activity** shows each game's last launched time, play time and launch count. Play time records games launched through Pad Launcher, including Steam sessions and games started through supported launchers (EA App, Epic, GOG, Ubisoft Connect, Rockstar, Battle.net and Xbox app) using their install folders. Enable **Include imported play time** to show Steam's total imported play time instead. Sort the table by play time, last launched or launch count.
+**Settings → Activity** shows each game's last launched time, play time and launch count. Play time updates live while a game is running and records games launched through Pad Launcher, including Steam sessions and games started through supported launchers (EA App, Epic, GOG, Ubisoft Connect, Rockstar, Battle.net and Xbox app) using their install folders. Enable **Include imported play time** to show Steam's total imported play time instead. Sort the table by play time, last launched or launch count. **Clear activity stats** resets launch history, launch counts and recorded play time; it keeps favourites, list memberships, artwork and recently-added dates.
 
 Open **Settings → Lists → List editor** to manage your lists.
 

@@ -23,7 +23,7 @@ namespace PadLauncher {
                 long launched=0;
                 if(settings.LaunchHistory!=null) settings.LaunchHistory.TryGetValue(game.Id,out launched);
                 LastValue=Math.Max(game.LastPlayed,launched);
-                PlaySeconds=PlayTimeTracker.Local(settings,game);
+                PlaySeconds=PlayTimeTracker.Local(settings,game)+PlayTimeTracker.LiveSeconds(game);
                 if(includeImportedPlayTime) PlaySeconds=Math.Max(PlaySeconds,Math.Max(0,game.ImportedPlayTimeSeconds));
                 LaunchValue=CombinedCollections.LaunchCount(settings,game);
                 LastLaunched=LastValue>0 ? DateTimeOffset.FromUnixTimeSeconds(LastValue).ToLocalTime().ToString("g") : "Never";
@@ -35,6 +35,21 @@ namespace PadLauncher {
             if(seconds<=0) return "—";
             long hours=seconds/3600, minutes=(seconds%3600)/60;
             return hours>0 ? hours+"h "+minutes+"m" : Math.Max(1,minutes)+"m";
+        }
+        internal static void ClearActivityStats(Settings settings,Library library) {
+            if(settings!=null) {
+                settings.LaunchHistory=new Dictionary<string,long>();
+                settings.LaunchCounts=new Dictionary<string,long>();
+                settings.PlayTimeSeconds=new Dictionary<string,long>();
+                settings.SteamPlayTimeAtLaunch=new Dictionary<string,string>();
+            }
+            if(library==null || library.Games==null) return;
+            foreach(var game in library.Games) {
+                if(game==null) continue;
+                game.LastPlayed=0;
+                game.HasPlayHistory=false;
+                game.ImportedPlayTimeSeconds=0;
+            }
         }
         FrameworkElement CreatePlayActivityPanel(Window dialog) {
             var root=new StackPanel();

@@ -15,7 +15,55 @@ namespace PadLauncher {
             return Math.Max(0,seconds);
         }
         public static long Total(Settings settings,Game game) {
-            return Local(settings,game)+(game==null ? 0 : Math.Max(0,game.ImportedPlayTimeSeconds));
+            return Local(settings,game)+LiveSeconds(game)+(game==null ? 0 : Math.Max(0,game.ImportedPlayTimeSeconds));
+        }
+        public const string LivePrefix="playtime-live-";
+        static readonly object liveGate=new object();
+        static string liveRoot;
+        static long liveStamp;
+        static Dictionary<string,long> liveMap;
+        public static void InvalidateLiveCache() {
+            lock(liveGate) {liveRoot=null; liveMap=null; liveStamp=0;}
+        }
+        static Dictionary<string,long> ReadLive(long now) {
+            var map=new Dictionary<string,long>(StringComparer.Ordinal);
+            string[] files;
+            try {files=Directory.GetFiles(Storage.Root,LivePrefix+"*.log");}
+            catch(IOException) {return map;} catch(UnauthorizedAccessException) {return map;}
+            foreach(string file in files) {
+                try {
+                    string[] parts=File.ReadAllText(file).Trim().Split('\t');
+                    if(parts.Length<3) continue;
+                    long start,last;
+                    if(!Int64.TryParse(parts[1],out start) || !Int64.TryParse(parts[2],out last)) continue;
+                    string id;
+                    try {id=Uri.UnescapeDataString(parts[0]);} catch(UriFormatException) {continue;}
+                    if(last<start || now-last>15) {
+                        if(now-last>60) {try {File.Delete(file);} catch(IOException) {} catch(UnauthorizedAccessException) {}}
+                        continue;
+                    }
+                    long elapsed=Math.Min(12*3600,last-start);
+                    if(elapsed<=0) continue;
+                    long existing; map.TryGetValue(id,out existing);
+                    map[id]=Math.Min(12*3600,existing+elapsed);
+                } catch(IOException) {} catch(UnauthorizedAccessException) {}
+            }
+            return map;
+        }
+        public static long LiveSeconds(Game game) {
+            if(game==null || String.IsNullOrWhiteSpace(Storage.Root)) return 0;
+            long now=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            Dictionary<string,long> map;
+            lock(liveGate) {
+                if(liveMap==null || !String.Equals(liveRoot,Storage.Root,StringComparison.OrdinalIgnoreCase) || now-liveStamp>1) {
+                    liveMap=ReadLive(now);
+                    liveRoot=Storage.Root;
+                    liveStamp=now;
+                }
+                map=liveMap;
+            }
+            long seconds;
+            return map.TryGetValue(game.Id,out seconds) ? seconds : 0;
         }
         public static string SteamAppId(Game game) {
             if(game==null) return null;
@@ -93,10 +141,10 @@ namespace PadLauncher {
             return changed;
         }
         public static string Hours(Settings settings,Game game) {
-            long seconds=Local(settings,game);
+            long seconds=Local(settings,game)+LiveSeconds(game);
             if(seconds<=0) return "0m";
             if(seconds<3600) return Math.Max(1,seconds/60)+"m";
-            return Math.Round(seconds/3600.0,1).ToString("0.#")+"h";
+            return (seconds/3600)+"h";
         }
         public static bool Consume(Settings settings,string root) {
             if(settings==null || String.IsNullOrWhiteSpace(root)) return false;
@@ -155,8 +203,9 @@ namespace PadLauncher {
             int pid;
             if(!Int32.TryParse(Argument(args,"--pid"),out pid)) return;
             try {
-                var process=Process.GetProcessById(pid);
-                process.WaitForExit();
+                using(var process=Process.GetProcessById(pid)) {
+                    while(!process.WaitForExit(1000)) WriteLive(root,gameId,start);
+                }
             } catch(ArgumentException) {return;} catch(InvalidOperationException) {return;}
             long end=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             WriteSession(root,gameId,start,end);
@@ -180,6 +229,7 @@ namespace PadLauncher {
                     else if(now>=graceUntil) break;
                 } else if(now>=giveUp) return;
                 if(first>0 && now-first>12*3600) break;
+                if(first>0) WriteLive(root,gameId,first);
                 Thread.Sleep(1000);
             }
             if(first>0) WriteSession(root,gameId,first,last);
@@ -202,6 +252,7 @@ namespace PadLauncher {
             return count;
         }
         static void WriteSession(string root,string gameId,long start,long end) {
+            ClearLive(root);
             if(end<=start) return;
             try {
                 Directory.CreateDirectory(root);
@@ -209,6 +260,19 @@ namespace PadLauncher {
                 using(var stream=new FileStream(Path.Combine(root,SessionFile),FileMode.Append,FileAccess.Write,FileShare.ReadWrite))
                 using(var writer=new StreamWriter(stream,new UTF8Encoding(false))) writer.Write(line);
             } catch(IOException) {} catch(UnauthorizedAccessException) {}
+        }
+        static void WriteLive(string root,string gameId,long start) {
+            if(String.IsNullOrWhiteSpace(root) || String.IsNullOrWhiteSpace(gameId) || start<=0) return;
+            try {
+                Directory.CreateDirectory(root);
+                string line=Uri.EscapeDataString(gameId)+"\t"+start+"\t"+DateTimeOffset.UtcNow.ToUnixTimeSeconds()+Environment.NewLine;
+                File.WriteAllText(Path.Combine(root,LivePrefix+Process.GetCurrentProcess().Id+".log"),line,new UTF8Encoding(false));
+            } catch(IOException) {} catch(UnauthorizedAccessException) {}
+        }
+        static void ClearLive(string root) {
+            if(String.IsNullOrWhiteSpace(root)) return;
+            try {File.Delete(Path.Combine(root,LivePrefix+Process.GetCurrentProcess().Id+".log"));}
+            catch(IOException) {} catch(UnauthorizedAccessException) {}
         }
         static string Argument(string[] args,string name) {
             for(int index=0;index+1<args.Length;index++) if(String.Equals(args[index],name,StringComparison.OrdinalIgnoreCase)) return args[index+1];

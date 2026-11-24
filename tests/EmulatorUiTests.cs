@@ -318,6 +318,23 @@ class EmulatorUiTests {
             Check(activityGrid!=null && activityGrid.Foreground!=null && activityGrid.CellStyle!=null && activityGrid.RowStyle!=null && activityGrid.ColumnHeaderStyle!=null,"Activity table uses the themed readable row, cell and header styles");
             includeImported.IsChecked=true; includeImported.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(Storage.Read<Settings>("settings.json").IncludeImportedPlayTime,"Activity can include imported play time when enabled");
+            var statsSettings=new Settings {
+                LaunchHistory=new Dictionary<string,long>{{"activity-game",123}},
+                LaunchCounts=new Dictionary<string,long>{{"activity-game",4}},
+                PlayTimeSeconds=new Dictionary<string,long>{{"activity-game",900}},
+                SteamPlayTimeAtLaunch=new Dictionary<string,string>{{"activity-game","10|600"}},
+                FavouriteGameIds=new List<string>{"activity-game"},
+                GameAddedAt=new Dictionary<string,long>{{"activity-game",456}}
+            };
+            var statsLibrary=new Library {Games=new List<Game>{new Game {Id="activity-game",Name="Activity game",LastPlayed=123,HasPlayHistory=true,ImportedPlayTimeSeconds=600}}};
+            Launcher.ClearActivityStats(statsSettings,statsLibrary);
+            Check(statsSettings.LaunchHistory.Count==0 && statsSettings.LaunchCounts.Count==0 && statsSettings.PlayTimeSeconds.Count==0 && statsSettings.SteamPlayTimeAtLaunch.Count==0 && statsSettings.FavouriteGameIds.Contains("activity-game") && statsSettings.GameAddedAt.ContainsKey("activity-game") && statsLibrary.Games[0].LastPlayed==0 && !statsLibrary.Games[0].HasPlayHistory && statsLibrary.Games[0].ImportedPlayTimeSeconds==0,"Clear activity stats resets launch and play history without touching favourites or added dates");
+            var clearActivity=(Button)Find(content,"ClearPlayActivityStats");
+            var closeSettings=(Button)Find(content,"CloseSettings");
+            Check(clearActivity!=null && (string)clearActivity.Content=="Clear activity stats" && clearActivity.Visibility==Visibility.Visible && Grid.GetRow(clearActivity)==Grid.GetRow(closeSettings) && clearActivity.HorizontalAlignment==HorizontalAlignment.Left && clearActivity.ReadLocalValue(Control.BackgroundProperty)==DependencyProperty.UnsetValue && clearActivity.ReadLocalValue(Control.ForegroundProperty)==DependencyProperty.UnsetValue && clearActivity.ReadLocalValue(Control.BorderThicknessProperty)==DependencyProperty.UnsetValue,"Activity shows a left-aligned, default-styled Clear activity stats button on the Close button row");
+            tabs.SelectedIndex=5; Layout(content);
+            Check(clearActivity.Visibility==Visibility.Collapsed,"Clear activity stats is only shown on the Activity tab");
+            tabs.SelectedIndex=8; Layout(content);
             tabs.SelectedIndex=5; Layout(content);
             var emulatorTabs=(TabControl)Find(content,"EmulatorTabs");
             emulatorTabs.SelectedIndex=1; Layout(content);

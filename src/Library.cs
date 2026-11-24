@@ -329,7 +329,7 @@ namespace PadLauncher {
             long last=RecentPlayed(settings,game);
             if(last<=0) return 0;
             double days=Math.Max(0,(now-last)/86400.0);
-            double hours=Math.Max(0,PlayTimeTracker.Local(settings,game))/3600.0;
+            double hours=Math.Max(0,PlayTimeTracker.Local(settings,game)+PlayTimeTracker.LiveSeconds(game))/3600.0;
             double playTimeWeight=1+Math.Log(1+hours,2)/4;
             return count*playTimeWeight*Math.Pow(0.5,days/60.0);
         }

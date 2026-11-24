@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.9")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.9")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.9")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.10")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.10")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.10")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -1738,8 +1738,28 @@ namespace PadLauncher {
             rebuild();
             dialog.PreviewKeyDown+=(s,e) => { if(e.Key==System.Windows.Input.Key.Escape) { dialog.Close(); e.Handled=true; } };
             var root=new Grid(); root.RowDefinitions.Add(new RowDefinition()); root.RowDefinitions.Add(new RowDefinition {Height=GridLength.Auto}); root.Children.Add(tabs);
-            var close=new Button {Content="Close",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(28,12,28,20),IsCancel=true};
+            var close=new Button {Name="CloseSettings",Content="Close",Background=mint,Foreground=new SolidColorBrush(Color.FromRgb(13,25,34)),BorderThickness=new Thickness(0),Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(28,12,28,20),IsCancel=true};
             close.Click+=(s,e) => dialog.Close(); Grid.SetRow(close,1); root.Children.Add(close);
+            var clearActivity=new Button {Name="ClearPlayActivityStats",Content="Clear activity stats",Padding=new Thickness(22,9,22,9),FontSize=14,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(28,12,28,20),Visibility=Visibility.Collapsed};
+            clearActivity.Click+=(s,e) => {
+                if(!ThemedMessage.Confirm(dialog,"Are you sure you want to clear your game activity?","Clear activity stats")) return;
+                try {
+                    ClearActivityStats(settings,library);
+                    Storage.Write("settings.json",settings);
+                    Storage.Write("library.json",library);
+                    ApplyLibrary();
+                    rebuild();
+                } catch(Exception error) {
+                    ThemedMessage.Show(dialog,error.Message,"Clear activity stats");
+                }
+            };
+            Grid.SetRow(clearActivity,1); root.Children.Add(clearActivity);
+            Action syncActivityAction=() => {
+                var selected=tabs.SelectedItem as TabItem;
+                clearActivity.Visibility=selected!=null && Object.ReferenceEquals(selected.Content,activityScroll) ? Visibility.Visible : Visibility.Collapsed;
+            };
+            tabs.SelectionChanged+=(s,e) => syncActivityAction();
+            syncActivityAction();
             dialog.Content=root;
             return dialog;
         }

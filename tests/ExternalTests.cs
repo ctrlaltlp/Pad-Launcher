@@ -179,7 +179,17 @@ class ExternalTests {
             File.WriteAllText(localConfig,steamVdf.Replace("\"Playtime\" \"10\"","\"Playtime\" \"14\""));
             Check(PlayTimeTracker.ConsumeSteam(steamTimeSettings) && steamTimeSettings.PlayTimeSeconds["100"]==240 && steamTimeSettings.SteamPlayTimeAtLaunch.Count==0,"Steam sessions record the play time gained since Pad Launcher launched the game");
             var shortTimeSettings=new Settings {PlayTimeSeconds=new Dictionary<string,long>{{"short",900},{"long",5400}}};
-            Check(PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="short"})=="15m" && PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="long"}).EndsWith("h") && PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="none"})=="0m","Play time shows minutes below an hour and hours above it");
+            Check(PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="short"})=="15m" && PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="long"})=="1h" && PlayTimeTracker.Hours(shortTimeSettings,new Game {Id="none"})=="0m","Play time shows minutes below an hour and whole hours above it");
+            string livePath=Path.Combine(root,PlayTimeTracker.LivePrefix+"test.log");
+            long liveNow=DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            File.WriteAllText(livePath,"live%3Agame\t"+(liveNow-120)+"\t"+liveNow+Environment.NewLine);
+            PlayTimeTracker.InvalidateLiveCache();
+            Check(PlayTimeTracker.LiveSeconds(new Game {Id="live:game"})>=118 && PlayTimeTracker.Hours(new Settings(),new Game {Id="live:game"})=="2m","Running games contribute live play time to the overlay and Activity");
+            File.WriteAllText(livePath,"live%3Agame\t"+(liveNow-1200)+"\t"+(liveNow-120)+Environment.NewLine);
+            PlayTimeTracker.InvalidateLiveCache();
+            Check(PlayTimeTracker.LiveSeconds(new Game {Id="live:game"})==0,"Stale live play-time markers are ignored");
+            try {File.Delete(livePath);} catch(IOException) {}
+            PlayTimeTracker.InvalidateLiveCache();
             string watchRoot=Path.Combine(root,"ea-game"); Directory.CreateDirectory(watchRoot);
             var eaGame=new Game {Id="ea:test",Source="ea",WorkingDirectory=watchRoot};
             Check(PlayTimeTracker.DirectoryToWatch(eaGame)==watchRoot && PlayTimeTracker.DirectoryToWatch(new Game {Source="xbox",WorkingDirectory=watchRoot})==watchRoot && PlayTimeTracker.DirectoryToWatch(new Game {Source="steam",WorkingDirectory=watchRoot})==null && PlayTimeTracker.DirectoryToWatch(new Game {Source="custom",WorkingDirectory=watchRoot})==null,"Launcher and Xbox games with an install folder are watched without double-counting Steam or custom launches");
@@ -192,6 +202,7 @@ class ExternalTests {
             string[] watchedParts=watchedSessions.Select(line => line.Split('\t')).FirstOrDefault(parts => parts.Length>=3 && Uri.UnescapeDataString(parts[0])=="ea:test");
             long watchedEnd=0;
             Check(watchedParts!=null && Int64.TryParse(watchedParts[2],out watchedEnd) && watchedEnd>watchStart,"Launcher sessions start when the game executable appears and stop when it exits");
+            Check(Directory.GetFiles(root,PlayTimeTracker.LivePrefix+"*.log").Length==0,"Finished sessions remove the live play-time marker");
             Check(featureSettings.RightStickSpeed==5,"Settings without a saved speed default to 5x right stick speed");
             Check(StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).StartsWith("\"") && StartupSetting.Command(Path.Combine(root,"Folder with spaces","Launcher.exe")).EndsWith("\""),"Windows startup executable path is quoted");
             byte[] coverBytes;
