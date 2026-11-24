@@ -98,9 +98,9 @@ namespace PadLauncher {
                 sortButtons[key]=button; return button;
             };
             grid.Columns.Add(new DataGridTextColumn {Header=header("Game","game"),Binding=new Binding("Game"),Width=new DataGridLength(1,DataGridLengthUnitType.Star),ElementStyle=textStyle});
+            grid.Columns.Add(new DataGridTextColumn {Header=header("Last launched","last"),Binding=new Binding("LastLaunched"),Width=170,ElementStyle=textStyle});
             grid.Columns.Add(new DataGridTextColumn {Header=header("Play time","time"),Binding=new Binding("PlayTime"),Width=130,ElementStyle=textStyle});
             grid.Columns.Add(new DataGridTextColumn {Header=header("Launches","launches"),Binding=new Binding("Launches"),Width=90,ElementStyle=textStyle});
-            grid.Columns.Add(new DataGridTextColumn {Header=header("Last launched","last"),Binding=new Binding("LastLaunched"),Width=170,ElementStyle=textStyle});
             grid.PreviewMouseDown+=(s,e) => {
                 if(e.ChangedButton!=System.Windows.Input.MouseButton.Left) return;
                 DependencyObject node=e.OriginalSource as DependencyObject;

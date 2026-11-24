@@ -313,7 +313,7 @@ class EmulatorUiTests {
             if(playTimeHeader!=null) playTimeHeader.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0,System.Windows.Input.MouseButton.Left){RoutedEvent=System.Windows.Input.Mouse.PreviewMouseDownEvent});
             Check(((string)timeHeader.Content).EndsWith("▲"),"Clicking anywhere on a column header sorts it");
             var includeImported=(CheckBox)Find(content,"PlayActivityIncludeImportedPlayTime");
-            Check(activityGrid.Columns.Count==4 && ((FrameworkElement)activityGrid.Columns[3].Header).Name=="PlayActivitySort_last","Activity places Last launched in the last column");
+            Check(activityGrid.Columns.Count==4 && ((FrameworkElement)activityGrid.Columns[1].Header).Name=="PlayActivitySort_last" && ((FrameworkElement)activityGrid.Columns[2].Header).Name=="PlayActivitySort_time" && ((FrameworkElement)activityGrid.Columns[3].Header).Name=="PlayActivitySort_launches","Activity places Last launched after Game, then Play time and Launches");
             Check(includeImported!=null && includeImported.IsChecked==false,"Activity uses Pad Launcher play time only by default");
             Check(activityGrid!=null && activityGrid.Foreground!=null && activityGrid.CellStyle!=null && activityGrid.RowStyle!=null && activityGrid.ColumnHeaderStyle!=null,"Activity table uses the themed readable row, cell and header styles");
             includeImported.IsChecked=true; includeImported.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
