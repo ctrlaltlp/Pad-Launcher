@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.9")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.9")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.9")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.10")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.10")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.10")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -321,6 +321,8 @@ namespace PadLauncher {
         readonly DispatcherTimer controllerTimer = new DispatcherTimer(DispatcherPriority.Input);
         readonly DispatcherTimer noticeTimer = new DispatcherTimer();
         readonly DispatcherTimer navigationSaveTimer=new DispatcherTimer(DispatcherPriority.Background);
+        readonly DispatcherTimer overlayPlayTimeTimer=new DispatcherTimer(DispatcherPriority.Background);
+        int overlayPlayTimeTicks;
         bool temporaryLabels;
         Settings settings;
         Library library = new Library();
@@ -352,6 +354,16 @@ namespace PadLauncher {
                 bool playTime=PlayTimeTracker.Consume(settings,Storage.Root);
                 if(PlayTimeTracker.ConsumeSteam(settings)) playTime=true;
                 if(playTime) Storage.Write("settings.json",settings);
+                overlayPlayTimeTimer.Interval=TimeSpan.FromSeconds(2);
+                overlayPlayTimeTimer.Tick+=(s,e) => {
+                    int revision=PlayTimeTracker.Revision;
+                    PlayTimeTracker.Consume(settings,Storage.Root);
+                    overlayPlayTimeTicks++;
+                    if(overlayPlayTimeTicks%15==0) PlayTimeTracker.ConsumeSteam(settings);
+                    if(PlayTimeTracker.Revision==revision) return;
+                    try {Storage.Write("settings.json",settings);} catch(Exception) {}
+                    if(filters.Count>0 && collectionIndex>=0 && collectionIndex<filters.Count && (filters[collectionIndex].Id=="most-played" || filters[collectionIndex].Id=="most-played-lately")) FilterGames(true);
+                };
             }
             if(settings.DesktopArcSide==null) settings.DesktopArcSide=settings.QuickSelectSide ?? "right";
             if(settings.DesktopArcMode==null) {
@@ -397,13 +409,13 @@ namespace PadLauncher {
             Deactivated+=(s,e) => controllerWaitForForegroundRelease=true;
             PreviewKeyDown += OnKey;
             PreviewTextInput+=(s,e) => HandleSearchText(e);
-            Closed += (s,e) => { updateCancellation.Cancel(); controllerTimer.Stop(); noticeTimer.Stop(); navigationSaveTimer.Stop(); Gamepad.StopNative(); Save(); };
+            Closed += (s,e) => { updateCancellation.Cancel(); controllerTimer.Stop(); noticeTimer.Stop(); navigationSaveTimer.Stop(); overlayPlayTimeTimer.Stop(); Gamepad.StopNative(); Save(); };
             Closing += (s,e) => {
                 CloseArc();
                 CancelArcReveal();
                 if(gameSearchWindow!=null) gameSearchWindow.Close();
                 if (!exiting) {
-                    e.Cancel=true; controllerTimer.Stop(); noticeTimer.Stop(); previousInputSource=null;
+                    e.Cancel=true; controllerTimer.Stop(); noticeTimer.Stop(); overlayPlayTimeTimer.Stop(); previousInputSource=null;
                     notice.Visibility=Visibility.Collapsed; exitButton.Reset(); previousButtons=0; navigation.Reset();
                     StopListTransition(); launching=false; Hide(); RestoreTemporaryLabels(); UpdateTrayHomeListener();
                     QueueSave();
@@ -466,13 +478,18 @@ namespace PadLauncher {
         void ShowOverlay(bool keepPreparedList) {
             if (exiting) return;
             if (IsVisible) { FocusOverlayInput(); return; }
-            if(!preview && !demo && PlayTimeTracker.Consume(settings,Storage.Root)) Save();
+            if(!preview && !demo) {
+                bool playTime=PlayTimeTracker.Consume(settings,Storage.Root);
+                if(PlayTimeTracker.ConsumeSteam(settings)) playTime=true;
+                if(playTime) Save();
+            }
             launching=false; controllerWaitForForegroundRelease=false; exitButton.Reset(); previousButtons=0; navigation.Reset();
             suppressSearchRelease=false; bindingLeftTriggerDown=bindingRightTriggerDown=false; layoutToggleDown=false;
             if(!keepPreparedList) ApplyLibrary(true);
             var monitor=preview ? null : ResolveMonitor(settings.OpenMonitor,System.Windows.Forms.Screen.AllScreens,System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position));
             if(monitor!=null) PlaceOnMonitor(monitor);
             Show();
+            if(!preview && !demo) overlayPlayTimeTimer.Start();
             if(monitor!=null) PlaceOnMonitor(monitor);
             if (!preview) { Gamepad.StartNative(new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle()); controllerTimer.Interval=TimeSpan.FromMilliseconds(16); controllerTimer.Start(); }
             FocusOverlayInput();

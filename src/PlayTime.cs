@@ -8,6 +8,7 @@ using System.Threading;
 namespace PadLauncher {
     public static class PlayTimeTracker {
         public const string SessionFile="playtime-sessions.log";
+        public static int Revision {get;private set;}
         public static long Local(Settings settings,Game game) {
             long seconds=0;
             if(settings!=null && settings.PlayTimeSeconds!=null && game!=null) settings.PlayTimeSeconds.TryGetValue(game.Id,out seconds);
@@ -88,6 +89,7 @@ namespace PadLauncher {
                 settings.SteamPlayTimeAtLaunch.Remove(gameId);
                 changed=true;
             }
+            if(changed) Revision++;
             return changed;
         }
         public static string Hours(Settings settings,Game game) {
@@ -125,6 +127,7 @@ namespace PadLauncher {
                 }
                 try {File.Delete(file);} catch(IOException) {} catch(UnauthorizedAccessException) {}
             }
+            if(changed) Revision++;
             return changed;
         }
         public static string DirectoryToWatch(Game game) {
@@ -141,7 +144,7 @@ namespace PadLauncher {
             long start;
             if(String.IsNullOrWhiteSpace(gameId) || String.IsNullOrWhiteSpace(root) || !Int64.TryParse(Argument(args,"--start"),out start)) return;
             if(!String.IsNullOrWhiteSpace(directory)) {
-                int grace=20; long wait=300;
+                int grace=4; long wait=300;
                 int parsed;
                 long parsedLong;
                 if(Int32.TryParse(Argument(args,"--grace"),out parsed) && parsed>=1) grace=parsed;
@@ -177,7 +180,7 @@ namespace PadLauncher {
                     else if(now>=graceUntil) break;
                 } else if(now>=giveUp) return;
                 if(first>0 && now-first>12*3600) break;
-                Thread.Sleep(2000);
+                Thread.Sleep(1000);
             }
             if(first>0) WriteSession(root,gameId,first,last);
         }

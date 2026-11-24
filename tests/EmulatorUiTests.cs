@@ -16,6 +16,26 @@ class EmulatorUiTests {
         for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) {var child=Find(VisualTreeHelper.GetChild(root,i),name); if(child!=null) return child;} return null;
     }
     static void Layout(FrameworkElement root) {root.Measure(new Size(780,680)); root.Arrange(new Rect(0,0,780,680)); root.UpdateLayout();}
+    static bool WaitForActivity(FrameworkElement content,string gameName,int seconds) {
+        bool found=false;
+        DateTime deadline=DateTime.UtcNow.AddSeconds(seconds);
+        var poll=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(100)};
+        poll.Tick+=(s,e) => {
+            var grid=(DataGrid)Find(content,"PlayActivityGames");
+            if(grid==null) return;
+            foreach(object item in grid.Items) {
+                var property=item==null ? null : item.GetType().GetProperty("Game");
+                if(property!=null && String.Equals(property.GetValue(item,null) as string,gameName,StringComparison.Ordinal)) {found=true; return;}
+            }
+        };
+        var guard=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(100)};
+        var frame=new DispatcherFrame();
+        guard.Tick+=(s,e) => {if(found || DateTime.UtcNow>=deadline) {guard.Stop(); frame.Continue=false;}};
+        poll.Start(); guard.Start();
+        Dispatcher.PushFrame(frame);
+        poll.Stop(); guard.Stop();
+        return found;
+    }
     static System.Collections.Generic.IEnumerable<DependencyObject> ImportChildren(DependencyObject root) {
         yield return root;
         foreach(var item in LogicalTreeHelper.GetChildren(root)) {var child=item as DependencyObject; if(child!=null) foreach(var next in ImportChildren(child)) yield return next;}
@@ -244,6 +264,7 @@ class EmulatorUiTests {
         try {
             string exe=Path.Combine(root,"duckstation.exe"),nextExe=Path.Combine(root,"duckstation-new.exe"),game=Path.Combine(root,"Test game.chd"); File.WriteAllText(exe,""); File.WriteAllText(nextExe,""); File.WriteAllText(game,"");
             var settings=new Settings(); EmulatorLibrary.SavePath(settings,"duckstation",exe); EmulatorLibrary.AddGames(settings,"duckstation",new[]{game});
+            var activityGame=EmulatorLibrary.Config(settings,"duckstation").Games[0];
             var library=new Library(); EmulatorLibrary.Apply(library,settings); Storage.Write("settings.json",settings); Storage.Write("library.json",library);
             launcher=new Launcher(false,true); var dialog=launcher.CreateHelpWindow(); var content=(FrameworkElement)dialog.Content;
             File.Move(exe,exe+".moved");
@@ -264,7 +285,11 @@ class EmulatorUiTests {
             var artworkPanel=emulatorArtworkDefaults==null ? null : emulatorArtworkDefaults.Parent as Panel;
             Check(cleanUpCachedArtwork!=null && artworkPanel!=null && artworkPanel.Children.IndexOf(cleanUpCachedArtwork)>artworkPanel.Children.IndexOf(emulatorArtworkDefaults) && (string)cleanUpCachedArtwork.Content=="Clean up cached artwork…","Artwork tab places merged cached-artwork cleanup below emulator artwork defaults");
             Check(Find(content,"RemoveMissingGameArtwork")==null,"Old separate missing-game artwork button is replaced");
+            File.WriteAllText(Path.Combine(root,PlayTimeTracker.SessionFile),Uri.EscapeDataString(activityGame.Id)+"\t1000\t1060"+Environment.NewLine);
             tabs.SelectedIndex=8; Layout(content);
+            Check(WaitForActivity(content,activityGame.Name,6),"Activity refreshes automatically when a new play session is recorded");
+            var refreshedActivity=Storage.Read<Settings>("settings.json");
+            Check(refreshedActivity.PlayTimeSeconds!=null && refreshedActivity.PlayTimeSeconds.ContainsKey(activityGame.Id) && refreshedActivity.PlayTimeSeconds[activityGame.Id]>=60,"Activity auto-refresh saves newly recorded play time");
             var gameHeader=(Button)Find(content,"PlayActivitySort_game");
             var lastHeader=(Button)Find(content,"PlayActivitySort_last");
             var timeHeader=(Button)Find(content,"PlayActivitySort_time");

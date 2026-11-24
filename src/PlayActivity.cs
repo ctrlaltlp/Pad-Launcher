@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace PadLauncher {
     public partial class Launcher {
@@ -38,7 +39,7 @@ namespace PadLauncher {
         FrameworkElement CreatePlayActivityPanel(Window dialog) {
             var root=new StackPanel();
             var heading=Label("Activity",26,white); heading.FontWeight=FontWeights.SemiBold; root.Children.Add(heading);
-            var note=Label("Last launched and play time for games with recorded activity. Play time includes Pad Launcher launches and tracked Steam sessions. Enable the checkbox to show Steam's total imported play time.",12,muted);
+            var note=Label("Last launched and play time for games with recorded activity. Play time includes Pad Launcher launches and tracked Steam sessions. Enable the checkbox to show Steam's total imported play time. This tab refreshes automatically.",12,muted);
             note.TextWrapping=TextWrapping.Wrap; note.Margin=new Thickness(0,8,0,14); root.Children.Add(note);
             bool changed=PlayTimeTracker.Consume(settings,Storage.Root);
             if(PlayTimeTracker.ConsumeSteam(settings)) changed=true;
@@ -131,6 +132,23 @@ namespace PadLauncher {
             };
             refresh.Click+=(s,e) => {bool consumedTime=PlayTimeTracker.Consume(settings,Storage.Root); if(PlayTimeTracker.ConsumeSteam(settings)) consumedTime=true; if(consumedTime) try {Storage.Write("settings.json",settings);} catch(Exception) {} render();};
             render();
+            int seenRevision=PlayTimeTracker.Revision;
+            var timer=new DispatcherTimer {Interval=TimeSpan.FromSeconds(2)};
+            int ticks=0;
+            timer.Tick+=(s,e) => {
+                PlayTimeTracker.Consume(settings,Storage.Root);
+                ticks++;
+                if(ticks%15==0) PlayTimeTracker.ConsumeSteam(settings);
+                if(PlayTimeTracker.Revision==seenRevision) return;
+                seenRevision=PlayTimeTracker.Revision;
+                try {Storage.Write("settings.json",settings);} catch(Exception) {}
+                render();
+            };
+            root.Loaded+=(s,e) => {timer.Start(); render();};
+            root.IsVisibleChanged+=(s,e) => {if(root.IsVisible) render();};
+            root.Unloaded+=(s,e) => timer.Stop();
+            dialog.Closed+=(s,e) => timer.Stop();
+            timer.Start();
             return root;
         }
     }
