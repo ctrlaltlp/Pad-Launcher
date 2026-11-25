@@ -529,6 +529,7 @@ namespace PadLauncher {
         public string DefaultCustomGameListId {get;set;}
         public List<string> OverlayListOrder {get;set;}
         public Dictionary<string,long> PlayTimeSeconds {get;set;}
+        public string LastAppliedPlayTimeBatch {get;set;}
         public Dictionary<string,string> SteamPlayTimeAtLaunch {get;set;}
         public bool IncludeImportedPlayTime {get;set;}
         public string JumpListButton {get;set;}
@@ -616,8 +617,11 @@ namespace PadLauncher {
             try { return Json().Deserialize<T>(File.ReadAllText(Path.Combine(Root, name))); } catch { return null; }
         }
         public static void Write(string name, object data) {
-            Directory.CreateDirectory(Root);
-            string path = Path.Combine(Root, name), temp = path + ".tmp";
+            Write(Root,name,data);
+        }
+        internal static void Write(string root,string name,object data) {
+            Directory.CreateDirectory(root);
+            string path = Path.Combine(root, name), temp = path + ".tmp";
             File.WriteAllText(temp, ReadableJson(data));
             if (File.Exists(path)) File.Replace(temp, path, null); else File.Move(temp, path);
         }

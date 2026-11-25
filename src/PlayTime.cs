@@ -147,35 +147,59 @@ namespace PadLauncher {
             return (seconds/3600)+"h";
         }
         public static bool Consume(Settings settings,string root) {
-            if(settings==null || String.IsNullOrWhiteSpace(root)) return false;
-            string path=Path.Combine(root,SessionFile);
-            string pending=path+".processing";
-            var completed=new List<string>();
-            if(File.Exists(pending)) completed.Add(pending);
-            if(File.Exists(path)) {
-                try {File.Move(path,pending); completed.Add(pending);} catch(IOException) {} catch(UnauthorizedAccessException) {}
-            }
+            if(settings==null || String.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return false;
+            string pendingPrefix=SessionFile+".processing";
+            string pending;
+            string[] lines;
+            try {
+                pending=Array.Find(Directory.GetFiles(root,pendingPrefix+".*"),file => {
+                    Guid batchId;
+                    return Guid.TryParseExact(Path.GetExtension(file).TrimStart('.'),"N",out batchId);
+                });
+                if(pending==null) {
+                    string legacy=Path.Combine(root,pendingPrefix);
+                    string source=File.Exists(legacy) ? legacy : Path.Combine(root,SessionFile);
+                    if(!File.Exists(source)) return false;
+                    pending=Path.Combine(root,pendingPrefix+"."+Guid.NewGuid().ToString("N"));
+                    File.Move(source,pending);
+                }
+                lines=File.ReadAllLines(pending);
+            } catch(IOException) {return false;} catch(UnauthorizedAccessException) {return false;}
+
+            string batch=Path.GetFileName(pending);
             bool changed=false;
-            foreach(string file in completed) {
-                string[] lines;
-                try {lines=File.ReadAllLines(file);} catch(IOException) {continue;} catch(UnauthorizedAccessException) {continue;}
+            if(batch!=settings.LastAppliedPlayTimeBatch) {
+                var previousTotals=settings.PlayTimeSeconds;
+                var totals=previousTotals==null ? new Dictionary<string,long>() : new Dictionary<string,long>(previousTotals);
                 foreach(string line in lines) {
                     string[] parts=line.Split('\t');
-                    if(parts.Length<3) continue;
                     long start,end;
-                    if(!Int64.TryParse(parts[1],out start) || !Int64.TryParse(parts[2],out end) || end<=start) continue;
+                    if(parts.Length<3 || !Int64.TryParse(parts[1],out start) || !Int64.TryParse(parts[2],out end) || end<=start) continue;
                     string id;
-                    try {id=Uri.UnescapeDataString(parts[0]);} catch {continue;}
+                    try {id=Uri.UnescapeDataString(parts[0]);} catch(UriFormatException) {continue;}
                     if(String.IsNullOrWhiteSpace(id)) continue;
-                    if(settings.PlayTimeSeconds==null) settings.PlayTimeSeconds=new Dictionary<string,long>();
                     long current;
-                    settings.PlayTimeSeconds.TryGetValue(id,out current);
-                    settings.PlayTimeSeconds[id]=current+(end-start);
+                    totals.TryGetValue(id,out current);
+                    totals[id]=current+(end-start);
                     changed=true;
                 }
-                try {File.Delete(file);} catch(IOException) {} catch(UnauthorizedAccessException) {}
+                if(changed) {
+                    // Commit the batch identity with the totals so a leftover log cannot be counted twice.
+                    string previousBatch=settings.LastAppliedPlayTimeBatch;
+                    settings.PlayTimeSeconds=totals;
+                    settings.LastAppliedPlayTimeBatch=batch;
+                    bool saved=false;
+                    try {Storage.Write(root,"settings.json",settings); saved=true;}
+                    catch(IOException) {} catch(UnauthorizedAccessException) {}
+                    if(!saved) {
+                        settings.PlayTimeSeconds=previousTotals;
+                        settings.LastAppliedPlayTimeBatch=previousBatch;
+                        return false;
+                    }
+                    Revision++;
+                }
             }
-            if(changed) Revision++;
+            try {File.Delete(pending);} catch(IOException) {} catch(UnauthorizedAccessException) {}
             return changed;
         }
         public static string DirectoryToWatch(Game game) {

@@ -167,6 +167,22 @@ class ExternalTests {
             File.WriteAllText(Path.Combine(Storage.Root,PlayTimeTracker.SessionFile), "epic:one\t1000\t1060\r\nsteam:one\t1000\t1025\r\n");
             bool consumed=PlayTimeTracker.Consume(featureSettings,Storage.Root);
             Check(consumed && featureSettings.PlayTimeSeconds["epic:one"]==150 && featureSettings.PlayTimeSeconds["steam:one"]==25 && PlayTimeTracker.Total(featureSettings,featureLibrary.Games.Single(g => g.Id=="epic:one"))==180,"Playtime sessions accumulate and add imported Steam playtime");
+            string sessionPath=Path.Combine(Storage.Root,PlayTimeTracker.SessionFile);
+            string tempSettings=Path.Combine(Storage.Root,"settings.json.tmp");
+            const string retrySession="epic:one\t2000\t2030\r\n";
+            File.WriteAllText(sessionPath+".processing",retrySession);
+            Directory.CreateDirectory(tempSettings);
+            try {
+                Check(!PlayTimeTracker.Consume(featureSettings,Storage.Root) && featureSettings.PlayTimeSeconds["epic:one"]==150,
+                    "A failed settings write leaves playtime totals unchanged");
+            } finally {Directory.Delete(tempSettings);}
+            Check(PlayTimeTracker.Consume(featureSettings,Storage.Root) && featureSettings.PlayTimeSeconds["epic:one"]==180,
+                "The next save recovers the pending playtime batch");
+            var restartedSettings=Storage.Read<Settings>("settings.json");
+            string recoveredLog=Path.Combine(Storage.Root,restartedSettings.LastAppliedPlayTimeBatch);
+            File.WriteAllText(recoveredLog,retrySession);
+            Check(!PlayTimeTracker.Consume(restartedSettings,Storage.Root) && restartedSettings.PlayTimeSeconds["epic:one"]==180 && !File.Exists(recoveredLog),
+                "Restart after saving but before cleanup does not count a batch twice");
             string steamRoot=Path.Combine(root,"steam-time");
             string steamConfig=Path.Combine(steamRoot,"userdata","123","config");
             Directory.CreateDirectory(steamConfig);
