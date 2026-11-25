@@ -34,6 +34,24 @@ class ExternalTests {
             LauncherLibrary.MergeSource(steamCurrent,steamFresh,steamSettings,"steam"); LauncherLibrary.MergeSource(steamCurrent,steamFresh,steamSettings,"steam");
             Check(steamCurrent.Collections.Count==1 && steamCurrent.Collections[0].Id=="tag:new","Steam collection reimport updates stable lists and removes deleted collections");
             Check(steamSettings.ListGameAdditions["tag:new"].SequenceEqual(new[]{"custom:steam"}) && steamSettings.ListGameAdditions["tag:old"].Count==0,"Steam reimport updates imported shortcut membership without duplicate or stale links");
+            string steamGameFolder=Path.Combine(root,"SteamLibrary","steamapps","common","GRID Legends");
+            var gridLibrary=new Library {
+                Games=new List<Game>{
+                    new Game {Id="1307710",Name="GRID Legends",SteamInstallDirectory=steamGameFolder},
+                    new Game {Id="steam-shortcut",Shortcut=true,SteamInstallDirectory=Path.Combine(root,"EA","GRID Legends")}
+                }
+            };
+            var gridEaScan=new Library {
+                Games=new List<Game>{
+                    new Game {Id="ea:duplicate",Name="GRID Legends",Source="ea",WorkingDirectory=steamGameFolder.ToLowerInvariant().Replace('\\','/')+"/"},
+                    new Game {Id="ea:separate",Name="GRID Legends",Source="ea",WorkingDirectory=Path.Combine(root,"EA","GRID Legends")}
+                },
+                Collections=new List<Collection>{new Collection {Id="source:ea",Games=new List<string>{"ea:duplicate","ea:separate"}}}
+            };
+            LauncherLibrary.MergeSource(gridLibrary,gridEaScan,new Settings(),"ea");
+            Check(gridLibrary.Games.Any(g => g.Id=="1307710") && gridLibrary.Games.All(g => g.Id!="ea:duplicate") &&
+                gridLibrary.Games.Any(g => g.Id=="ea:separate") && gridLibrary.Collections.Single().Games.SequenceEqual(new[]{"ea:separate"}),
+                "EA reimport excludes the Steam install while keeping a separate same-title EA copy and its list membership");
             string install=Path.Combine(root,"game"); Directory.CreateDirectory(install); File.WriteAllText(Path.Combine(install,"game.exe"),"");
             var manifest=new Dictionary<string,object>{{"DisplayName","Amnesia:  The Dark Descent"},{"AppName","app"},{"CatalogNamespace","ns"},{"CatalogItemId","item"},{"InstallLocation",install},{"LaunchExecutable","game.exe"},{"AppCategories",new[]{"games"}}};
             string file=Path.Combine(root,"game.item"); File.WriteAllText(file,Storage.Json().Serialize(manifest));

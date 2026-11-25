@@ -14,9 +14,9 @@ using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 
-[assembly: System.Reflection.AssemblyVersion("0.6.7.11")]
-[assembly: System.Reflection.AssemblyFileVersion("0.6.7.11")]
-[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.11")]
+[assembly: System.Reflection.AssemblyVersion("0.6.7.12")]
+[assembly: System.Reflection.AssemblyFileVersion("0.6.7.12")]
+[assembly: System.Reflection.AssemblyInformationalVersion("0.6.7.12")]
 [assembly: System.Reflection.AssemblyTitle("Pad Launcher")]
 [assembly: System.Reflection.AssemblyProduct("Pad Launcher")]
 [assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.8",FrameworkDisplayName=".NET Framework 4.8")]
@@ -1920,7 +1920,8 @@ namespace PadLauncher {
                 scanning=true; button.IsEnabled=false; result.Text="Restoring…";
                 try {
                     var snapshot=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
-                    var fresh=await Task.Run(() => LauncherLibrary.ScanSource(snapshot,source));
+                    var currentGames=library.Games.ToArray();
+                    var fresh=await Task.Run(() => LauncherLibrary.ScanSource(snapshot,source,currentGames));
                     var next=Storage.Json().Deserialize<Settings>(Storage.Json().Serialize(settings));
                     var updated=Storage.Json().Deserialize<Library>(Storage.Json().Serialize(library));
                     LauncherLibrary.RestoreSource(updated,fresh,next,source);

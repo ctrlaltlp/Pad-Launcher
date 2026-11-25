@@ -14,7 +14,20 @@ namespace PadLauncher {
             foreach(var list in library.Collections) if(list.Games!=null) list.Games.RemoveAll(removed.Contains);
             foreach(var game in library.Games.Where(game => game.Shortcut)) game.DirectLaunchShortcut=settings.SteamShortcutLaunchMode=="direct";
         }
-        public static Library ScanSource(Settings settings,string source) {
+        static string InstallDirectoryKey(string path) {
+            if(String.IsNullOrWhiteSpace(path)) return null;
+            try {return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar);}
+            catch(ArgumentException) {return null;} catch(NotSupportedException) {return null;} catch(PathTooLongException) {return null;}
+        }
+        static HashSet<string> SteamInstallDirectories(IEnumerable<Game> games) {
+            return new HashSet<string>(games.Where(game => !game.Shortcut && (String.IsNullOrEmpty(game.Source) || game.Source=="steam"))
+                .Select(game => InstallDirectoryKey(game.SteamInstallDirectory)).Where(path => path!=null),StringComparer.OrdinalIgnoreCase);
+        }
+        static List<Game> ScanEa(IEnumerable<Game> steamGames) {
+            var steamDirectories=SteamInstallDirectories(steamGames);
+            return EaLibrary.Scan(EaLibrary.InstalledRecords().Where(record => !steamDirectories.Contains(InstallDirectoryKey(record.Folder))));
+        }
+        public static Library ScanSource(Settings settings,string source,IEnumerable<Game> currentGames=null) {
             if(source=="steam") {
                 if(!settings.SteamEnabled) throw new IOException("Enable Steam games before restoring Steam collections.");
                 string root=String.IsNullOrWhiteSpace(settings.SteamPath) ? SteamLibrary.DetectSteam() : settings.SteamPath;
@@ -31,7 +44,7 @@ namespace PadLauncher {
                     string data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),"Epic","EpicGamesLauncher","Data");
                     result.Games=EpicLibrary.Scan(Path.Combine(data,"Manifests"),Path.Combine(data,"Catalog","catcache.bin"),result.Warnings); break;
                 case "gog": result.Games=GogLibrary.Scan(); break;
-                case "ea": result.Games=EaLibrary.Scan(); break;
+                case "ea": result.Games=ScanEa(currentGames ?? Enumerable.Empty<Game>()); break;
                 case "ubisoft": result.Games=UbisoftLibrary.Scan(); break;
                 case "rockstar": result.Games=RockstarLibrary.Scan(); break;
                 case "battlenet": result.Games=BattleNetLibrary.Scan(); break;
@@ -73,6 +86,13 @@ namespace PadLauncher {
             current.Collections.RemoveAll(c => c.Source==source || c.Id=="source:"+source || (source=="steam" && ((c.Id ?? "").StartsWith("tag:") || (c.Id ?? "").StartsWith("user-collections."))));
             current.Collections.AddRange(fresh.Collections.GroupBy(c => c.Id).Select(group => group.First()));
             if(source=="steam") SteamShortcutIdentity.Reconcile(current,settings);
+            if(source=="steam" || source=="ea") {
+                var steamDirectories=SteamInstallDirectories(current.Games);
+                var duplicates=new HashSet<string>(current.Games.Where(game => game.Source=="ea" &&
+                    steamDirectories.Contains(InstallDirectoryKey(game.WorkingDirectory))).Select(game => game.Id));
+                current.Games.RemoveAll(game => game.Source=="ea" && duplicates.Contains(game.Id));
+                foreach(var list in current.Collections) if(list.Games!=null) list.Games.RemoveAll(duplicates.Contains);
+            }
             current.Games=current.Games.OrderBy(g => g.Name,StringComparer.CurrentCultureIgnoreCase).ToList();
         }
         public static Library Scan(Settings settings,string manifestFolder=null,string catalogFile=null) {
@@ -103,7 +123,7 @@ namespace PadLauncher {
                 } catch(Exception error) {result.Warnings.Add("GOG library: "+error.Message);}
             }
             if(settings.EaEnabled) {
-                try {var ea=EaLibrary.Scan(); result.Games.AddRange(ea); if(ea.Count>0) result.Collections.Add(new Collection {Id="source:ea",Name="EA App",Games=ea.Select(g => g.Id).ToList()});}
+                try {var ea=ScanEa(result.Games); result.Games.AddRange(ea); if(ea.Count>0) result.Collections.Add(new Collection {Id="source:ea",Name="EA App",Games=ea.Select(g => g.Id).ToList()});}
                 catch(Exception error) {result.Warnings.Add("EA library: "+error.Message);}
             }
             if(settings.UbisoftEnabled) {

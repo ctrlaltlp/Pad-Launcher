@@ -42,6 +42,7 @@ namespace PadLauncher {
         public string ArtworkTitle {get;set;}
         public string Arguments {get;set;}
         public string WorkingDirectory {get;set;}
+        public string SteamInstallDirectory {get;set;}
         public string ImportedActionInfo {get;set;}
         public bool Shortcut { get; set; }
         public bool ShortcutInstalled { get; set; }
@@ -782,7 +783,9 @@ namespace PadLauncher {
                         if (!UInt32.TryParse(id, out parsed) || String.IsNullOrWhiteSpace(name)) continue;
                         if (!UInt32.TryParse(Vdf.Str(app, "StateFlags"), out flags) || (flags & 4) == 0) continue;
                         if (IsRuntime(name)) continue;
-                        if (!result.Games.Any(g => g.Id == id)) result.Games.Add(new Game { Id = id, LaunchId = id, Name = name });
+                        string installName=Vdf.Str(app,"installdir");
+                        string installDirectory=String.IsNullOrWhiteSpace(installName) ? null : Path.Combine(folder,"steamapps","common",installName);
+                        if (!result.Games.Any(g => g.Id == id)) result.Games.Add(new Game { Id = id, LaunchId = id, Name = name, SteamInstallDirectory=installDirectory });
                     } catch (Exception e) { result.Warnings.Add(Path.GetFileName(manifest) + ": " + e.Message); }
                 }
             }
